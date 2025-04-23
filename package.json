@@ -1,0 +1,34 @@
+{
+  "name": "kaizen",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@heroicons/react": "^2.0.18",
+    "autoprefixer": "^10.4.14",
+    "axios": "^1.8.4",
+    "next": "^14.0.0",
+    "postcss": "^8.4.21",
+    "react": "^18.2.0",
+    "react-beautiful-dnd": "^13.1.1",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0",
+    "tailwindcss": "^3.3.0",
+    "zustand": "^4.3.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.5.0",
+    "@types/react": "^18.2.20",
+    "@types/react-beautiful-dnd": "^13.1.8",
+    "@types/react-dom": "^18.2.7",
+    "eslint": "^8.47.0",
+    "eslint-config-next": "^14.0.0",
+    "typescript": "^5.1.6"
+  }
+}
