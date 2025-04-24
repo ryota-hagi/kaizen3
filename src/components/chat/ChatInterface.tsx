@@ -4,13 +4,29 @@ import React, { useState, useRef, useEffect, useContext } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { WorkflowContext, WorkflowContextProvider } from '../../contexts/WorkflowContext'
 import { callClaudeAPI } from '../../utils/api'
-import ReactMarkdown from 'react-markdown'
+import { ChatHeader } from './ChatHeader'
+import { ChatMenu } from './ChatMenu'
+import { ChatMessages } from './ChatMessages'
+import { ChatInput } from './ChatInput'
+import { ChatModals } from './ChatModals'
 
 interface Message {
   id: string
   content: string
   sender: 'user' | 'assistant'
   timestamp: Date
+}
+
+interface MemoItem {
+  title: string
+  content: Message[]
+  timestamp: Date
+}
+
+interface TemplateItem {
+  id: string
+  title: string
+  content: string
 }
 
 import { CompanyInfo, Employee, WorkflowContext as WorkflowContextType } from '../../utils/api'
@@ -20,14 +36,125 @@ interface ChatInterfaceProps {
   companyInfo?: CompanyInfo
   employees?: Employee[]
   workflowContext?: WorkflowContextType
+  onOpenChange?: (isOpen: boolean) => void
+  defaultOpen?: boolean
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
   standalone = false,
   companyInfo,
   employees,
-  workflowContext
+  workflowContext,
+  onOpenChange,
+  defaultOpen = false
 }) => {
+  // チャットの開閉状態を管理
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+  
+  // メモ関連の状態
+  const [showMemoTitleInput, setShowMemoTitleInput] = useState(false)
+  const [memoTitle, setMemoTitle] = useState('')
+  const [showMemoList, setShowMemoList] = useState(false)
+  const [savedMemos, setSavedMemos] = useState<MemoItem[]>([])
+  
+  // テンプレート関連の状態
+  const [showTemplateList, setShowTemplateList] = useState(false)
+  const [templates, setTemplates] = useState<TemplateItem[]>([])
+  
+  // 共有関連の状態
+  const [showShareModal, setShowShareModal] = useState(false)
+  
+  // コンポーネントマウント時にローカルストレージからメモを読み込む
+  useEffect(() => {
+    const storedMemos = localStorage.getItem('chatMemos')
+    if (storedMemos) {
+      try {
+        const parsedMemos = JSON.parse(storedMemos)
+        
+        // JSONから復元されたデータのtimestampをDateオブジェクトに変換
+        const processedMemos = parsedMemos.map((memo: any) => {
+          // メモのタイムスタンプを変換
+          const memoWithDate = {
+            ...memo,
+            timestamp: new Date(memo.timestamp)
+          }
+          
+          // メッセージ内のタイムスタンプも変換
+          if (Array.isArray(memo.content)) {
+            memoWithDate.content = memo.content.map((message: any) => ({
+              ...message,
+              timestamp: new Date(message.timestamp)
+            }))
+          }
+          
+          return memoWithDate
+        })
+        
+        setSavedMemos(processedMemos)
+      } catch (error) {
+        console.error('Failed to parse stored memos:', error)
+      }
+    }
+    
+    // テンプレートデータをローカルストレージから取得
+    const storedTemplates = localStorage.getItem('kaizen_templates')
+    if (storedTemplates) {
+      try {
+        const parsedTemplates = JSON.parse(storedTemplates)
+        setTemplates(parsedTemplates)
+      } catch (error) {
+        console.error('Failed to parse stored templates:', error)
+        
+        // エラーが発生した場合はデフォルトのテンプレートを使用
+        const defaultTemplates: TemplateItem[] = [
+          {
+            id: '1',
+            title: '業務報告',
+            content: '今日の業務内容：\n\n達成したこと：\n\n明日の予定：\n\n課題・問題点：'
+          },
+          {
+            id: '2',
+            title: '会議議事録',
+            content: '日時：\n参加者：\n\n議題：\n\n決定事項：\n\n次回アクション：'
+          },
+          {
+            id: '3',
+            title: '顧客問い合わせ対応',
+            content: '顧客名：\n問い合わせ内容：\n\n対応内容：\n\nフォローアップ：'
+          }
+        ]
+        setTemplates(defaultTemplates)
+      }
+    } else {
+      // ローカルストレージにテンプレートがない場合はデフォルトのテンプレートを使用
+      const defaultTemplates: TemplateItem[] = [
+        {
+          id: '1',
+          title: '業務報告',
+          content: '今日の業務内容：\n\n達成したこと：\n\n明日の予定：\n\n課題・問題点：'
+        },
+        {
+          id: '2',
+          title: '会議議事録',
+          content: '日時：\n参加者：\n\n議題：\n\n決定事項：\n\n次回アクション：'
+        },
+        {
+          id: '3',
+          title: '顧客問い合わせ対応',
+          content: '顧客名：\n問い合わせ内容：\n\n対応内容：\n\nフォローアップ：'
+        }
+      ]
+      setTemplates(defaultTemplates)
+    }
+  }, [])
+
+  // isOpenの状態が変わったら親コンポーネントに通知
+  useEffect(() => {
+    if (onOpenChange) {
+      onOpenChange(isOpen);
+    }
+  }, [isOpen, onOpenChange]);
+
   // コンポーネントマウント時にpropsをログ出力
   useEffect(() => {
     console.log('=== ChatInterface Props ===');
@@ -38,6 +165,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     console.log('Workflow Context Type:', workflowContext ? typeof workflowContext : 'undefined');
     console.log('Workflow Context:', workflowContext);
   }, [companyInfo, employees, workflowContext]);
+  
   const router = useRouter()
   const pathname = usePathname()
   const { 
@@ -54,7 +182,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-
 
   useEffect(() => {
     scrollToBottom()
@@ -252,100 +379,159 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }
 
-  // Enter2回押しの検出用
-  const [enterPressed, setEnterPressed] = useState(false)
-  const enterPressedTimer = useRef<NodeJS.Timeout | null>(null)
+  // チャットを開く
+  const openChat = () => {
+    setIsOpen(true)
+  }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      
-      if (enterPressed) {
-        // 2回目のEnterが押された場合、メッセージを送信
-        handleSendMessage()
-        setEnterPressed(false)
-        if (enterPressedTimer.current) {
-          clearTimeout(enterPressedTimer.current)
-        }
-      } else {
-        // 1回目のEnterが押された場合、フラグを立てる
-        setEnterPressed(true)
-        
-        // 一定時間後にフラグをリセット（ダブルEnterの検出時間枠）
-        enterPressedTimer.current = setTimeout(() => {
-          setEnterPressed(false)
-        }, 500) // 500ミリ秒以内に2回目のEnterが押されなければリセット
+  // チャットを閉じる
+  const closeChat = () => {
+    setIsOpen(false)
+  }
+
+  // メモを保存する
+  const handleSaveMemo = () => {
+    if (memoTitle.trim()) {
+      // メモを保存する処理
+      const memo: MemoItem = {
+        title: memoTitle.trim(),
+        content: messages,
+        timestamp: new Date()
       }
+      const updatedMemos = [...savedMemos, memo]
+      setSavedMemos(updatedMemos)
+      localStorage.setItem('chatMemos', JSON.stringify(updatedMemos))
+      
+      // モーダルを閉じてタイトルをリセット
+      setShowMemoTitleInput(false)
+      setMemoTitle('')
     }
   }
 
+  // メモを選択する
+  const handleSelectMemo = (memo: MemoItem) => {
+    setMessages(memo.content)
+    setShowMemoList(false)
+  }
+
+  // テンプレートを選択する
+  const handleSelectTemplate = (template: TemplateItem) => {
+    setInput(template.content)
+    setShowTemplateList(false)
+  }
+  
+  // チャットを共有する
+  const handleShareChat = () => {
+    setShowShareModal(true)
+  }
+  
+  // チャットをテキスト形式でコピーする
+  const handleCopyAsText = () => {
+    const chatText = messages.map(msg => {
+      const sender = msg.sender === 'user' ? 'ユーザー' : 'アシスタント'
+      const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      return `[${time}] ${sender}:\n${msg.content}\n`
+    }).join('\n')
+    
+    navigator.clipboard.writeText(chatText)
+      .then(() => {
+        alert('チャット内容をクリップボードにコピーしました')
+        setShowShareModal(false)
+      })
+      .catch(err => {
+        console.error('クリップボードへのコピーに失敗しました:', err)
+        alert('コピーに失敗しました。もう一度お試しください。')
+      })
+  }
+  
+  // チャットをMarkdown形式でコピーする
+  const handleCopyAsMarkdown = () => {
+    const chatMarkdown = messages.map(msg => {
+      const sender = msg.sender === 'user' ? '## ユーザー' : '## アシスタント'
+      const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      return `${sender} (${time})\n\n${msg.content}\n`
+    }).join('\n---\n\n')
+    
+    navigator.clipboard.writeText(chatMarkdown)
+      .then(() => {
+        alert('チャット内容をMarkdown形式でクリップボードにコピーしました')
+        setShowShareModal(false)
+      })
+      .catch(err => {
+        console.error('クリップボードへのコピーに失敗しました:', err)
+        alert('コピーに失敗しました。もう一度お試しください。')
+      })
+  }
+
+  // 閉じている状態のチャットアイコン
+  if (!isOpen) {
+    return (
+      <div className="fixed bottom-6 right-6 z-50">
+        <button 
+          onClick={openChat}
+          className="w-14 h-14 bg-primary-500 rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-all duration-200 transform hover:scale-105"
+        >
+          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+          </svg>
+        </button>
+      </div>
+    )
+  }
+
+  // 開いている状態のチャットインターフェース
   return (
-    <div className="chat-container h-full flex flex-col">
-      <div className="chat-header">
-        <h2 className="text-lg font-medium text-secondary-900">Kaizen アシスタント</h2>
-        <p className="text-sm text-secondary-500">業務改善のサポートをします</p>
-      </div>
+    <div className="fixed top-0 right-0 w-96 h-screen z-50 flex flex-col bg-gradient-to-br from-white to-blue-50 shadow-lg border-l border-blue-100">
+      {/* チャットヘッダー */}
+      <ChatHeader onClose={closeChat} />
       
-      <div className="chat-messages">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`chat-message ${
-              message.sender === 'user' ? 'chat-message-user' : 'chat-message-assistant'
-            }`}
-          >
-            {message.sender === 'user' ? (
-              <div className="text-sm">{message.content}</div>
-            ) : (
-              <div className="text-sm markdown-content">
-                <ReactMarkdown>{message.content}</ReactMarkdown>
-              </div>
-            )}
-            <div className="text-xs text-secondary-400 mt-1">
-              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
-          </div>
-        ))}
-        
-        {isLoading && (
-          <div className="chat-message chat-message-assistant">
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-secondary-400 rounded-full animate-bounce"></div>
-              <div className="w-2 h-2 bg-secondary-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              <div className="w-2 h-2 bg-secondary-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-            </div>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
+      {/* チャットメニュー */}
+      <ChatMenu
+        onNewChat={() => setMessages([])}
+        onShowMemoTitleInput={() => setShowMemoTitleInput(true)}
+        onShowMemoList={() => setShowMemoList(true)}
+        onShowTemplateList={() => setShowTemplateList(true)}
+        onShowShareModal={handleShareChat}
+      />
       
-      <div className="chat-input">
-        <div className="flex items-end space-x-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="メッセージを入力..."
-            className="flex-1 p-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-            rows={3}
-          />
-          <button
-            onClick={handleSendMessage}
-            disabled={!input.trim() || isLoading}
-            className={`px-4 py-2 rounded-md ${
-              !input.trim() || isLoading
-                ? 'bg-secondary-200 text-secondary-400 cursor-not-allowed'
-                : 'bg-primary-600 text-white hover:bg-primary-700'
-            }`}
-          >
-            送信
-          </button>
-        </div>
-        <p className="text-xs text-secondary-500 mt-2">
-          Enterキーを2回押して送信、Shift+Enterで改行
-        </p>
-      </div>
+      {/* チャットメッセージ */}
+      <ChatMessages
+        messages={messages}
+        isLoading={isLoading}
+        messagesEndRef={messagesEndRef}
+      />
+      
+      {/* チャット入力 */}
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        handleSendMessage={handleSendMessage}
+        isLoading={isLoading}
+      />
+      
+      {/* モーダル */}
+      <ChatModals
+        showMemoTitleInput={showMemoTitleInput}
+        memoTitle={memoTitle}
+        setMemoTitle={setMemoTitle}
+        onCloseMemoTitleInput={() => {
+          setShowMemoTitleInput(false)
+          setMemoTitle('')
+        }}
+        onSaveMemo={handleSaveMemo}
+        showMemoList={showMemoList}
+        savedMemos={savedMemos}
+        onCloseMemoList={() => setShowMemoList(false)}
+        onSelectMemo={handleSelectMemo}
+        showTemplateList={showTemplateList}
+        templates={templates}
+        onCloseTemplateList={() => setShowTemplateList(false)}
+        onSelectTemplate={handleSelectTemplate}
+        showShareModal={showShareModal}
+        onCloseShareModal={() => setShowShareModal(false)}
+        onCopyAsText={handleCopyAsText}
+        onCopyAsMarkdown={handleCopyAsMarkdown}
+      />
     </div>
   )
 }

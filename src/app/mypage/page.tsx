@@ -4,13 +4,21 @@ import React, { useState, useEffect } from 'react'
 import { DashboardLayout } from '../../components/layouts/DashboardLayout'
 import { CompanyInfo, Employee } from '../../utils/api'
 
+// テンプレートのインターフェース
+interface Template {
+  id: string
+  title: string
+  content: string
+}
+
 // ローカルストレージのキー
 const COMPANY_INFO_STORAGE_KEY = 'kaizen_company_info'
 const EMPLOYEES_STORAGE_KEY = 'kaizen_employees'
+const TEMPLATES_STORAGE_KEY = 'kaizen_templates'
 
 export default function MyPage() {
   // タブの状態管理
-  const [activeTab, setActiveTab] = useState<'company' | 'employees'>('company')
+  const [activeTab, setActiveTab] = useState<'company' | 'employees' | 'templates'>('company')
   const [saveSuccess, setSaveSuccess] = useState(false)
   
   // デフォルトの会社情報
@@ -50,10 +58,37 @@ export default function MyPage() {
     }
   ]
   
+  // デフォルトのテンプレート
+  const defaultTemplates: Template[] = [
+    {
+      id: '1',
+      title: '業務報告',
+      content: '今日の業務内容：\n\n達成したこと：\n\n明日の予定：\n\n課題・問題点：'
+    },
+    {
+      id: '2',
+      title: '会議議事録',
+      content: '日時：\n参加者：\n\n議題：\n\n決定事項：\n\n次回アクション：'
+    },
+    {
+      id: '3',
+      title: '顧客問い合わせ対応',
+      content: '顧客名：\n問い合わせ内容：\n\n対応内容：\n\nフォローアップ：'
+    }
+  ]
+  
   // 状態管理
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(defaultCompanyInfo)
   const [employees, setEmployees] = useState<Employee[]>(defaultEmployees)
+  const [templates, setTemplates] = useState<Template[]>(defaultTemplates)
   const [isEditingCompany, setIsEditingCompany] = useState(false)
+  
+  // テンプレート関連の状態
+  const [newTemplate, setNewTemplate] = useState<Omit<Template, 'id'>>({
+    title: '',
+    content: ''
+  })
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
   
   // 新規従業員の状態
   const [newEmployee, setNewEmployee] = useState<Omit<Employee, 'id'>>({
@@ -102,6 +137,24 @@ export default function MyPage() {
         }
       } else {
         console.log('No employees found in localStorage, using default');
+      }
+      
+      // テンプレート情報の読み込み
+      const savedTemplates = localStorage.getItem(TEMPLATES_STORAGE_KEY)
+      console.log('Raw Templates from LocalStorage:', savedTemplates);
+      
+      if (savedTemplates) {
+        try {
+          const parsedTemplates = JSON.parse(savedTemplates);
+          console.log('Parsed Templates:', parsedTemplates);
+          setTemplates(parsedTemplates)
+        } catch (error) {
+          console.error('Failed to parse templates from localStorage:', error)
+        }
+      } else {
+        console.log('No templates found in localStorage, using default');
+        // デフォルトのテンプレートをローカルストレージに保存
+        localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(defaultTemplates))
       }
     }
   }, [])
@@ -246,6 +299,95 @@ export default function MyPage() {
     setSaveSuccess(true)
   }
   
+  // テンプレート関連のハンドラ
+  // 新規テンプレートの変更ハンドラ
+  const handleNewTemplateChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setNewTemplate(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+  
+  // 編集中のテンプレートの変更ハンドラ
+  const handleEditTemplateChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (!editingTemplate) return
+    
+    const { name, value } = e.target
+    setEditingTemplate(prev => ({
+      ...prev!,
+      [name]: value
+    }))
+  }
+  
+  // テンプレートの追加ハンドラ
+  const handleAddTemplate = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    const template: Template = {
+      id: Date.now().toString(),
+      ...newTemplate
+    }
+    
+    const updatedTemplates = [...templates, template]
+    setTemplates(updatedTemplates)
+    
+    // ローカルストレージに保存
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
+    }
+    
+    // フォームをリセット
+    setNewTemplate({
+      title: '',
+      content: ''
+    })
+    
+    // 保存成功メッセージを表示
+    setSaveSuccess(true)
+  }
+  
+  // テンプレートの編集ハンドラ
+  const handleEditTemplate = (template: Template) => {
+    setEditingTemplate(template)
+  }
+  
+  // 編集したテンプレートの保存ハンドラ
+  const handleSaveEditedTemplate = () => {
+    if (!editingTemplate) return
+    
+    const updatedTemplates = templates.map(temp => 
+      temp.id === editingTemplate.id ? editingTemplate : temp
+    )
+    
+    setTemplates(updatedTemplates)
+    
+    // ローカルストレージに保存
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
+    }
+    
+    // 編集モードを終了
+    setEditingTemplate(null)
+    
+    // 保存成功メッセージを表示
+    setSaveSuccess(true)
+  }
+  
+  // テンプレートの削除ハンドラ
+  const handleDeleteTemplate = (id: string) => {
+    const updatedTemplates = templates.filter(temp => temp.id !== id)
+    setTemplates(updatedTemplates)
+    
+    // ローカルストレージに保存
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
+    }
+    
+    // 保存成功メッセージを表示
+    setSaveSuccess(true)
+  }
+  
   return (
     <DashboardLayout companyName={companyInfo.name}>
       <div className="p-8">
@@ -283,6 +425,16 @@ export default function MyPage() {
                 onClick={() => setActiveTab('employees')}
               >
                 従業員情報
+              </button>
+              <button
+                className={`py-4 font-medium ${
+                  activeTab === 'templates'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-secondary-500 hover:text-secondary-700'
+                }`}
+                onClick={() => setActiveTab('templates')}
+              >
+                テンプレート
               </button>
             </div>
           </div>
@@ -489,7 +641,7 @@ export default function MyPage() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : activeTab === 'employees' ? (
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-medium text-secondary-900">従業員情報</h2>
@@ -700,6 +852,154 @@ export default function MyPage() {
                       </div>
                       
                       <div className="md:col-span-2">
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                        >
+                          追加
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-medium text-secondary-900">テンプレート</h2>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-secondary-200">
+                    <thead className="bg-secondary-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                          タイトル
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                          内容
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                          操作
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-secondary-200">
+                      {templates.map((template) => (
+                        <tr key={template.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                            {template.title}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-secondary-500 max-w-xs truncate">
+                            {template.content}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() => handleEditTemplate(template)}
+                              className="text-blue-600 hover:text-blue-900 mr-4"
+                            >
+                              編集
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTemplate(template.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              削除
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {editingTemplate ? (
+                  <div className="mt-8 border-t border-secondary-200 pt-6">
+                    <h3 className="text-md font-medium text-secondary-900 mb-4">テンプレートを編集</h3>
+                    <form className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label htmlFor="edit-title" className="block text-sm font-medium text-secondary-700 mb-1">
+                          タイトル
+                        </label>
+                        <input
+                          type="text"
+                          id="edit-title"
+                          name="title"
+                          value={editingTemplate.title}
+                          onChange={handleEditTemplateChange}
+                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="edit-content" className="block text-sm font-medium text-secondary-700 mb-1">
+                          内容
+                        </label>
+                        <textarea
+                          id="edit-content"
+                          name="content"
+                          value={editingTemplate.content}
+                          onChange={handleEditTemplateChange}
+                          rows={6}
+                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          required
+                        />
+                      </div>
+                      
+                      <div className="flex space-x-4">
+                        <button
+                          type="button"
+                          onClick={handleSaveEditedTemplate}
+                          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                        >
+                          保存
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingTemplate(null)}
+                          className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
+                        >
+                          キャンセル
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="mt-8 border-t border-secondary-200 pt-6">
+                    <h3 className="text-md font-medium text-secondary-900 mb-4">テンプレートを追加</h3>
+                    <form onSubmit={handleAddTemplate} className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label htmlFor="title" className="block text-sm font-medium text-secondary-700 mb-1">
+                          タイトル
+                        </label>
+                        <input
+                          type="text"
+                          id="title"
+                          name="title"
+                          value={newTemplate.title}
+                          onChange={handleNewTemplateChange}
+                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="content" className="block text-sm font-medium text-secondary-700 mb-1">
+                          内容
+                        </label>
+                        <textarea
+                          id="content"
+                          name="content"
+                          value={newTemplate.content}
+                          onChange={handleNewTemplateChange}
+                          rows={6}
+                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
                         <button
                           type="submit"
                           className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"

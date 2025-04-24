@@ -30,7 +30,8 @@ interface Workflow {
 }
 
 export default function Home() {
-  const [chatExpanded, setChatExpanded] = useState(true)
+  // チャットの開閉状態を管理
+  const [isChatOpen, setIsChatOpen] = useState(false)
   const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null)
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -221,7 +222,7 @@ export default function Home() {
     <DashboardLayout companyName={companyName}>
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* メインコンテンツ */}
-        <div className={`flex-1 flex ${chatExpanded ? 'pr-96' : 'pr-16'} transition-all duration-300 ease-in-out`}>
+        <div className={`flex-1 flex ${isChatOpen ? 'pr-96' : ''} transition-all duration-300 ease-in-out`}>
           <div className="flex-1 overflow-auto p-8">
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-secondary-900">ダッシュボード</h1>
@@ -443,66 +444,50 @@ export default function Home() {
           </div>
         </div>
 
-        {/* チャットインターフェース */}
-        <div 
-          className={`fixed right-0 top-0 h-full bg-white border-l border-secondary-200 transition-all duration-300 ease-in-out ${
-            chatExpanded ? 'w-96' : 'w-16'
-          }`}
-        >
-          <button
-            className="absolute top-4 left-4 text-secondary-500 hover:text-secondary-700"
-            onClick={() => setChatExpanded(!chatExpanded)}
-          >
-            {chatExpanded ? '>' : '<'}
-          </button>
-          
-          {chatExpanded && (
-            <div className="h-full pt-14">
-              <ChatInterface 
-                companyInfo={companyInfo}
-                employees={employees}
-                workflowContext={activeWorkflow && activeWorkflow !== 'new' ? (() => {
-                  const currentWorkflow = workflows.find(w => w.id === activeWorkflow);
-                  if (!currentWorkflow) return undefined;
-                  
-                  // 関連するワークフローを検索（改善前/改善後）
-                  let relatedWorkflow = undefined;
-                  if (currentWorkflow.isImproved && currentWorkflow.originalId) {
-                    // 改善後のワークフローの場合、元のワークフローを検索
-                    relatedWorkflow = workflows.find(w => w.id === currentWorkflow.originalId);
-                  } else {
-                    // 元のワークフローの場合、改善後のワークフローを検索
-                    relatedWorkflow = workflows.find(
-                      w => w.originalId === currentWorkflow.id && w.isImproved
-                    );
-                  }
-                  
-                  console.log('Current Workflow:', currentWorkflow);
-                  console.log('Related Workflow:', relatedWorkflow);
-                  
-                  return {
-                    id: currentWorkflow.id,
-                    name: currentWorkflow.name,
-                    description: currentWorkflow.description,
-                    steps: currentWorkflow.steps,
-                    isImproved: currentWorkflow.isImproved,
-                    originalId: currentWorkflow.originalId,
-                    relatedWorkflow: relatedWorkflow ? {
-                      id: relatedWorkflow.id,
-                      name: relatedWorkflow.name,
-                      description: relatedWorkflow.description,
-                      steps: relatedWorkflow.steps,
-                      createdAt: relatedWorkflow.createdAt,
-                      updatedAt: relatedWorkflow.updatedAt,
-                      isImproved: relatedWorkflow.isImproved,
-                      originalId: relatedWorkflow.originalId
-                    } : undefined
-                  };
-                })() : undefined}
-              />
-            </div>
-          )}
-        </div>
+        {/* チャットインターフェース - 直接配置 */}
+        <ChatInterface 
+          companyInfo={companyInfo}
+          employees={employees}
+          onOpenChange={setIsChatOpen}
+          workflowContext={activeWorkflow && activeWorkflow !== 'new' ? (() => {
+            const currentWorkflow = workflows.find(w => w.id === activeWorkflow);
+            if (!currentWorkflow) return undefined;
+            
+            // 関連するワークフローを検索（改善前/改善後）
+            let relatedWorkflow = undefined;
+            if (currentWorkflow.isImproved && currentWorkflow.originalId) {
+              // 改善後のワークフローの場合、元のワークフローを検索
+              relatedWorkflow = workflows.find(w => w.id === currentWorkflow.originalId);
+            } else {
+              // 元のワークフローの場合、改善後のワークフローを検索
+              relatedWorkflow = workflows.find(
+                w => w.originalId === currentWorkflow.id && w.isImproved
+              );
+            }
+            
+            console.log('Current Workflow:', currentWorkflow);
+            console.log('Related Workflow:', relatedWorkflow);
+            
+            return {
+              id: currentWorkflow.id,
+              name: currentWorkflow.name,
+              description: currentWorkflow.description,
+              steps: currentWorkflow.steps,
+              isImproved: currentWorkflow.isImproved,
+              originalId: currentWorkflow.originalId,
+              relatedWorkflow: relatedWorkflow ? {
+                id: relatedWorkflow.id,
+                name: relatedWorkflow.name,
+                description: relatedWorkflow.description,
+                steps: relatedWorkflow.steps,
+                createdAt: relatedWorkflow.createdAt,
+                updatedAt: relatedWorkflow.updatedAt,
+                isImproved: relatedWorkflow.isImproved,
+                originalId: relatedWorkflow.originalId
+              } : undefined
+            };
+          })() : undefined}
+        />
       </div>
     </DashboardLayout>
   )
