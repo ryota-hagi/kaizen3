@@ -150,9 +150,9 @@ export const parseStepsFromResponse = (responseText: string, originalSteps: Work
     console.log(`${matches.length}個のステップ情報が見つかりました`)
     
     if (matches.length === 0) {
-      // 抽出できなかった場合はテストデータを返す
-      console.log('ステップ情報を抽出できなかったため、テストデータを使用します')
-      return generateTestImprovedFlow({ steps: originalSteps } as Workflow)
+      // 抽出できなかった場合はエラーをスロー
+      console.error('ステップ情報を抽出できませんでした。Claude APIのレスポンス:', responseText)
+      throw new Error('改善案の生成に失敗しました。Claude APIからの応答を正しく解析できませんでした。')
     }
     
     // 抽出したステップ情報を変換
@@ -204,7 +204,7 @@ export const parseStepsFromResponse = (responseText: string, originalSteps: Work
     })
   } catch (error) {
     console.error('ステップ情報の抽出中にエラーが発生しました:', error)
-    // エラー時はテストデータを返す
-    return generateTestImprovedFlow({ steps: originalSteps } as Workflow)
+    // エラー時もエラーをスロー
+    throw new Error('改善案の生成中にエラーが発生しました。もう一度お試しください。')
   }
 }

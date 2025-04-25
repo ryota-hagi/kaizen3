@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { DashboardLayout } from '../../components/layouts/DashboardLayout'
+import { useUser } from '@/contexts/UserContext'
 
 interface WorkflowStep {
   id: string
@@ -25,6 +26,7 @@ interface Workflow {
   originalId?: string
   isCompleted?: boolean
   completedAt?: Date
+  createdBy?: string // 作成者のユーザーID
 }
 
 export default function WorkflowsPage() {
@@ -33,6 +35,42 @@ export default function WorkflowsPage() {
   const [companyName, setCompanyName] = useState('株式会社サンプル')
   const [showCompleted, setShowCompleted] = useState(false)
   const router = useRouter()
+  const { users, getUserById, currentUser } = useUser()
+  
+  // デバッグ用：ユーザー情報とワークフローの作成者情報を確認
+  useEffect(() => {
+    console.log('Current User:', currentUser)
+    console.log('All Users:', users)
+    console.log('Workflows:', workflows)
+    
+    // ユーザーデータが存在しない場合、デフォルトのユーザーデータを作成
+    if (users.length === 0) {
+      console.log('ユーザーデータが存在しません。デフォルトのユーザーデータを作成します。')
+      
+      // デフォルトユーザーを作成
+      const defaultUser: any = {
+        id: 'default-user',
+        username: 'admin',
+        email: 'admin@example.com',
+        fullName: '管理者',
+        role: '管理者',
+        companyId: 'default-company',
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        status: 'アクティブ'
+      }
+      
+      // ローカルストレージに保存
+      localStorage.setItem('kaizen_user_info', JSON.stringify(defaultUser))
+      localStorage.setItem('kaizen_users', JSON.stringify([{
+        user: defaultUser,
+        password: 'password'
+      }]))
+      
+      // ページをリロード
+      window.location.reload()
+    }
+  }, [currentUser, users, workflows])
   
   // 会社情報を取得
   useEffect(() => {
@@ -62,8 +100,28 @@ export default function WorkflowsPage() {
           updatedAt: new Date(wf.updatedAt)
         }))
         
+        // 作成者情報が設定されていないワークフローに、デフォルトの作成者情報を設定
+        const workflowsWithCreator = workflowsWithDates.map((wf: Workflow) => {
+          if (!wf.createdBy && users.length > 0) {
+            return {
+              ...wf,
+              createdBy: users[0].id // 最初のユーザーを作成者として設定
+            }
+          }
+          return wf
+        })
+        
+        // 作成者情報が更新されたワークフローをローカルストレージに保存
+        const hasUpdates = workflowsWithCreator.some((wf: Workflow, index: number) => 
+          !parsedWorkflows[index].createdBy && wf.createdBy
+        )
+        
+        if (hasUpdates) {
+          localStorage.setItem('workflows', JSON.stringify(workflowsWithCreator))
+        }
+        
         // 最新順にソート
-        const sortedWorkflows = workflowsWithDates
+        const sortedWorkflows = workflowsWithCreator
           .sort((a: Workflow, b: Workflow) => b.updatedAt.getTime() - a.updatedAt.getTime())
           
         setWorkflows(sortedWorkflows)
@@ -73,10 +131,10 @@ export default function WorkflowsPage() {
     }
   }
 
-  // 初回レンダリング時にワークフローリストを更新
+  // 初回レンダリング時とユーザーデータが変更されたときにワークフローリストを更新
   useEffect(() => {
     loadWorkflows()
-  }, [])
+  }, [users]) // usersが変更されたときにも再実行
 
   // ローカルストレージの変更を監視
   useEffect(() => {
@@ -183,23 +241,26 @@ export default function WorkflowsPage() {
           </button>
         </div>
         
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-secondary-200">
-            <thead className="bg-secondary-50">
+        <div className="bg-white rounded-lg shadow overflow-x-auto">
+          <table className="min-w-full divide-y divide-secondary-200 table-fixed">
+            <thead className="bg-blue-50 border-b-2 border-blue-200">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                   フロー名
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                   説明
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                   ステップ数
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                   最終更新日
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                  作成者
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                   操作
                 </th>
               </tr>
@@ -215,7 +276,7 @@ export default function WorkflowsPage() {
                   
                   return (
                     <tr key={groupId} className="hover:bg-secondary-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap bg-blue-50">
                         <Link 
                           href={`/workflows/${displayWorkflow.id}`}
                           className="text-sm font-medium text-secondary-900 hover:text-primary-600"
@@ -231,13 +292,39 @@ export default function WorkflowsPage() {
                       <td className="px-6 py-4">
                         <div className="text-sm text-secondary-500 line-clamp-2">{displayWorkflow.description}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap bg-blue-50">
                         <div className="text-sm text-secondary-500">{displayWorkflow.steps?.length || 0}ステップ</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-secondary-500">
                           {displayWorkflow.updatedAt.toLocaleDateString('ja-JP')}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {displayWorkflow.createdBy && getUserById(displayWorkflow.createdBy) ? (
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-8 w-8">
+                              {getUserById(displayWorkflow.createdBy)?.profileImage ? (
+                                <img
+                                  className="h-8 w-8 rounded-full"
+                                  src={getUserById(displayWorkflow.createdBy)?.profileImage}
+                                  alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
+                                />
+                              ) : (
+                                <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-800">
+                                  {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="ml-2">
+                              <div className="text-sm font-medium text-secondary-900">
+                                {getUserById(displayWorkflow.createdBy)?.fullName}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-secondary-500">未設定</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
@@ -288,7 +375,7 @@ export default function WorkflowsPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-secondary-500">
+                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-secondary-500">
                     {searchTerm ? '検索条件に一致する業務フローはありません' : '保存された業務フローはありません'}
                   </td>
                 </tr>

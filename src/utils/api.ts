@@ -1,5 +1,26 @@
 import axios from 'axios';
 
+// ユーザーステータスの型定義
+export type UserStatus = '招待中' | 'ログアウト中' | 'アクティブ';
+
+// ユーザー情報の型定義
+export interface UserInfo {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string;
+  role: string;
+  companyId: string; // 所属会社ID
+  department?: string;
+  position?: string;
+  profileImage?: string;
+  createdAt: string;
+  lastLogin?: string | null;
+  isInvited?: boolean; // 招待ステータス（後方互換性のため残す）
+  status?: UserStatus; // ユーザーステータス（'招待中' | 'ログアウト中' | 'アクティブ'）
+  employeeId?: string; // 紐づけられた従業員ID
+}
+
 // 会社情報の型定義
 export interface CompanyInfo {
   name: string;
@@ -43,6 +64,7 @@ export interface Workflow {
   originalId?: string;
   isCompleted?: boolean;
   completedAt?: Date;
+  createdBy?: string; // 作成者のユーザーID
 }
 
 export interface WorkflowContext {

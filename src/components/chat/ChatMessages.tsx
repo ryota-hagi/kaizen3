@@ -3,6 +3,32 @@
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
 
+// XMLタグをMarkdown形式に変換する関数
+const convertXmlToMarkdown = (content: string): string => {
+  // 各ステップの詳細分析の前に改行を追加
+  content = content.replace(/各ステップの詳細分析/g, '\n## 各ステップの詳細分析\n');
+  
+  // 工程名タグを変換（青色のテキストに）
+  let result = content.replace(/<工程名>(.*?)<\/工程名>/g, '\n### $1\n');
+  
+  // 概要タグを変換
+  result = result.replace(/<概要>(.*?)<\/概要>/g, '$1\n');
+  
+  // 担当者タグを変換
+  result = result.replace(/<担当者>(.*?)<\/担当者>/g, '**担当者**: $1\n');
+  
+  // 所要時間タグを変換
+  result = result.replace(/<所要時間>(.*?)<\/所要時間>/g, '**所要時間**: $1分\n');
+  
+  // ツールタグを変換
+  result = result.replace(/<ツール>(.*?)<\/ツール>/g, '**ツール**: $1\n');
+  
+  // コストタグを変換
+  result = result.replace(/<コスト>(.*?)<\/コスト>/g, '**コスト**: $1\n');
+  
+  return result;
+}
+
 interface Message {
   id: string
   content: string
@@ -51,7 +77,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
               <div className="text-sm">{message.content}</div>
             ) : (
               <div className="text-sm markdown-content">
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+                <ReactMarkdown>{convertXmlToMarkdown(message.content)}</ReactMarkdown>
               </div>
             )}
             <div className={`text-xs ${message.sender === 'user' ? 'text-blue-100' : 'text-secondary-400'} mt-1 text-right`}>

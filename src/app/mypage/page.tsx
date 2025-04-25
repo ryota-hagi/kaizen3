@@ -1,8 +1,16 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { DashboardLayout } from '../../components/layouts/DashboardLayout'
-import { CompanyInfo, Employee } from '../../utils/api'
+import { useRouter } from 'next/navigation'
+import { DashboardLayout } from '@/components/layouts/DashboardLayout'
+import { CompanyInfo as CompanyInfoType, Employee } from '@/utils/api'
+import { useUser } from '@/contexts/UserContext'
+import { LoginForm } from '@/components/auth/LoginForm'
+import { RegisterForm } from '@/components/auth/RegisterForm'
+import { UserProfile } from '@/components/auth/UserProfile'
+import { CompanyInfo } from '@/components/mypage/CompanyInfo'
+import { EmployeeList } from '@/components/mypage/EmployeeList'
+import { TemplateList } from '@/components/mypage/TemplateList'
 
 // テンプレートのインターフェース
 interface Template {
@@ -17,12 +25,20 @@ const EMPLOYEES_STORAGE_KEY = 'kaizen_employees'
 const TEMPLATES_STORAGE_KEY = 'kaizen_templates'
 
 export default function MyPage() {
+  // 認証状態とユーザー情報
+  const { isAuthenticated, currentUser } = useUser()
+  const router = useRouter()
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  
   // タブの状態管理
-  const [activeTab, setActiveTab] = useState<'company' | 'employees' | 'templates'>('company')
+  const [activeTab, setActiveTab] = useState<'profile' | 'company' | 'employees' | 'templates'>('profile')
+  
+  // 管理者権限の確認
+  const isAdmin = currentUser?.role === '管理者'
   const [saveSuccess, setSaveSuccess] = useState(false)
   
   // デフォルトの会社情報
-  const defaultCompanyInfo: CompanyInfo = {
+  const defaultCompanyInfo: CompanyInfoType = {
     name: '株式会社サンプル',
     industry: 'IT',
     size: '50-100人',
@@ -78,28 +94,9 @@ export default function MyPage() {
   ]
   
   // 状態管理
-  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(defaultCompanyInfo)
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfoType>(defaultCompanyInfo)
   const [employees, setEmployees] = useState<Employee[]>(defaultEmployees)
   const [templates, setTemplates] = useState<Template[]>(defaultTemplates)
-  const [isEditingCompany, setIsEditingCompany] = useState(false)
-  
-  // テンプレート関連の状態
-  const [newTemplate, setNewTemplate] = useState<Omit<Template, 'id'>>({
-    title: '',
-    content: ''
-  })
-  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
-  
-  // 新規従業員の状態
-  const [newEmployee, setNewEmployee] = useState<Omit<Employee, 'id'>>({
-    name: '',
-    position: '',
-    department: '',
-    hourlyRate: 0
-  })
-  
-  // 編集中の従業員の状態
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   
   // コンポーネントのマウント時にローカルストレージから情報を読み込む
   useEffect(() => {
@@ -170,70 +167,27 @@ export default function MyPage() {
     }
   }, [saveSuccess])
   
-  // 会社情報の変更ハンドラ
-  const handleCompanyInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setCompanyInfo(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
-  
   // 会社情報の保存ハンドラ
-  const handleSaveCompanyInfo = () => {
-    console.log('=== Saving Company Info ===');
-    console.log('Company Info to Save:', JSON.stringify(companyInfo, null, 2));
+  const handleSaveCompanyInfo = (updatedInfo: CompanyInfoType) => {
+    setCompanyInfo(updatedInfo)
     
     // ローカルストレージに保存
     if (typeof window !== 'undefined') {
-      localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(companyInfo))
-      
-      // 保存後に再度読み込んで確認
-      try {
-        const savedCompanyInfo = localStorage.getItem(COMPANY_INFO_STORAGE_KEY);
-        console.log('Saved Company Info:', savedCompanyInfo);
-      } catch (error) {
-        console.error('Error reading saved company info:', error);
-      }
+      localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(updatedInfo))
     }
-    
-    // 編集モードを終了
-    setIsEditingCompany(false)
     
     // 保存成功メッセージを表示
     setSaveSuccess(true)
   }
   
-  // 新規従業員の変更ハンドラ
-  const handleNewEmployeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setNewEmployee(prev => ({
-      ...prev,
-      [name]: name === 'hourlyRate' ? Number(value) : value
-    }))
-  }
-  
-  // 編集中の従業員の変更ハンドラ
-  const handleEditEmployeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editingEmployee) return
-    
-    const { name, value } = e.target
-    setEditingEmployee(prev => ({
-      ...prev!,
-      [name]: name === 'hourlyRate' ? Number(value) : value
-    }))
-  }
-  
   // 従業員の追加ハンドラ
-  const handleAddEmployee = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const employee: Employee = {
+  const handleAddEmployee = (employee: Omit<Employee, 'id'>) => {
+    const newEmployee: Employee = {
       id: Date.now().toString(),
-      ...newEmployee
+      ...employee
     }
     
-    const updatedEmployees = [...employees, employee]
+    const updatedEmployees = [...employees, newEmployee]
     setEmployees(updatedEmployees)
     
     // ローカルストレージに保存
@@ -241,29 +195,14 @@ export default function MyPage() {
       localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(updatedEmployees))
     }
     
-    // フォームをリセット
-    setNewEmployee({
-      name: '',
-      position: '',
-      department: '',
-      hourlyRate: 0
-    })
-    
     // 保存成功メッセージを表示
     setSaveSuccess(true)
   }
   
   // 従業員の編集ハンドラ
   const handleEditEmployee = (employee: Employee) => {
-    setEditingEmployee(employee)
-  }
-  
-  // 編集した従業員の保存ハンドラ
-  const handleSaveEditedEmployee = () => {
-    if (!editingEmployee) return
-    
     const updatedEmployees = employees.map(emp => 
-      emp.id === editingEmployee.id ? editingEmployee : emp
+      emp.id === employee.id ? employee : emp
     )
     
     setEmployees(updatedEmployees)
@@ -273,16 +212,8 @@ export default function MyPage() {
       localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(updatedEmployees))
     }
     
-    // 編集モードを終了
-    setEditingEmployee(null)
-    
     // 保存成功メッセージを表示
     setSaveSuccess(true)
-  }
-  
-  // 編集のキャンセルハンドラ
-  const handleCancelEdit = () => {
-    setEditingEmployee(null)
   }
   
   // 従業員の削除ハンドラ
@@ -299,37 +230,14 @@ export default function MyPage() {
     setSaveSuccess(true)
   }
   
-  // テンプレート関連のハンドラ
-  // 新規テンプレートの変更ハンドラ
-  const handleNewTemplateChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setNewTemplate(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
-  
-  // 編集中のテンプレートの変更ハンドラ
-  const handleEditTemplateChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (!editingTemplate) return
-    
-    const { name, value } = e.target
-    setEditingTemplate(prev => ({
-      ...prev!,
-      [name]: value
-    }))
-  }
-  
   // テンプレートの追加ハンドラ
-  const handleAddTemplate = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const template: Template = {
+  const handleAddTemplate = (template: Omit<Template, 'id'>) => {
+    const newTemplate: Template = {
       id: Date.now().toString(),
-      ...newTemplate
+      ...template
     }
     
-    const updatedTemplates = [...templates, template]
+    const updatedTemplates = [...templates, newTemplate]
     setTemplates(updatedTemplates)
     
     // ローカルストレージに保存
@@ -337,27 +245,14 @@ export default function MyPage() {
       localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
     }
     
-    // フォームをリセット
-    setNewTemplate({
-      title: '',
-      content: ''
-    })
-    
     // 保存成功メッセージを表示
     setSaveSuccess(true)
   }
   
   // テンプレートの編集ハンドラ
   const handleEditTemplate = (template: Template) => {
-    setEditingTemplate(template)
-  }
-  
-  // 編集したテンプレートの保存ハンドラ
-  const handleSaveEditedTemplate = () => {
-    if (!editingTemplate) return
-    
     const updatedTemplates = templates.map(temp => 
-      temp.id === editingTemplate.id ? editingTemplate : temp
+      temp.id === template.id ? template : temp
     )
     
     setTemplates(updatedTemplates)
@@ -366,9 +261,6 @@ export default function MyPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
     }
-    
-    // 編集モードを終了
-    setEditingTemplate(null)
     
     // 保存成功メッセージを表示
     setSaveSuccess(true)
@@ -388,13 +280,39 @@ export default function MyPage() {
     setSaveSuccess(true)
   }
   
+  // 認証モードの切り替え
+  const toggleAuthMode = () => {
+    setAuthMode(authMode === 'login' ? 'register' : 'login')
+  }
+  
+  // 認証成功時の処理
+  const handleAuthSuccess = () => {
+    // 認証成功後の処理（必要に応じて）
+  }
+  
+  // 認証状態をチェック
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/auth/login')
+    }
+  }, [isAuthenticated])
+  
+  // 認証されていない場合はローディング表示
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      </div>
+    )
+  }
+  
   return (
     <DashboardLayout companyName={companyInfo.name}>
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-secondary-900">マイページ</h1>
-            <p className="text-secondary-600">会社情報と従業員情報を管理します</p>
+            <p className="text-secondary-600">ユーザー情報と会社情報を管理します</p>
           </div>
           {saveSuccess && (
             <div className="bg-green-100 text-green-800 px-4 py-2 rounded-md">
@@ -408,6 +326,16 @@ export default function MyPage() {
             <div className="flex space-x-8 px-6">
               <button
                 className={`py-4 font-medium ${
+                  activeTab === 'profile'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-secondary-500 hover:text-secondary-700'
+                }`}
+                onClick={() => setActiveTab('profile')}
+              >
+                プロフィール
+              </button>
+              <button
+                className={`py-4 font-medium ${
                   activeTab === 'company'
                     ? 'text-primary-600 border-b-2 border-primary-600'
                     : 'text-secondary-500 hover:text-secondary-700'
@@ -416,16 +344,18 @@ export default function MyPage() {
               >
                 会社情報
               </button>
-              <button
-                className={`py-4 font-medium ${
-                  activeTab === 'employees'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-secondary-500 hover:text-secondary-700'
-                }`}
-                onClick={() => setActiveTab('employees')}
-              >
-                従業員情報
-              </button>
+              {isAdmin && (
+                <button
+                  className={`py-4 font-medium ${
+                    activeTab === 'employees'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-secondary-500 hover:text-secondary-700'
+                  }`}
+                  onClick={() => setActiveTab('employees')}
+                >
+                  従業員情報
+                </button>
+              )}
               <button
                 className={`py-4 font-medium ${
                   activeTab === 'templates'
@@ -440,577 +370,28 @@ export default function MyPage() {
           </div>
           
           <div className="p-6">
-            {activeTab === 'company' ? (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-medium text-secondary-900">会社情報</h2>
-                  {!isEditingCompany ? (
-                    <button
-                      onClick={() => setIsEditingCompany(true)}
-                      className="px-3 py-1 text-sm bg-secondary-100 text-secondary-700 rounded hover:bg-secondary-200 transition-colors"
-                    >
-                      編集
-                    </button>
-                  ) : (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={handleSaveCompanyInfo}
-                        className="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
-                      >
-                        保存
-                      </button>
-                      <button
-                        onClick={() => setIsEditingCompany(false)}
-                        className="px-3 py-1 text-sm bg-secondary-100 text-secondary-700 rounded hover:bg-secondary-200 transition-colors"
-                      >
-                        キャンセル
-                      </button>
-                    </div>
-                  )}
-                </div>
-                
-                {isEditingCompany ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="name" className="block text-sm font-medium text-secondary-700 mb-1">
-                        会社名
-                      </label>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        value={companyInfo.name}
-                        onChange={handleCompanyInfoChange}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="industry" className="block text-sm font-medium text-secondary-700 mb-1">
-                        業種
-                      </label>
-                      <input
-                        type="text"
-                        id="industry"
-                        name="industry"
-                        value={companyInfo.industry}
-                        onChange={handleCompanyInfoChange}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="size" className="block text-sm font-medium text-secondary-700 mb-1">
-                        従業員規模
-                      </label>
-                      <input
-                        type="text"
-                        id="size"
-                        name="size"
-                        value={companyInfo.size}
-                        onChange={handleCompanyInfoChange}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="address" className="block text-sm font-medium text-secondary-700 mb-1">
-                        所在地
-                      </label>
-                      <input
-                        type="text"
-                        id="address"
-                        name="address"
-                        value={companyInfo.address}
-                        onChange={handleCompanyInfoChange}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                    
-                    <div className="md:col-span-2">
-                      <label htmlFor="businessDescription" className="block text-sm font-medium text-secondary-700 mb-1">
-                        事業内容
-                      </label>
-                      <textarea
-                        id="businessDescription"
-                        name="businessDescription"
-                        value={companyInfo.businessDescription || ''}
-                        onChange={handleCompanyInfoChange}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="foundedYear" className="block text-sm font-medium text-secondary-700 mb-1">
-                        設立年
-                      </label>
-                      <input
-                        type="text"
-                        id="foundedYear"
-                        name="foundedYear"
-                        value={companyInfo.foundedYear || ''}
-                        onChange={handleCompanyInfoChange}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="website" className="block text-sm font-medium text-secondary-700 mb-1">
-                        Webサイト
-                      </label>
-                      <input
-                        type="url"
-                        id="website"
-                        name="website"
-                        value={companyInfo.website || ''}
-                        onChange={handleCompanyInfoChange}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="contactEmail" className="block text-sm font-medium text-secondary-700 mb-1">
-                        連絡先メール
-                      </label>
-                      <input
-                        type="email"
-                        id="contactEmail"
-                        name="contactEmail"
-                        value={companyInfo.contactEmail || ''}
-                        onChange={handleCompanyInfoChange}
-                        className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-secondary-50 p-4 rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <h3 className="text-sm font-medium text-secondary-500">会社名</h3>
-                        <p className="text-secondary-900">{companyInfo.name}</p>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-sm font-medium text-secondary-500">業種</h3>
-                        <p className="text-secondary-900">{companyInfo.industry}</p>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-sm font-medium text-secondary-500">従業員規模</h3>
-                        <p className="text-secondary-900">{companyInfo.size}</p>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-sm font-medium text-secondary-500">所在地</h3>
-                        <p className="text-secondary-900">{companyInfo.address}</p>
-                      </div>
-                      
-                      {companyInfo.businessDescription && (
-                        <div className="md:col-span-2">
-                          <h3 className="text-sm font-medium text-secondary-500">事業内容</h3>
-                          <p className="text-secondary-900">{companyInfo.businessDescription}</p>
-                        </div>
-                      )}
-                      
-                      {companyInfo.foundedYear && (
-                        <div>
-                          <h3 className="text-sm font-medium text-secondary-500">設立年</h3>
-                          <p className="text-secondary-900">{companyInfo.foundedYear}</p>
-                        </div>
-                      )}
-                      
-                      {companyInfo.website && (
-                        <div>
-                          <h3 className="text-sm font-medium text-secondary-500">Webサイト</h3>
-                          <a href={companyInfo.website} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
-                            {companyInfo.website}
-                          </a>
-                        </div>
-                      )}
-                      
-                      {companyInfo.contactEmail && (
-                        <div>
-                          <h3 className="text-sm font-medium text-secondary-500">連絡先メール</h3>
-                          <a href={`mailto:${companyInfo.contactEmail}`} className="text-primary-600 hover:underline">
-                            {companyInfo.contactEmail}
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : activeTab === 'employees' ? (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-medium text-secondary-900">従業員情報</h2>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-secondary-200">
-                    <thead className="bg-secondary-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          名前
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          役職
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          部署
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          時給（円）
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          操作
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-secondary-200">
-                      {employees.map((employee) => (
-                        <tr key={employee.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
-                            {employee.name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
-                            {employee.position}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
-                            {employee.department}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
-                            {employee.hourlyRate.toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button
-                              onClick={() => handleEditEmployee(employee)}
-                              className="text-blue-600 hover:text-blue-900 mr-4"
-                            >
-                              編集
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEmployee(employee.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              削除
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {editingEmployee ? (
-                  <div className="mt-8 border-t border-secondary-200 pt-6">
-                    <h3 className="text-md font-medium text-secondary-900 mb-4">従業員を編集</h3>
-                    <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="edit-name" className="block text-sm font-medium text-secondary-700 mb-1">
-                          名前
-                        </label>
-                        <input
-                          type="text"
-                          id="edit-name"
-                          name="name"
-                          value={editingEmployee.name}
-                          onChange={handleEditEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="edit-position" className="block text-sm font-medium text-secondary-700 mb-1">
-                          役職
-                        </label>
-                        <input
-                          type="text"
-                          id="edit-position"
-                          name="position"
-                          value={editingEmployee.position}
-                          onChange={handleEditEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="edit-department" className="block text-sm font-medium text-secondary-700 mb-1">
-                          部署
-                        </label>
-                        <input
-                          type="text"
-                          id="edit-department"
-                          name="department"
-                          value={editingEmployee.department}
-                          onChange={handleEditEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="edit-hourlyRate" className="block text-sm font-medium text-secondary-700 mb-1">
-                          時給（円）
-                        </label>
-                        <input
-                          type="number"
-                          id="edit-hourlyRate"
-                          name="hourlyRate"
-                          value={editingEmployee.hourlyRate}
-                          onChange={handleEditEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          min="0"
-                          required
-                        />
-                      </div>
-                      
-                      <div className="md:col-span-2 flex space-x-4">
-                        <button
-                          type="button"
-                          onClick={handleSaveEditedEmployee}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                        >
-                          保存
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelEdit}
-                          className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
-                        >
-                          キャンセル
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                ) : (
-                  <div className="mt-8 border-t border-secondary-200 pt-6">
-                    <h3 className="text-md font-medium text-secondary-900 mb-4">従業員を追加</h3>
-                    <form onSubmit={handleAddEmployee} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-secondary-700 mb-1">
-                          名前
-                        </label>
-                        <input
-                          type="text"
-                          id="name"
-                          name="name"
-                          value={newEmployee.name}
-                          onChange={handleNewEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="position" className="block text-sm font-medium text-secondary-700 mb-1">
-                          役職
-                        </label>
-                        <input
-                          type="text"
-                          id="position"
-                          name="position"
-                          value={newEmployee.position}
-                          onChange={handleNewEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="department" className="block text-sm font-medium text-secondary-700 mb-1">
-                          部署
-                        </label>
-                        <input
-                          type="text"
-                          id="department"
-                          name="department"
-                          value={newEmployee.department}
-                          onChange={handleNewEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="hourlyRate" className="block text-sm font-medium text-secondary-700 mb-1">
-                          時給（円）
-                        </label>
-                        <input
-                          type="number"
-                          id="hourlyRate"
-                          name="hourlyRate"
-                          value={newEmployee.hourlyRate}
-                          onChange={handleNewEmployeeChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          min="0"
-                          required
-                        />
-                      </div>
-                      
-                      <div className="md:col-span-2">
-                        <button
-                          type="submit"
-                          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                        >
-                          追加
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
+            {activeTab === 'profile' ? (
+              <UserProfile />
+            ) : activeTab === 'company' ? (
+              <CompanyInfo 
+                companyInfo={companyInfo} 
+                onSave={handleSaveCompanyInfo}
+                isEditable={isAdmin}
+              />
+            ) : activeTab === 'employees' && isAdmin ? (
+              <EmployeeList 
+                employees={employees}
+                onAdd={handleAddEmployee}
+                onEdit={handleEditEmployee}
+                onDelete={handleDeleteEmployee}
+              />
             ) : (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-medium text-secondary-900">テンプレート</h2>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-secondary-200">
-                    <thead className="bg-secondary-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          タイトル
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          内容
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                          操作
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-secondary-200">
-                      {templates.map((template) => (
-                        <tr key={template.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
-                            {template.title}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-secondary-500 max-w-xs truncate">
-                            {template.content}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button
-                              onClick={() => handleEditTemplate(template)}
-                              className="text-blue-600 hover:text-blue-900 mr-4"
-                            >
-                              編集
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTemplate(template.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              削除
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {editingTemplate ? (
-                  <div className="mt-8 border-t border-secondary-200 pt-6">
-                    <h3 className="text-md font-medium text-secondary-900 mb-4">テンプレートを編集</h3>
-                    <form className="grid grid-cols-1 gap-4">
-                      <div>
-                        <label htmlFor="edit-title" className="block text-sm font-medium text-secondary-700 mb-1">
-                          タイトル
-                        </label>
-                        <input
-                          type="text"
-                          id="edit-title"
-                          name="title"
-                          value={editingTemplate.title}
-                          onChange={handleEditTemplateChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="edit-content" className="block text-sm font-medium text-secondary-700 mb-1">
-                          内容
-                        </label>
-                        <textarea
-                          id="edit-content"
-                          name="content"
-                          value={editingTemplate.content}
-                          onChange={handleEditTemplateChange}
-                          rows={6}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div className="flex space-x-4">
-                        <button
-                          type="button"
-                          onClick={handleSaveEditedTemplate}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                        >
-                          保存
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingTemplate(null)}
-                          className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
-                        >
-                          キャンセル
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                ) : (
-                  <div className="mt-8 border-t border-secondary-200 pt-6">
-                    <h3 className="text-md font-medium text-secondary-900 mb-4">テンプレートを追加</h3>
-                    <form onSubmit={handleAddTemplate} className="grid grid-cols-1 gap-4">
-                      <div>
-                        <label htmlFor="title" className="block text-sm font-medium text-secondary-700 mb-1">
-                          タイトル
-                        </label>
-                        <input
-                          type="text"
-                          id="title"
-                          name="title"
-                          value={newTemplate.title}
-                          onChange={handleNewTemplateChange}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <label htmlFor="content" className="block text-sm font-medium text-secondary-700 mb-1">
-                          内容
-                        </label>
-                        <textarea
-                          id="content"
-                          name="content"
-                          value={newTemplate.content}
-                          onChange={handleNewTemplateChange}
-                          rows={6}
-                          className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          required
-                        />
-                      </div>
-                      
-                      <div>
-                        <button
-                          type="submit"
-                          className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                        >
-                          追加
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
+              <TemplateList
+                templates={templates}
+                onAdd={handleAddTemplate}
+                onEdit={handleEditTemplate}
+                onDelete={handleDeleteTemplate}
+              />
             )}
           </div>
         </div>

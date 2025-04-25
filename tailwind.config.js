@@ -7,6 +7,12 @@ module.exports = {
   ],
   theme: {
     extend: {
+      width: {
+        '192': '768px',
+      },
+      transitionProperty: {
+        'width': 'width',
+      },
       colors: {
         primary: {
           50: '#f0f9ff',

@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
+import { useUser } from '@/contexts/UserContext'
+import { useChat } from '@/contexts/ChatContext'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -10,6 +12,8 @@ interface DashboardLayoutProps {
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, companyName = '株式会社サンプル' }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { currentUser } = useUser()
+  const { isOpen, isExpanded } = useChat()
   
   // 現在のパスを取得する関数（クライアントサイドでのみ実行）
   const getCurrentPath = () => {
@@ -62,6 +66,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
             <span className={sidebarCollapsed ? 'hidden' : 'block'}>マイページ</span>
             <span className={sidebarCollapsed ? 'block' : 'hidden'}>M</span>
           </Link>
+          
+          {/* 管理者向けメニュー */}
+          {currentUser && currentUser.role === '管理者' && (
+            <Link 
+              href="/dashboard/users" 
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                getCurrentPath() === '/dashboard/users' 
+                  ? 'bg-primary-50 text-primary-700' 
+                  : 'text-secondary-700 hover:bg-secondary-50'
+              }`}
+            >
+              <span className={sidebarCollapsed ? 'hidden' : 'block'}>ユーザー管理</span>
+              <span className={sidebarCollapsed ? 'block' : 'hidden'}>U</span>
+            </Link>
+          )}
         </nav>
         
         <div className="p-4 border-t border-secondary-200">
@@ -75,7 +94,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
       </div>
 
       {/* メインコンテンツ */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
+        style={{ 
+          marginLeft: '1rem',
+          marginRight: isOpen ? '1rem' : '0',
+          flex: '1 1 auto',
+          width: 'auto'
+        }}>
         {children}
       </div>
     </div>

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useContext } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { WorkflowContext, WorkflowContextProvider } from '../../contexts/WorkflowContext'
+import { useChat } from '../../contexts/ChatContext'
 import { callClaudeAPI } from '../../utils/api'
 import { ChatHeader } from './ChatHeader'
 import { ChatMenu } from './ChatMenu'
@@ -48,8 +49,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onOpenChange,
   defaultOpen = false
 }) => {
-  // チャットの開閉状態を管理
-  const [isOpen, setIsOpen] = useState(defaultOpen)
+  // チャットの状態をグローバルコンテキストから取得
+  const { isOpen, isExpanded, setIsOpen, setIsExpanded, toggleExpand } = useChat()
+  
+  // コンポーネントマウント時にデフォルト値を設定
+  useEffect(() => {
+    if (defaultOpen) {
+      setIsOpen(true)
+    }
+  }, [defaultOpen, setIsOpen])
   
   // メモ関連の状態
   const [showMemoTitleInput, setShowMemoTitleInput] = useState(false)
@@ -187,6 +195,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     scrollToBottom()
   }, [messages])
 
+  // ローカルストレージからチャットメッセージを読み込む
+  useEffect(() => {
+    const storedMessages = localStorage.getItem('chat_messages')
+    if (storedMessages) {
+      try {
+        const parsedMessages = JSON.parse(storedMessages)
+        // JSONから復元されたデータのtimestampをDateオブジェクトに変換
+        const processedMessages = parsedMessages.map((message: any) => ({
+          ...message,
+          timestamp: new Date(message.timestamp)
+        }))
+        setMessages(processedMessages)
+      } catch (error) {
+        console.error('チャットメッセージの解析エラー:', error)
+      }
+    }
+  }, [])
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -222,9 +248,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           sender: 'assistant',
           timestamp: new Date()
         }
-        setMessages(prev => [...prev, assistantMessage])
-        setIsLoading(false)
-        return
+        const updatedMessages = [...messages, userMessage, assistantMessage];
+        setMessages(updatedMessages);
+        localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
+        setIsLoading(false);
+        return;
       } else if (addStepCommand && currentWorkflow) {
         const assistantMessage: Message = {
           id: Date.now().toString(),
@@ -232,9 +260,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           sender: 'assistant',
           timestamp: new Date()
         }
-        setMessages(prev => [...prev, assistantMessage])
-        setIsLoading(false)
-        return
+        const updatedMessages = [...messages, userMessage, assistantMessage];
+        setMessages(updatedMessages);
+        localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
+        setIsLoading(false);
+        return;
       } else if (saveCommand && currentWorkflow) {
         saveWorkflow()
         const assistantMessage: Message = {
@@ -243,9 +273,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           sender: 'assistant',
           timestamp: new Date()
         }
-        setMessages(prev => [...prev, assistantMessage])
-        setIsLoading(false)
-        return
+        const updatedMessages = [...messages, userMessage, assistantMessage];
+        setMessages(updatedMessages);
+        localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
+        setIsLoading(false);
+        return;
       } else if (navigateCommand) {
         let destination = ''
         if (/ダッシュボード/i.test(input)) {
@@ -265,9 +297,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           sender: 'assistant',
           timestamp: new Date()
         }
-        setMessages(prev => [...prev, assistantMessage])
-        setIsLoading(false)
-        return
+        const updatedMessages = [...messages, userMessage, assistantMessage];
+        setMessages(updatedMessages);
+        localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
+        setIsLoading(false);
+        return;
       }
       
       // ステップ追加コマンドの処理（2回目のメッセージ）
@@ -291,9 +325,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               sender: 'assistant',
               timestamp: new Date()
             }
-            setMessages(prev => [...prev, assistantMessage])
-            setIsLoading(false)
-            return
+            const updatedMessages = [...messages, userMessage, assistantMessage];
+            setMessages(updatedMessages);
+            localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
+            setIsLoading(false);
+            return;
           }
         }
       }
@@ -346,7 +382,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             timestamp: new Date()
           }
           
+          // メッセージを状態に追加
           setMessages(prev => [...prev, assistantMessage]);
+          
+          // ローカルストレージにメッセージを保存
+          const updatedMessages = [...messages, userMessage, assistantMessage];
+          localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
         } else {
           throw new Error('Empty response from Claude API');
         }
@@ -360,7 +401,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           timestamp: new Date()
         }
         
-        setMessages(prev => [...prev, errorMessage])
+        const updatedMessages = [...messages, userMessage, errorMessage];
+        setMessages(updatedMessages);
+        localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
       }
       
     } catch (error) {
@@ -373,7 +416,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         timestamp: new Date()
       }
       
-      setMessages(prev => [...prev, errorMessage])
+      const updatedMessages = [...messages, userMessage, errorMessage];
+      setMessages(updatedMessages);
+      localStorage.setItem('chat_messages', JSON.stringify(updatedMessages));
     } finally {
       setIsLoading(false)
     }
@@ -387,6 +432,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // チャットを閉じる
   const closeChat = () => {
     setIsOpen(false)
+    // チャットを閉じるときに拡張状態もリセット
+    if (isExpanded) {
+      setIsExpanded(false)
+    }
   }
 
   // メモを保存する
@@ -479,11 +528,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     )
   }
 
+
   // 開いている状態のチャットインターフェース
   return (
-    <div className="fixed top-0 right-0 w-96 h-screen z-50 flex flex-col bg-gradient-to-br from-white to-blue-50 shadow-lg border-l border-blue-100">
+    <div className={`fixed top-0 right-0 ${isExpanded ? 'w-192' : 'w-96'} h-screen z-50 flex flex-col bg-gradient-to-br from-white to-blue-50 shadow-lg border-l border-blue-100 transition-all duration-300`}>
       {/* チャットヘッダー */}
-      <ChatHeader onClose={closeChat} />
+      <ChatHeader 
+        onClose={closeChat} 
+        isExpanded={isExpanded} 
+        onToggleExpand={toggleExpand} 
+      />
       
       {/* チャットメニュー */}
       <ChatMenu

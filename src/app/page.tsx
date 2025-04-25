@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '../components/layouts/DashboardLayout'
 import { WorkflowEditor } from '../components/workflow/WorkflowEditor'
 import { ChatInterface } from '../components/chat/ChatInterface'
+import { useUser } from '@/contexts/UserContext'
 
 interface WorkflowStep {
   id: string
@@ -40,6 +41,7 @@ export default function Home() {
   const [companyInfo, setCompanyInfo] = useState<any>(null)
   const [employees, setEmployees] = useState<any[]>([])
   const router = useRouter()
+  const { getUserById } = useUser()
   
   // 会社情報と従業員情報を取得
   useEffect(() => {
@@ -267,21 +269,24 @@ export default function Home() {
                 
                 <div className="bg-white rounded-lg shadow overflow-hidden">
                   <table className="min-w-full divide-y divide-secondary-200">
-                    <thead className="bg-secondary-50">
+                    <thead className="bg-blue-50 border-b-2 border-blue-200">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                           フロー名
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                           説明
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                           ステップ数
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                           最終更新日
                         </th>
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                  作成者
+                </th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                           操作
                         </th>
                       </tr>
@@ -355,6 +360,34 @@ export default function Home() {
                                     {displayWorkflow.updatedAt.toLocaleDateString('ja-JP')}
                                   </div>
                                 </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {displayWorkflow.createdBy && getUserById ? getUserById(displayWorkflow.createdBy) ? (
+                                    <div className="flex items-center">
+                                      <div className="flex-shrink-0 h-8 w-8">
+                                        {getUserById(displayWorkflow.createdBy)?.profileImage ? (
+                                          <img
+                                            className="h-8 w-8 rounded-full"
+                                            src={getUserById(displayWorkflow.createdBy)?.profileImage}
+                                            alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
+                                          />
+                                        ) : (
+                                          <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-800">
+                                            {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="ml-2">
+                                        <div className="text-sm font-medium text-secondary-900">
+                                          {getUserById(displayWorkflow.createdBy)?.fullName}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-sm text-secondary-500">未設定</div>
+                                  ) : (
+                                    <div className="text-sm text-secondary-500">未設定</div>
+                                  )}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <button
                                     onClick={() => {
@@ -405,7 +438,7 @@ export default function Home() {
                         })()
                       ) : (
                         <tr>
-                          <td colSpan={5} className="px-6 py-10 text-center text-sm text-secondary-500">
+                          <td colSpan={6} className="px-6 py-10 text-center text-sm text-secondary-500">
                             {searchTerm ? '検索条件に一致する業務フローはありません' : '保存された業務フローはありません'}
                           </td>
                         </tr>

@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import React from 'react'
 import { WorkflowContextProvider } from '../contexts/WorkflowContext'
+import { UserContextProvider } from '../contexts/UserContext'
+import { ChatContextProvider } from '../contexts/ChatContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,9 +21,13 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className={inter.className}>
-        <WorkflowContextProvider>
-          {children}
-        </WorkflowContextProvider>
+        <UserContextProvider>
+          <WorkflowContextProvider>
+            <ChatContextProvider>
+              {children}
+            </ChatContextProvider>
+          </WorkflowContextProvider>
+        </UserContextProvider>
       </body>
     </html>
   )

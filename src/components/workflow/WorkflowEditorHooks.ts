@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Workflow } from '../../utils/api'
 import { WorkflowStep, generateSampleWorkflow, parseStepsFromResponse } from './WorkflowEditorHelpers'
+import { useUser } from '../../contexts/UserContext'
 
 /**
  * ワークフローデータを読み込むためのカスタムフック
@@ -309,6 +310,8 @@ export const useWorkflowImprovement = (
   workflowDescription: string,
   improvedWorkflow: Workflow | null = null
 ) => {
+  // UserContextからユーザー情報を取得
+  const { currentUser } = useUser()
   const [isLoading, setIsLoading] = useState(false)
   const [customPrompt, setCustomPrompt] = useState('')
   const [previousSteps, setPreviousSteps] = useState<WorkflowStep[]>([])
@@ -365,6 +368,28 @@ ${workflow.steps
 `;
 
       try {
+        // 会社情報を取得
+        const storedCompanyInfo = localStorage.getItem('kaizen_company_info')
+        let companyInfo = null
+        if (storedCompanyInfo) {
+          try {
+            companyInfo = JSON.parse(storedCompanyInfo)
+          } catch (error) {
+            console.error('会社情報の解析エラー:', error)
+          }
+        }
+
+        // 従業員情報を取得
+        const storedEmployees = localStorage.getItem('kaizen_employees')
+        let employees = []
+        if (storedEmployees) {
+          try {
+            employees = JSON.parse(storedEmployees)
+          } catch (error) {
+            console.error('従業員情報の解析エラー:', error)
+          }
+        }
+
         // 実際にClaudeAPIを呼び出す
         console.log('ClaudeAPIを呼び出します')
         const response = await fetch('/api/claude', {
@@ -374,7 +399,26 @@ ${workflow.steps
           },
           body: JSON.stringify({
             message: prompt,
-            model: 'claude-3-opus-20240229'
+            companyInfo: companyInfo,
+            employees: employees,
+            workflowContext: {
+              id: workflow.id,
+              name: workflow.name,
+              description: workflow.description,
+              steps: workflow.steps,
+              isImproved: workflow.isImproved || false,
+              // 再提案の場合は、現在の改善後ステップを使用
+              relatedWorkflow: {
+                id: improvedWorkflow ? improvedWorkflow.id : `improved-${workflow?.id}-${Date.now()}`,
+                name: `${workflowName}（改善後）`,
+                description: `${workflowDescription} - AIによる改善案`,
+                steps: improvedSteps.length > 0 ? improvedSteps : [],
+                createdAt: improvedWorkflow ? improvedWorkflow.createdAt : new Date(),
+                updatedAt: new Date(),
+                isImproved: true,
+                originalId: workflow.id
+              }
+            }
           }),
         })
 
@@ -402,13 +446,44 @@ ${workflow.steps
           createdAt: improvedWorkflow ? improvedWorkflow.createdAt : new Date(),
           updatedAt: new Date(),
           isImproved: true,
-          originalId: workflow?.id
+          originalId: workflow?.id,
+          createdBy: currentUser?.id // 現在のユーザーIDを作成者として設定
         }
 
         setImprovedWorkflow(newImprovedWorkflow)
         setImprovedSteps(steps)
         setIsImproved(true)
         setShowComparison(true)
+        
+        // 改善後のフローをチャットに送信
+        try {
+          // チャットインターフェースにメッセージを送信
+          const chatMessage = `改善後のフロー：\n\n${steps.map((step, index) => 
+            `【${step.title}】\n` +
+            `- 説明: ${step.description}\n` +
+            `- 担当: ${step.assignee}\n` +
+            `- 所要時間: ${step.timeRequired}分\n` +
+            `- ツール/設備: ${step.tools || '未設定'}\n` +
+            `- コスト: ${step.cost !== undefined ? `${step.cost}円` : '未設定'}`
+          ).join('\n\n')}`;
+          
+          // ローカルストレージにチャットメッセージを保存
+          const chatMessages = localStorage.getItem('chat_messages') || '[]';
+          const parsedMessages = JSON.parse(chatMessages);
+          
+          // システムメッセージとして追加
+          parsedMessages.push({
+            id: Date.now().toString(),
+            content: chatMessage,
+            sender: 'assistant',
+            timestamp: new Date()
+          });
+          
+          localStorage.setItem('chat_messages', JSON.stringify(parsedMessages));
+          console.log('改善後のフローをチャットに送信しました');
+        } catch (error) {
+          console.error('チャットへのメッセージ送信エラー:', error);
+        }
         
         return newImprovedWorkflow
       } catch (error) {
@@ -473,6 +548,8 @@ export const useWorkflowSave = (
   setImprovedWorkflow: (workflow: Workflow | null) => void,
   onClose?: () => void
 ) => {
+  // UserContextからユーザー情報を取得
+  const { currentUser } = useUser()
   // ワークフローの保存
   const saveWorkflow = () => {
     if (!workflow) return
@@ -503,6 +580,8 @@ export const useWorkflowSave = (
     // 新規作成の場合
     if (workflow.id === 'new') {
       updatedWorkflow.id = Date.now().toString()
+      // 作成者情報を設定
+      updatedWorkflow.createdBy = currentUser?.id
       workflows.push(updatedWorkflow)
     } else {
       // 既存ワークフローの更新
@@ -525,7 +604,8 @@ export const useWorkflowSave = (
         createdAt: improvedWorkflow ? improvedWorkflow.createdAt : new Date(),
         updatedAt: new Date(),
         isImproved: true,
-        originalId: updatedWorkflow.id
+        originalId: updatedWorkflow.id,
+        createdBy: currentUser?.id // 現在のユーザーIDを作成者として設定
       }
 
       // 既存の改善後ワークフローを検索
