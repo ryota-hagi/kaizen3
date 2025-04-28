@@ -1,69 +1,40 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useUser } from '@/contexts/UserContext'
+import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 
 interface LoginFormProps {
   onSuccess?: () => void
-  onRegisterClick?: () => void
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => {
-  const { login } = useUser()
+export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const router = useRouter()
-  
-  // フォームの状態
-  const [formData, setFormData] = useState({
-    username: '',
-    password: ''
-  })
-  
-  // エラーメッセージの状態
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
-  // 入力値の変更ハンドラ
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-    
-    // エラーをクリア
-    setError(null)
-  }
-  
-  // フォーム送信ハンドラ
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    
-    // バリデーション
-    if (!formData.username || !formData.password) {
-      setError('ユーザーIDとパスワードを入力してください')
-      setLoading(false)
-      return
-    }
-    
+  // Googleログインハンドラ
+  const handleGoogleLogin = async () => {
     try {
-      // ログイン処理
-      const success = await login(formData.username, formData.password)
+      setLoading(true)
+      setError(null)
       
-      if (success) {
-        // ログイン成功
+      // Google認証を開始
+      const result = await signIn('google', {
+        callbackUrl: onSuccess ? undefined : '/mypage',
+        redirect: false,
+      })
+      
+      if (result?.error) {
+        setError('ログインに失敗しました')
+        console.error('Login error:', result.error)
+      } else if (result?.url) {
+        // リダイレクト
         if (onSuccess) {
           onSuccess()
         } else {
-          // マイページにリダイレクト
-          router.push('/mypage')
+          router.push(result.url)
         }
-      } else {
-        // ログイン失敗
-        setError('ユーザーIDまたはパスワードが正しくありません')
       }
     } catch (err) {
       setError('ログイン中にエラーが発生しました')
@@ -73,17 +44,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     }
   }
   
-  // 新規登録ボタンのクリックハンドラ
-  const handleRegisterClick = () => {
-    if (onRegisterClick) {
-      onRegisterClick()
-    } else {
-      router.push('/register')
-    }
-  }
-  
   return (
-    <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full mx-auto">
+    <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
       <h2 className="text-2xl font-bold text-secondary-900 mb-6">ログイン</h2>
       
       {error && (
@@ -92,60 +54,38 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
         </div>
       )}
       
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="username" className="block text-sm font-medium text-secondary-700 mb-1">
-            ユーザーID
-          </label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-secondary-700 mb-1">
-            パスワード
-          </label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
-        
-        <div className="pt-2">
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors ${
-              loading ? 'opacity-70 cursor-not-allowed' : ''
-            }`}
-          >
-            {loading ? 'ログイン中...' : 'ログイン'}
-          </button>
-        </div>
-      </form>
-      
-      <div className="mt-6 text-center">
-        <p className="text-secondary-600">
-          アカウントをお持ちでない場合は
-          <button
-            onClick={handleRegisterClick}
-            className="text-primary-600 hover:text-primary-800 ml-1 font-medium"
-          >
-            新規登録
-          </button>
-        </p>
+      <div className="space-y-6">
+        <button
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="w-full flex items-center justify-center px-4 py-2 border border-secondary-300 rounded-md shadow-sm text-sm font-medium text-secondary-700 bg-white hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
+              fill="#4285F4"
+            />
+            <path
+              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
+              fill="#34A853"
+              clipPath="url(#b)"
+              transform="translate(0 6)"
+            />
+            <path
+              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
+              fill="#FBBC05"
+              clipPath="url(#c)"
+              transform="translate(0 12)"
+            />
+            <path
+              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
+              fill="#EA4335"
+              clipPath="url(#d)"
+              transform="translate(0 18)"
+            />
+          </svg>
+          {loading ? 'ログイン中...' : 'Googleでログイン'}
+        </button>
       </div>
     </div>
   )

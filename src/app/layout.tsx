@@ -5,6 +5,7 @@ import React from 'react'
 import { WorkflowContextProvider } from '../contexts/WorkflowContext'
 import { UserContextProvider } from '../contexts/UserContext'
 import { ChatContextProvider } from '../contexts/ChatContext'
+import { Providers } from './providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,13 +22,15 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className={inter.className}>
-        <UserContextProvider>
-          <WorkflowContextProvider>
-            <ChatContextProvider>
-              {children}
-            </ChatContextProvider>
-          </WorkflowContextProvider>
-        </UserContextProvider>
+        <Providers>
+          <UserContextProvider>
+            <WorkflowContextProvider>
+              <ChatContextProvider>
+                {children}
+              </ChatContextProvider>
+            </WorkflowContextProvider>
+          </UserContextProvider>
+        </Providers>
       </body>
     </html>
   )
