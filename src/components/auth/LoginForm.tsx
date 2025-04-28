@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useUser } from '@/contexts/UserContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { debugLocalStorage } from '@/utils/localStorage'
 
 interface LoginFormProps {
   onSuccess?: () => void
@@ -36,11 +37,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     setError(null)
   }
   
+  // デバッグ用：コンポーネントマウント時にローカルストレージの内容を表示
+  useEffect(() => {
+    console.log('LoginForm: コンポーネントがマウントされました');
+    debugLocalStorage();
+  }, []);
+
   // フォーム送信ハンドラ
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    
+    console.log('ログイン試行:', formData.username);
     
     // バリデーション
     if (!formData.username || !formData.password) {
@@ -50,11 +59,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     }
     
     try {
+      // デバッグ用：ログイン前にローカルストレージの内容を表示
+      debugLocalStorage();
+      
       // ログイン処理
       const success = await login(formData.username, formData.password)
       
       if (success) {
         // ログイン成功
+        console.log('ログイン成功:', formData.username);
+        
         if (onSuccess) {
           onSuccess()
         } else {
@@ -63,6 +77,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
         }
       } else {
         // ログイン失敗
+        console.log('ログイン失敗:', formData.username);
         setError('ユーザーIDまたはパスワードが正しくありません')
       }
     } catch (err) {
@@ -78,12 +93,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick
     if (onRegisterClick) {
       onRegisterClick()
     } else {
-      router.push('/register')
+      router.push('/auth/register')
     }
   }
   
   return (
-    <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full mx-auto">
+    <div className="max-w-md w-full mx-auto">
       <h2 className="text-2xl font-bold text-secondary-900 mb-6">ログイン</h2>
       
       {error && (

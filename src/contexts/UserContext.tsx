@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { UserInfo, Employee } from '../utils/api'
+import { getFromLocalStorage, saveToLocalStorage, removeFromLocalStorage, debugLocalStorage } from '../utils/localStorage'
 
 // ローカルストレージのキー
 const USER_STORAGE_KEY = 'kaizen_user_info'
@@ -53,67 +54,67 @@ const UserContext = createContext<UserContextType>(defaultUserContext)
 // コンテキストを使用するためのカスタムフック
 export const useUser = () => useContext(UserContext)
 
-  // ローカルストレージからユーザー情報を読み込む関数
+// ローカルストレージからユーザー情報を読み込む関数
 const loadUserDataFromLocalStorage = (
   setCurrentUser: React.Dispatch<React.SetStateAction<UserInfo | null>>,
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
   setUserPasswords: React.Dispatch<React.SetStateAction<Record<string, string>>>,
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ) => {
-  if (typeof window === 'undefined') return;
-
-  // 現在のユーザー情報を読み込む
-  const savedUserInfo = localStorage.getItem(USER_STORAGE_KEY)
-  if (savedUserInfo) {
-    try {
-      const parsedUserInfo = JSON.parse(savedUserInfo)
-      // ステータスが設定されていない場合は、アクティブに設定
-      if (!parsedUserInfo.status) {
-        parsedUserInfo.status = 'アクティブ'
+  // デバッグ用にローカルストレージの内容を表示
+  debugLocalStorage();
+  
+  // まず全ユーザー情報を読み込む（ユーザーリストとパスワードを確実に読み込むため）
+  const parsedData = getFromLocalStorage(USERS_STORAGE_KEY, []) as UserWithPassword[];
+  
+  if (parsedData && parsedData.length > 0) {
+    // ユーザー情報とパスワードを分離
+    const usersList = parsedData.map(item => {
+      const user = item.user;
+      
+      // ステータスが設定されていない場合は、適切なステータスを設定
+      if (!user.status) {
+        if (user.isInvited) {
+          user.status = '招待中'
+        } else if (user.lastLogin) {
+          // 最終ログイン日付があれば「ログアウト中」
+          user.status = 'ログアウト中'
+        } else {
+          // デフォルトは招待中
+          user.status = '招待中'
+        }
       }
-      setCurrentUser(parsedUserInfo)
-      setIsAuthenticated(true)
-    } catch (error) {
-      console.error('Failed to parse user info from localStorage:', error)
-    }
+      
+      return user;
+    });
+    
+    const passwordsMap = parsedData.reduce((acc, item) => {
+      acc[item.user.id] = item.password
+      return acc
+    }, {} as Record<string, string>)
+    
+    setUsers(usersList)
+    setUserPasswords(passwordsMap)
+    
+    console.log('ユーザーリストを読み込みました:', usersList.length, 'ユーザー')
+    console.log('パスワード情報を読み込みました:', Object.keys(passwordsMap).length, 'エントリ')
+  } else {
+    console.log('ユーザーリストが見つかりません')
   }
 
-  // 全ユーザー情報を読み込む
-  const savedUsers = localStorage.getItem(USERS_STORAGE_KEY)
-  if (savedUsers) {
-    try {
-      const parsedData = JSON.parse(savedUsers) as UserWithPassword[]
-      
-      // ユーザー情報とパスワードを分離
-      const usersList = parsedData.map(item => {
-        const user = item.user;
-        
-        // ステータスが設定されていない場合は、適切なステータスを設定
-        if (!user.status) {
-          if (user.isInvited) {
-            user.status = '招待中'
-          } else if (user.lastLogin) {
-            // 最終ログイン日付があれば「ログアウト中」
-            user.status = 'ログアウト中'
-          } else {
-            // デフォルトは招待中
-            user.status = '招待中'
-          }
-        }
-        
-        return user;
-      });
-      
-      const passwordsMap = parsedData.reduce((acc, item) => {
-        acc[item.user.id] = item.password
-        return acc
-      }, {} as Record<string, string>)
-      
-      setUsers(usersList)
-      setUserPasswords(passwordsMap)
-    } catch (error) {
-      console.error('Failed to parse users from localStorage:', error)
+  // 次に現在のユーザー情報を読み込む
+  const parsedUserInfo = getFromLocalStorage(USER_STORAGE_KEY, null);
+  
+  if (parsedUserInfo) {
+    // ステータスが設定されていない場合は、アクティブに設定
+    if (!parsedUserInfo.status) {
+      parsedUserInfo.status = 'アクティブ'
     }
+    setCurrentUser(parsedUserInfo)
+    setIsAuthenticated(true)
+    console.log('現在のユーザー情報を読み込みました:', parsedUserInfo.username)
+  } else {
+    console.log('現在のユーザー情報が見つかりません')
   }
 }
 
@@ -165,137 +166,165 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
   }, []);
 
-  // ログイン処理
-  const login = async (usernameOrEmail: string, password: string): Promise<boolean> => {
-    // ユーザー名またはメールアドレスでユーザーを検索
-    const user = users.find(u => u.username === usernameOrEmail || u.email === usernameOrEmail)
+// ログイン処理
+const login = async (usernameOrEmail: string, password: string): Promise<boolean> => {
+  console.log('ログイン試行:', usernameOrEmail)
+  console.log('現在のユーザー数:', users.length)
+  
+  // デバッグ用にローカルストレージの内容を表示
+  debugLocalStorage();
+  
+  // ユーザー名またはメールアドレスでユーザーを検索
+  const user = users.find(u => u.username === usernameOrEmail || u.email === usernameOrEmail)
+  
+  if (!user) {
+    console.log('ユーザーが見つかりません:', usernameOrEmail)
+    return false // ユーザーが見つからない
+  }
+  
+  console.log('ユーザーが見つかりました:', user.username)
+  
+  // パスワードの検証
+  const storedPassword = userPasswords[user.id]
+  if (!storedPassword) {
+    console.log('パスワードが保存されていません')
+    return false // パスワードが保存されていない
+  }
+  
+  if (storedPassword !== password) {
+    console.log('パスワードが一致しません')
+    return false // パスワードが一致しない
+  }
+  
+  console.log('パスワードが一致しました')
+  
+  // 最終ログイン日時を更新し、招待状態を解除、ステータスをアクティブに設定
+  const updatedUser = {
+    ...user,
+    lastLogin: new Date().toISOString(),
+    isInvited: false, // ログイン時に招待状態を解除（後方互換性のため）
+    status: 'アクティブ' as const // ログイン時にステータスをアクティブに設定
+  }
+  
+  // 現在のユーザーを設定
+  setCurrentUser(updatedUser)
+  setIsAuthenticated(true)
+  
+  // ユーザーリストも更新
+  const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u)
+  setUsers(updatedUsers)
+  
+  // ローカルストレージに保存
+  saveToLocalStorage(USER_STORAGE_KEY, updatedUser);
+  
+  // ユーザーリストをローカルストレージに保存
+  const usersWithPasswords = updatedUsers.map(u => ({
+    user: u,
+    password: userPasswords[u.id]
+  }))
+  saveToLocalStorage(USERS_STORAGE_KEY, usersWithPasswords);
+  
+  return true
+}
+
+// ログアウト処理
+const logout = () => {
+  if (currentUser) {
+    console.log('ログアウト処理を開始:', currentUser.username)
     
-    if (!user) {
-      return false // ユーザーが見つからない
-    }
-    
-    // パスワードの検証
-    if (userPasswords[user.id] !== password) {
-      return false // パスワードが一致しない
-    }
-    
-    // 最終ログイン日時を更新し、招待状態を解除、ステータスをアクティブに設定
+    // ユーザーのステータスを「ログアウト中」に更新
     const updatedUser = {
-      ...user,
-      lastLogin: new Date().toISOString(),
-      isInvited: false, // ログイン時に招待状態を解除（後方互換性のため）
-      status: 'アクティブ' as const // ログイン時にステータスをアクティブに設定
-    }
-    
-    // 現在のユーザーを設定
-    setCurrentUser(updatedUser)
-    setIsAuthenticated(true)
-    
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
-      
-      // ユーザーリストも更新
-      const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u)
-      setUsers(updatedUsers)
-      
-      // ユーザーリストをローカルストレージに保存
-      const usersWithPasswords = updatedUsers.map(u => ({
-        user: u,
-        password: userPasswords[u.id]
-      }))
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersWithPasswords))
-    }
-    
-    return true
-  }
-
-  // ログアウト処理
-  const logout = () => {
-    if (currentUser) {
-      // ユーザーのステータスを「ログアウト中」に更新
-      const updatedUser = {
-        ...currentUser,
-        status: 'ログアウト中' as const
-      }
-      
-      // ユーザーリストを更新
-      const updatedUsers = users.map(u => u.id === currentUser.id ? updatedUser : u)
-      setUsers(updatedUsers)
-      
-      // ユーザーリストをローカルストレージに保存
-      if (typeof window !== 'undefined') {
-        const usersWithPasswords = updatedUsers.map(u => ({
-          user: u,
-          password: userPasswords[u.id]
-        }))
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersWithPasswords))
-      }
-    }
-    
-    // 現在のユーザーをクリア
-    setCurrentUser(null)
-    setIsAuthenticated(false)
-    
-    // ローカルストレージからユーザー情報を削除
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(USER_STORAGE_KEY)
-    }
-  }
-
-  // ユーザー登録処理
-  const register = async (
-    userData: Omit<UserInfo, 'id' | 'createdAt' | 'lastLogin'>, 
-    password: string
-  ): Promise<boolean> => {
-    // ユーザー名が既に存在するか確認
-    if (users.some(u => u.username === userData.username)) {
-      return false // ユーザー名が既に使用されている
-    }
-    
-    // メールアドレスが既に存在するか確認
-    if (users.some(u => u.email === userData.email)) {
-      return false // メールアドレスが既に使用されている
-    }
-    
-    // 新しいユーザーを作成
-    const newUser: UserInfo = {
-      id: Date.now().toString(),
-      ...userData,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      status: 'アクティブ' as const // 登録時はアクティブ状態
+      ...currentUser,
+      status: 'ログアウト中' as const
     }
     
     // ユーザーリストを更新
-    const updatedUsers = [...users, newUser]
+    const updatedUsers = users.map(u => u.id === currentUser.id ? updatedUser : u)
     setUsers(updatedUsers)
     
-    // パスワードを保存
-    const updatedPasswords = {
-      ...userPasswords,
-      [newUser.id]: password
-    }
-    setUserPasswords(updatedPasswords)
+    // パスワード情報を確実に保持
+    const usersWithPasswords = updatedUsers.map(u => ({
+      user: u,
+      password: userPasswords[u.id] || '' // パスワードがない場合は空文字を設定
+    }))
     
-    // 現在のユーザーとして設定
-    setCurrentUser(newUser)
-    setIsAuthenticated(true)
-    
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser))
-      
-      // ユーザーリストをローカルストレージに保存
-      const usersWithPasswords = updatedUsers.map(u => ({
-        user: u,
-        password: u.id === newUser.id ? password : updatedPasswords[u.id]
-      }))
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersWithPasswords))
-    }
-    
-    return true
+    // ユーザーリストをローカルストレージに保存
+    saveToLocalStorage(USERS_STORAGE_KEY, usersWithPasswords);
+    console.log('ユーザーリストを更新しました:', updatedUsers.length, 'ユーザー')
   }
+  
+  // 現在のユーザーをクリア
+  setCurrentUser(null)
+  setIsAuthenticated(false)
+  
+  // ローカルストレージからユーザー情報を削除
+  removeFromLocalStorage(USER_STORAGE_KEY);
+  console.log('現在のユーザー情報を削除しました')
+  
+  // デバッグ用にローカルストレージの内容を表示
+  debugLocalStorage();
+}
+
+// ユーザー登録処理
+const register = async (
+  userData: Omit<UserInfo, 'id' | 'createdAt' | 'lastLogin'>, 
+  password: string
+): Promise<boolean> => {
+  console.log('ユーザー登録処理を開始:', userData.username);
+  
+  // ユーザー名が既に存在するか確認
+  if (users.some(u => u.username === userData.username)) {
+    console.log('ユーザー名が既に使用されています:', userData.username);
+    return false // ユーザー名が既に使用されている
+  }
+  
+  // メールアドレスが既に存在するか確認
+  if (users.some(u => u.email === userData.email)) {
+    console.log('メールアドレスが既に使用されています:', userData.email);
+    return false // メールアドレスが既に使用されている
+  }
+  
+  // 新しいユーザーを作成
+  const newUser: UserInfo = {
+    id: Date.now().toString(),
+    ...userData,
+    createdAt: new Date().toISOString(),
+    lastLogin: new Date().toISOString(),
+    status: 'アクティブ' as const // 登録時はアクティブ状態
+  }
+  
+  console.log('新しいユーザーを作成しました:', newUser);
+  
+  // ユーザーリストを更新
+  const updatedUsers = [...users, newUser]
+  setUsers(updatedUsers)
+  
+  // パスワードを保存
+  const updatedPasswords = {
+    ...userPasswords,
+    [newUser.id]: password
+  }
+  setUserPasswords(updatedPasswords)
+  
+  // 現在のユーザーとして設定
+  setCurrentUser(newUser)
+  setIsAuthenticated(true)
+  
+  // ユーザー情報をローカルストレージに保存
+  saveToLocalStorage(USER_STORAGE_KEY, newUser);
+  
+  // ユーザーリストをローカルストレージに保存
+  const usersWithPasswords = updatedUsers.map(u => ({
+    user: u,
+    password: u.id === newUser.id ? password : updatedPasswords[u.id]
+  }))
+  saveToLocalStorage(USERS_STORAGE_KEY, usersWithPasswords);
+  
+  // デバッグ用にローカルストレージの内容を表示
+  debugLocalStorage();
+  
+  return true
+}
 
   // ユーザープロフィールの更新
   const updateUserProfile = async (userData: Partial<UserInfo>): Promise<boolean> => {
