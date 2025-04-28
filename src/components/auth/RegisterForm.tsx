@@ -1,9 +1,8 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useUser } from '@/contexts/UserContext'
 import { useRouter } from 'next/navigation'
-import { debugLocalStorage } from '@/utils/localStorage'
 
 interface RegisterFormProps {
   onSuccess?: () => void
@@ -13,12 +12,6 @@ interface RegisterFormProps {
 export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel }) => {
   const { register } = useUser()
   const router = useRouter()
-  
-  // デバッグ用：コンポーネントマウント時にローカルストレージの内容を表示
-  useEffect(() => {
-    console.log('RegisterForm: コンポーネントがマウントされました');
-    debugLocalStorage();
-  }, []);
   
   // フォームの状態
   const [formData, setFormData] = useState({
@@ -54,8 +47,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel 
     setLoading(true)
     setError(null)
     
-    console.log('登録試行:', formData.username);
-    
     // バリデーション
     if (!formData.username || !formData.email || !formData.password || !formData.fullName || !formData.role) {
       setError('必須項目を入力してください')
@@ -79,9 +70,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel 
     }
     
     try {
-      // デバッグ用：登録前にローカルストレージの内容を表示
-      debugLocalStorage();
-      
       // 会社情報を取得（ローカルストレージから）
       let companyId = 'default-company';
       if (typeof window !== 'undefined') {
@@ -90,12 +78,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel 
           try {
             const parsedCompanyInfo = JSON.parse(savedCompanyInfo);
             companyId = parsedCompanyInfo.name;
-            console.log('会社情報を取得しました:', companyId);
           } catch (error) {
             console.error('Failed to parse company info from localStorage:', error);
           }
-        } else {
-          console.log('会社情報が見つかりません、デフォルト値を使用します');
         }
       }
       
@@ -115,11 +100,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel 
       
       if (success) {
         // 登録成功
-        console.log('登録成功:', formData.username);
-        
-        // デバッグ用：登録後にローカルストレージの内容を表示
-        debugLocalStorage();
-        
         if (onSuccess) {
           onSuccess()
         } else {
@@ -128,7 +108,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel 
         }
       } else {
         // 登録失敗
-        console.log('登録失敗:', formData.username);
         setError('ユーザー名またはメールアドレスが既に使用されています')
       }
     } catch (err) {
