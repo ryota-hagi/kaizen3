@@ -22,38 +22,57 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
   // URLパラメータまたはpropsからトークンを取得
   useEffect(() => {
     const urlToken = searchParams?.get('token')
+    
+    console.log('[DEBUG] URL token:', urlToken)
+    console.log('[DEBUG] Prop token:', propInviteToken)
+    
     if (urlToken) {
+      console.log('[DEBUG] Using URL token')
       setToken(urlToken)
       // トークンをセッションストレージに保存（コールバック後に使用するため）
       sessionStorage.setItem('invite_token', urlToken)
+      localStorage.setItem('invite_token', urlToken) // ローカルストレージにも保存
     } else if (propInviteToken) {
+      console.log('[DEBUG] Using prop token')
       setToken(propInviteToken)
       // トークンをセッションストレージに保存（コールバック後に使用するため）
       sessionStorage.setItem('invite_token', propInviteToken)
+      localStorage.setItem('invite_token', propInviteToken) // ローカルストレージにも保存
     } else {
       // セッションストレージからトークンを取得（既に保存されている場合）
-      const storedToken = sessionStorage.getItem('invite_token')
+      const storedToken = sessionStorage.getItem('invite_token') || localStorage.getItem('invite_token')
       if (storedToken) {
+        console.log('[DEBUG] Using stored token:', storedToken)
         setToken(storedToken)
       }
     }
-  }, [searchParams, propInviteToken])
+    
+    // 現在のトークンをログに出力
+    console.log('[DEBUG] Current token state:', token)
+    console.log('[DEBUG] Session storage token:', sessionStorage.getItem('invite_token'))
+    console.log('[DEBUG] Local storage token:', localStorage.getItem('invite_token'))
+  }, [searchParams, propInviteToken, token])
   
   const handleGoogleLogin = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      if (!token) {
+      const currentToken = token || sessionStorage.getItem('invite_token') || localStorage.getItem('invite_token')
+      
+      if (!currentToken) {
         setError('招待トークンが見つかりません。招待メールのリンクから再度アクセスしてください。')
         setLoading(false)
         return
       }
       
+      console.log('[DEBUG] Login with token:', currentToken)
+      
       const supabase = getSupabaseClient()
       
-      // 招待トークンをセッションストレージに保存（コールバック後に使用するため）
-      sessionStorage.setItem('invite_token', token)
+      // 招待トークンをセッションストレージとローカルストレージに保存（コールバック後に使用するため）
+      sessionStorage.setItem('invite_token', currentToken)
+      localStorage.setItem('invite_token', currentToken)
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -127,6 +146,18 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
           </a>
         </div>
       </div>
+      
+      {/* デバッグ情報（開発環境のみ） */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-6 p-3 bg-gray-100 rounded text-xs">
+          <p>デバッグ情報:</p>
+          <p>URL Token: {searchParams?.get('token') || 'なし'}</p>
+          <p>Prop Token: {propInviteToken || 'なし'}</p>
+          <p>Current Token: {token || 'なし'}</p>
+          <p>Session Storage: {sessionStorage.getItem('invite_token') || 'なし'}</p>
+          <p>Local Storage: {localStorage.getItem('invite_token') || 'なし'}</p>
+        </div>
+      )}
     </div>
   )
 }
