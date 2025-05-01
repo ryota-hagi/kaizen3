@@ -74,8 +74,7 @@ export const inviteUser = async (
             role: inviteData.role,
             companyId: companyId, // 確実に会社IDを設定
             status: '招待中' as const,
-            inviteToken: inviteToken,
-            isInvited: true
+            inviteToken: inviteToken
           };
         }
         return user;
@@ -114,8 +113,7 @@ export const inviteUser = async (
         createdAt: new Date().toISOString(),
         lastLogin: null,
         status: '招待中' as const, // 必ず招待中に設定
-        inviteToken: inviteToken, // 必ずトークンを設定
-        isInvited: true // 必ずisInvitedをtrueに設定
+        inviteToken: inviteToken // 必ずトークンを設定
       };
       
       console.log('[inviteUser] Creating new invited user with company ID:', companyId);

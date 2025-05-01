@@ -53,17 +53,16 @@ export default function UsersPage() {
     if (!currentUser || !currentUser.companyId) return [];
     
     return users.filter(user => 
-      (user.status === '招待中' || user.isInvited === true) && 
+      user.status === '招待中' && 
       user.companyId === currentUser.companyId
     );
   }
   
-  // 招待中のユーザーリストをローカルストレージに保存
-  const saveInvitedUsersToLocalStorage = () => {
+  // コンポーネントがマウントされたときと、usersが変更されたときに招待中ユーザーをログに出力
+  useEffect(() => {
     const invitedUsers = getInvitedUsers();
     if (invitedUsers.length > 0) {
-      localStorage.setItem('kaizen_invited_users', JSON.stringify(invitedUsers));
-      console.log(`[UsersPage] Saved ${invitedUsers.length} invited users to localStorage`);
+      console.log(`[UsersPage] Found ${invitedUsers.length} invited users`);
       
       // 招待中ユーザーの詳細をログに出力
       invitedUsers.forEach((user, index) => {
@@ -72,16 +71,10 @@ export default function UsersPage() {
           email: user.email,
           inviteToken: user.inviteToken || '',
           status: user.status,
-          isInvited: user.isInvited,
           companyId: user.companyId || 'not set'
         });
       });
     }
-  }
-  
-  // コンポーネントがマウントされたときと、usersが変更されたときに招待中ユーザーを保存
-  useEffect(() => {
-    saveInvitedUsersToLocalStorage();
   }, [users]);
   
   // ユーザー詳細モーダルを開く
@@ -182,9 +175,6 @@ export default function UsersPage() {
           
           localStorage.setItem('kaizen_users', JSON.stringify(updatedUsersWithPasswords));
           console.log('ローカルストレージに保存しました');
-          
-          // 招待中ユーザーリストを更新
-          saveInvitedUsersToLocalStorage();
         }
         
         // 3秒後に成功メッセージを非表示

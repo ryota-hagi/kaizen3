@@ -77,11 +77,11 @@ export default function CallbackClient() {
             return
           }
           
-          // 招待ユーザーを検索（大文字小文字を区別せず比較）
+          // 招待ユーザーを検索（大文字小文字を区別して比較）
           const invitedUsers = users.filter(user => 
             user.inviteToken && 
-            user.inviteToken.toLowerCase() === inviteToken.toLowerCase() &&
-            (user.isInvited === true || user.status === '招待中')
+            user.inviteToken === inviteToken &&
+            user.status === '招待中'
           )
           
           console.log('[DEBUG] Found invited users:', invitedUsers.length)
