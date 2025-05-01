@@ -74,7 +74,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
             </div>
             
             {/* 招待中のユーザーの場合は招待リンクを表示 */}
-            {(user.status === '招待中' || user.isInvited) && user.inviteToken && (
+            {user.status === '招待中' && user.inviteToken && (
               <div className="col-span-2 bg-yellow-50 p-3 rounded-md border border-yellow-200">
                 <p className="text-sm font-medium text-yellow-800 mb-2">招待リンク</p>
                 <div className="flex items-center">
@@ -160,7 +160,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
             <div>
               <p className="text-sm text-secondary-500">ステータス</p>
               <p className="font-medium">
-                {user.status || (user.isInvited ? '招待中' : 'アクティブ')}
+                {user.status || 'アクティブ'}
               </p>
             </div>
             <div>

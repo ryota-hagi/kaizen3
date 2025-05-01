@@ -239,15 +239,12 @@ export const verifyInviteToken = async (
       console.log(`[verifyInviteToken] Invited user ${index + 1}: token: ${user.inviteToken}, status: ${user.status}, isInvited: ${user.isInvited}, companyId: ${user.companyId || 'not set'}`);
     });
     
-    // トークンが一致するユーザーを検索（大文字小文字を区別せず比較）
+    // トークンが一致するユーザーを検索（大文字小文字を区別して比較）
     for (const user of mergedUsers) {
-      const tokenMatch = user.inviteToken && user.inviteToken.toLowerCase() === token.toLowerCase();
+      const tokenMatch = user.inviteToken && user.inviteToken === token;
       
-      // 招待中のステータスチェック - 画面表示とストレージの不一致を考慮
-      let statusMatch = false;
-      if (user.status === '招待中' || user.isInvited === true) {
-        statusMatch = true;
-      }
+      // 招待中のステータスチェック
+      const statusMatch = user.status === '招待中';
       
       // 会社IDが設定されているか確認
       if (!user.companyId) {
@@ -383,9 +380,9 @@ export const verifyInviteToken = async (
       }
     }
     
-    // トークンが一致するユーザーが見つからない場合、トークンのみで検索（大文字小文字を区別せず比較）
+    // トークンが一致するユーザーが見つからない場合、トークンのみで検索（大文字小文字を区別して比較）
     const userByToken = mergedUsers.find(user => 
-      user.inviteToken && user.inviteToken.toLowerCase() === token.toLowerCase()
+      user.inviteToken && user.inviteToken === token
     );
     
     if (userByToken) {
@@ -481,9 +478,9 @@ export const completeInvitation = async (
     // ローカルストレージでも招待を完了（フォールバック）
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
     
-    // 招待ユーザーを検索（大文字小文字を区別せず比較）
+    // 招待ユーザーを検索（大文字小文字を区別して比較）
     const invitedUserIndex = currentUsers.findIndex(user => 
-      user.inviteToken && user.inviteToken.toLowerCase() === token.toLowerCase()
+      user.inviteToken && user.inviteToken === token
     );
     
     if (invitedUserIndex === -1) {

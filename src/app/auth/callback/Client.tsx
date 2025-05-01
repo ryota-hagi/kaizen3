@@ -87,10 +87,10 @@ export default function CallbackClient() {
           console.log('[DEBUG] Found invited users:', invitedUsers.length)
           
           if (invitedUsers.length === 0) {
-            // トークンのみで検索（会社IDやステータスを考慮しない）
+            // トークンのみで検索（大文字小文字を区別して比較）
             const usersByTokenOnly = users.filter(user => 
               user.inviteToken && 
-              user.inviteToken.toLowerCase() === inviteToken.toLowerCase()
+              user.inviteToken === inviteToken
             )
             
             console.log('[DEBUG] Found users by token only:', usersByTokenOnly.length)
@@ -146,12 +146,12 @@ export default function CallbackClient() {
                 const parsedData = JSON.parse(savedUsers)
                 console.log('[DEBUG] Found users in localStorage:', parsedData.length)
                 
-                // 招待中のユーザーを検索
+                // 招待中のユーザーを検索（大文字小文字を区別して比較）
                 const storedInvitedUsers = parsedData.filter((item: any) => 
                   item.user && 
                   item.user.inviteToken && 
-                  item.user.inviteToken.toLowerCase() === inviteToken.toLowerCase() &&
-                  (item.user.isInvited === true || item.user.status === '招待中')
+                  item.user.inviteToken === inviteToken &&
+                  item.user.status === '招待中'
                 )
                 
                 console.log('[DEBUG] Found invited users in localStorage:', storedInvitedUsers.length)
