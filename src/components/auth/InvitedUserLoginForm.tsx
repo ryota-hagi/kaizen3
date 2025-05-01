@@ -29,17 +29,17 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
     if (urlToken) {
       console.log('[DEBUG] Using URL token')
       setToken(urlToken)
-      // トークンをセッションストレージに保存（コールバック後に使用するため）
+      // トークンをセッションストレージとローカルストレージに保存（コールバック後に使用するため）
       sessionStorage.setItem('invite_token', urlToken)
-      localStorage.setItem('invite_token', urlToken) // ローカルストレージにも保存
+      localStorage.setItem('invite_token', urlToken)
     } else if (propInviteToken) {
       console.log('[DEBUG] Using prop token')
       setToken(propInviteToken)
-      // トークンをセッションストレージに保存（コールバック後に使用するため）
+      // トークンをセッションストレージとローカルストレージに保存（コールバック後に使用するため）
       sessionStorage.setItem('invite_token', propInviteToken)
-      localStorage.setItem('invite_token', propInviteToken) // ローカルストレージにも保存
+      localStorage.setItem('invite_token', propInviteToken)
     } else {
-      // セッションストレージからトークンを取得（既に保存されている場合）
+      // セッションストレージまたはローカルストレージからトークンを取得（既に保存されている場合）
       const storedToken = sessionStorage.getItem('invite_token') || localStorage.getItem('invite_token')
       if (storedToken) {
         console.log('[DEBUG] Using stored token:', storedToken)
@@ -51,7 +51,7 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
     console.log('[DEBUG] Current token state:', token)
     console.log('[DEBUG] Session storage token:', sessionStorage.getItem('invite_token'))
     console.log('[DEBUG] Local storage token:', localStorage.getItem('invite_token'))
-  }, [searchParams, propInviteToken, token])
+  }, [searchParams, propInviteToken])
   
   const handleGoogleLogin = async () => {
     try {
@@ -74,10 +74,13 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
       sessionStorage.setItem('invite_token', currentToken)
       localStorage.setItem('invite_token', currentToken)
       
+      // URLパラメータにトークンを含める
+      const redirectTo = `${window.location.origin}/auth/callback?invite=true&token=${encodeURIComponent(currentToken)}`
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?invite=true`
+          redirectTo
         }
       })
       
@@ -154,8 +157,8 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
           <p>URL Token: {searchParams?.get('token') || 'なし'}</p>
           <p>Prop Token: {propInviteToken || 'なし'}</p>
           <p>Current Token: {token || 'なし'}</p>
-          <p>Session Storage: {sessionStorage.getItem('invite_token') || 'なし'}</p>
-          <p>Local Storage: {localStorage.getItem('invite_token') || 'なし'}</p>
+          <p>Session Storage: {typeof window !== 'undefined' ? sessionStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
+          <p>Local Storage: {typeof window !== 'undefined' ? localStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
         </div>
       )}
     </div>

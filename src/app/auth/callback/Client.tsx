@@ -37,20 +37,28 @@ export default function CallbackClient() {
         
         // 招待ユーザーかどうかを確認
         const isInvited = searchParams?.get('invite') === 'true'
-        const inviteToken = sessionStorage.getItem('invite_token')
+        
+        // トークンを取得（URLパラメータ、セッションストレージ、ローカルストレージの順に確認）
+        const urlToken = searchParams?.get('token')
+        const sessionToken = sessionStorage.getItem('invite_token')
+        const localToken = localStorage.getItem('invite_token')
+        const inviteToken = urlToken || sessionToken || localToken
         
         console.log('[DEBUG] Is invited user:', isInvited)
-        console.log('[DEBUG] Invite token from sessionStorage:', inviteToken)
+        console.log('[DEBUG] URL token:', urlToken)
+        console.log('[DEBUG] Session token:', sessionToken)
+        console.log('[DEBUG] Local token:', localToken)
+        console.log('[DEBUG] Using token:', inviteToken)
         console.log('[DEBUG] Total users in context:', users.length)
         
         // 全ユーザーのトークンをログに出力
         users.forEach((user, index) => {
-          console.log(`[DEBUG] User ${index} token:`, user.inviteToken, 'isInvited:', user.isInvited, 'status:', user.status)
+          console.log(`[DEBUG] User ${index} token:`, user.inviteToken, 'isInvited:', user.isInvited, 'status:', user.status, 'companyId:', user.companyId)
         })
         
         if (isInvited) {
           // 招待ユーザーの場合
-          console.log('[DEBUG] Processing invited user login with token:', inviteToken)
+          console.log('[DEBUG] Processing invited user login')
           
           if (!inviteToken) {
             console.error('No invite token found')
@@ -59,68 +67,26 @@ export default function CallbackClient() {
             return
           }
           
-          // ローカルストレージから招待ユーザーを検索（大文字小文字を区別せず比較）
-          const invitedUser = users.find(user => 
-            (user.inviteToken && inviteToken && 
-             user.inviteToken.toLowerCase() === inviteToken.toLowerCase()) && 
-            (user.status === '招待中' || user.isInvited === true)
+          // 招待ユーザーを検索（大文字小文字を区別せず比較）
+          const invitedUsers = users.filter(user => 
+            user.inviteToken && 
+            user.inviteToken.toLowerCase() === inviteToken.toLowerCase()
           )
           
-          if (!invitedUser) {
+          console.log('[DEBUG] Found invited users:', invitedUsers.length)
+          
+          if (invitedUsers.length === 0) {
             console.error('[DEBUG] No invited user found with token:', inviteToken)
-            console.log('[DEBUG] Trying to find user with token only...')
-            
-            // トークンのみで検索（ステータスを無視）
-            const userByTokenOnly = users.find(user => 
-              user.inviteToken && inviteToken && 
-              user.inviteToken.toLowerCase() === inviteToken.toLowerCase()
-            )
-            
-            if (userByTokenOnly) {
-              console.log('[DEBUG] Found user by token only:', userByTokenOnly.email)
-              console.log('[DEBUG] User status:', userByTokenOnly.status)
-              console.log('[DEBUG] User isInvited:', userByTokenOnly.isInvited)
-              console.log('[DEBUG] User company ID:', userByTokenOnly.companyId)
-              
-              // 会社IDを取得
-              const companyId = userByTokenOnly.companyId
-              
-              if (!companyId) {
-                console.error('[DEBUG] No company ID found for user')
-                setError('招待ユーザーの会社情報が見つかりません。')
-                setLoading(false)
-                return
-              }
-              
-              console.log('[DEBUG] Using company ID:', companyId)
-              
-              // ユーザー情報を更新
-              const success = await updateUserAfterGoogleSignIn({
-                isInvited: true,
-                inviteToken,
-                role: 'メンバー',
-                companyId
-              })
-              
-              if (success) {
-                // 招待トークンをクリア
-                sessionStorage.removeItem('invite_token')
-                
-                // ダッシュボードにリダイレクト
-                router.push('/dashboard')
-              } else {
-                setError('ユーザー情報の更新に失敗しました')
-              }
-              
-              return
-            }
-            
             setError('招待ユーザーが見つかりません。招待メールのリンクから再度アクセスしてください。')
             setLoading(false)
             return
           }
           
-          // 招待ユーザーの会社IDを取得
+          // 最初に見つかった招待ユーザーを使用
+          const invitedUser = invitedUsers[0]
+          console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId)
+          
+          // 会社IDを取得
           const companyId = invitedUser.companyId
           
           if (!companyId) {
@@ -130,19 +96,20 @@ export default function CallbackClient() {
             return
           }
           
-          console.log('[DEBUG] Found invited user with company ID:', companyId)
+          console.log('[DEBUG] Using company ID:', companyId)
           
           // ユーザー情報を更新
           const success = await updateUserAfterGoogleSignIn({
             isInvited: true,
             inviteToken,
-            role: 'メンバー',
-            companyId // 招待ユーザーの会社IDを設定
+            role: invitedUser.role || 'メンバー',
+            companyId
           })
           
           if (success) {
             // 招待トークンをクリア
             sessionStorage.removeItem('invite_token')
+            localStorage.removeItem('invite_token')
             
             // ダッシュボードにリダイレクト
             router.push('/dashboard')
