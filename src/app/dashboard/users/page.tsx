@@ -2,14 +2,17 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 import { useUser } from '@/contexts/UserContext'
 import Link from 'next/link'
 import { UserInfo, Employee } from '@/utils/api'
+import { UserRoleAlert } from './UserRoleAlert'
 
 export default function UsersPage() {
   const { isAuthenticated, currentUser, users, getUserById, deleteUser, updateUser, getEmployees } = useUser()
   const router = useRouter()
+  const { data: session, status } = useSession()
   
   // 状態管理
   const [searchTerm, setSearchTerm] = useState('')
@@ -36,16 +39,17 @@ export default function UsersPage() {
   
   // 認証状態をチェック
   useEffect(() => {
-    if (!isAuthenticated) {
+    // NextAuth.jsのセッション情報を使用して認証状態をチェック
+    if (status === 'unauthenticated') {
       router.push('/auth/login')
-    } else if (currentUser && currentUser.role !== '管理者') {
+    } else if (status === 'authenticated' && currentUser && currentUser.role !== '管理者') {
       // 管理者以外はダッシュボードにリダイレクト
       router.push('/dashboard')
     }
-  }, [isAuthenticated, currentUser, router])
+  }, [status, currentUser, router])
   
   // 認証されていない場合はローディング表示
-  if (!isAuthenticated || !currentUser) {
+  if (status === 'loading' || !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
@@ -111,8 +115,8 @@ export default function UsersPage() {
   // ユーザー削除処理
   const handleDeleteUser = async () => {
     if (userToDelete) {
-      const success = await deleteUser(userToDelete.id)
-      if (success) {
+      const result = await deleteUser(userToDelete.id)
+      if (result.success) {
         setDeleteSuccess(true)
         closeDeleteModal()
         
@@ -120,6 +124,10 @@ export default function UsersPage() {
         setTimeout(() => {
           setDeleteSuccess(false)
         }, 3000)
+      } else if (result.message) {
+        // エラーメッセージがある場合はアラートで表示
+        alert(result.message)
+        closeDeleteModal()
       }
     }
   }
@@ -184,6 +192,9 @@ export default function UsersPage() {
   
   return (
     <DashboardLayout>
+      {/* 管理者アラート */}
+      <UserRoleAlert />
+      
       <div className="p-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -193,12 +204,12 @@ export default function UsersPage() {
             </p>
           </div>
           <div className="flex space-x-4">
-            <Link
-              href="/dashboard/invite"
-              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-            >
-              ユーザーを招待
-            </Link>
+          <Link
+            href="/dashboard/users/add"
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+          >
+            ユーザーを追加
+          </Link>
             <Link
               href="/dashboard"
               className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
@@ -403,6 +414,39 @@ export default function UsersPage() {
                     <p className="font-medium">{selectedUser.username}</p>
                   )}
                 </div>
+                
+                {/* 招待中のユーザーの場合は招待リンクを表示 */}
+                {(selectedUser.status === '招待中' || selectedUser.isInvited) && selectedUser.inviteToken && (
+                  <div className="col-span-2 bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                    <p className="text-sm font-medium text-yellow-800 mb-2">招待リンク</p>
+                    <div className="flex items-center">
+                      <input
+                        type="text"
+                        value={`${window.location.origin}/auth/register/callback?token=${selectedUser.inviteToken}`}
+                        readOnly
+                        className="flex-1 px-3 py-2 text-xs border border-secondary-300 rounded-l-md focus:outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          const link = `${window.location.origin}/auth/register/callback?token=${selectedUser.inviteToken}`;
+                          navigator.clipboard.writeText(link)
+                            .then(() => {
+                              alert('招待リンクをクリップボードにコピーしました');
+                            })
+                            .catch(err => {
+                              console.error('クリップボードへのコピーに失敗しました:', err);
+                            });
+                        }}
+                        className="px-3 py-2 bg-primary-600 text-white text-xs rounded-r-md hover:bg-primary-700 transition-colors"
+                      >
+                        コピー
+                      </button>
+                    </div>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      このリンクを招待したユーザーに共有してください。リンクをクリックするとGoogle認証を行い、アカウントを有効化できます。
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className="text-sm text-secondary-500">役割</p>
                   {isEditMode ? (
@@ -464,6 +508,10 @@ export default function UsersPage() {
                 <div>
                   <p className="text-sm text-secondary-500">会社ID</p>
                   <p className="font-medium">{selectedUser.companyId}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-secondary-500">ユーザーID</p>
+                  <p className="font-medium">{selectedUser.id}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-sm text-secondary-500">紐づけ従業員</p>

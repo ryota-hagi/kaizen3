@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ローカルストレージ修正ツール</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 10px 5px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button.danger {
+      background-color: #f44336;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+    }
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+    }
+  </style>
+</head>
+<body>
+  <h1>ローカルストレージ修正ツール</h1>
+  <p>このツールは、ローカルストレージに保存されたユーザーデータを修正します。</p>
+  <p>特に、招待中のユーザーが正しく保存されるように修正します。</p>
+  
+  <div>
+    <button id="fixButton">ローカルストレージを修正</button>
+    <button id="checkButton">ローカルストレージを確認</button>
+    <button id="clearButton" class="danger">ローカルストレージをクリア</button>
+  </div>
+  
+  <div id="result" class="result"></div>
+  <pre id="output"></pre>
+  
+  <script>
+    // ローカルストレージのユーザーデータを修正する関数
+    function fixLocalStorage() {
+      // 現在のユーザーデータを取得
+      const USERS_STORAGE_KEY = 'kaizen_users';
+      const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+      
+      if (!savedUsers) {
+        console.log('ユーザーデータがありません');
+        return 'ユーザーデータがありません';
+      }
+      
+      try {
+        const parsedData = JSON.parse(savedUsers);
+        console.log('現在のユーザーデータ:', parsedData.length, '件');
+        
+        // 招待中のユーザーを確認
+        const invitedUsers = parsedData.filter(item => 
+          item.user && (item.user.status === '招待中' || item.user.isInvited === true)
+        );
+        console.log('修正前の招待中のユーザー:', invitedUsers.length, '件');
+        
+        // 招待中のユーザーの詳細を表示
+        invitedUsers.forEach((item, index) => {
+          console.log(`修正前の招待中ユーザー${index}:`, {
+            id: item.user.id,
+            email: item.user.email,
+            inviteToken: item.user.inviteToken || '',
+            status: item.user.status,
+            isInvited: item.user.isInvited,
+            companyId: item.user.companyId
+          });
+        });
+        
+        // ユーザーデータを修正
+        let hasChanges = false;
+        parsedData.forEach(item => {
+          if (!item.user) return;
+          
+          // ステータスが招待中の場合、isInvitedフラグを設定
+          if (item.user.status === '招待中' && item.user.isInvited !== true) {
+            item.user.isInvited = true;
+            console.log(`ユーザー ${item.user.email} のisInvitedフラグを設定`);
+            hasChanges = true;
+          }
+          
+          // isInvitedフラグがtrueの場合、ステータスを招待中に設定
+          if (item.user.isInvited === true && item.user.status !== '招待中') {
+            item.user.status = '招待中';
+            console.log(`ユーザー ${item.user.email} のステータスを招待中に設定`);
+            hasChanges = true;
+          }
+          
+          // 招待中のユーザーには必ずトークンを設定
+          if ((item.user.status === '招待中' || item.user.isInvited === true) && 
+              (!item.user.inviteToken || item.user.inviteToken === '')) {
+            item.user.inviteToken = Math.random().toString(36).substring(2, 10);
+            console.log(`ユーザー ${item.user.email} のトークンを生成: ${item.user.inviteToken}`);
+            hasChanges = true;
+          }
+        });
+        
+        // テスト用の招待ユーザーを追加
+        const testUser = {
+          user: {
+            id: Date.now().toString(),
+            username: 'testuser',
+            email: 'test@example.com',
+            fullName: 'テストユーザー',
+            role: '一般ユーザー',
+            companyId: '株式会社テスト',
+            createdAt: new Date().toISOString(),
+            lastLogin: null,
+            status: '招待中',
+            isInvited: true,
+            inviteToken: Math.random().toString(36).substring(2, 10)
+          },
+          password: ''
+        };
+        
+        console.log('テスト用の招待ユーザーを追加します:', testUser.user);
+        parsedData.push(testUser);
+        hasChanges = true;
+        
+        // 変更があった場合のみ保存
+        if (hasChanges) {
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
+          console.log('ユーザーデータを修正して保存しました');
+          
+          // 修正後のデータを確認
+          const modifiedData = JSON.parse(localStorage.getItem(USERS_STORAGE_KEY));
+          const modifiedInvitedUsers = modifiedData.filter(item => 
+            item.user && (item.user.status === '招待中' || item.user.isInvited === true)
+          );
+          console.log('修正後の招待中のユーザー:', modifiedInvitedUsers.length, '件');
+          
+          modifiedInvitedUsers.forEach((item, index) => {
+            console.log(`修正後の招待中ユーザー${index}:`, {
+              id: item.user.id,
+              email: item.user.email,
+              inviteToken: item.user.inviteToken || '',
+              status: item.user.status,
+              isInvited: item.user.isInvited,
+              companyId: item.user.companyId
+            });
+          });
+        } else {
+          console.log('ユーザーデータに変更なし、保存をスキップします');
+        }
+        
+        return '完了しました。ページをリロードしてください。';
+      } catch (error) {
+        console.error('ユーザーデータの解析に失敗しました:', error);
+        return 'エラーが発生しました: ' + error.message;
+      }
+    }
+    
+    // ローカルストレージのユーザーデータを確認する関数
+    function checkLocalStorage() {
+      // 現在のユーザーデータを取得
+      const USERS_STORAGE_KEY = 'kaizen_users';
+      const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+      
+      if (!savedUsers) {
+        console.log('ユーザーデータがありません');
+        return 'ユーザーデータがありません';
+      }
+      
+      try {
+        const parsedData = JSON.parse(savedUsers);
+        console.log('現在のユーザーデータ:', parsedData.length, '件');
+        
+        // 招待中のユーザーを確認
+        const invitedUsers = parsedData.filter(item => 
+          item.user && (item.user.status === '招待中' || item.user.isInvited === true)
+        );
+        console.log('招待中のユーザー:', invitedUsers.length, '件');
+        
+        // 招待中のユーザーの詳細を表示
+        invitedUsers.forEach((item, index) => {
+          console.log(`招待中ユーザー${index}:`, {
+            id: item.user.id,
+            email: item.user.email,
+            inviteToken: item.user.inviteToken || '',
+            status: item.user.status,
+            isInvited: item.user.isInvited,
+            companyId: item.user.companyId
+          });
+        });
+        
+        return `ユーザーデータ: ${parsedData.length}件、招待中のユーザー: ${invitedUsers.length}件`;
+      } catch (error) {
+        console.error('ユーザーデータの解析に失敗しました:', error);
+        return 'エラーが発生しました: ' + error.message;
+      }
+    }
+    
+    // ローカルストレージをクリアする関数
+    function clearLocalStorage() {
+      localStorage.removeItem('kaizen_users');
+      localStorage.removeItem('kaizen_user_info');
+      console.log('ローカルストレージをクリアしました');
+      return 'ローカルストレージをクリアしました';
+    }
+    
+    // コンソールログを表示する関数
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    
+    console.log = function() {
+      const output = document.getElementById('output');
+      const args = Array.from(arguments);
+      
+      output.innerHTML += args.map(arg => {
+        if (typeof arg === 'object') {
+          return JSON.stringify(arg, null, 2);
+        }
+        return arg;
+      }).join(' ') + '<br>';
+      
+      originalConsoleLog.apply(console, arguments);
+    };
+    
+    console.error = function() {
+      const output = document.getElementById('output');
+      const args = Array.from(arguments);
+      
+      output.innerHTML += '<span style="color: red;">' + args.map(arg => {
+        if (typeof arg === 'object') {
+          return JSON.stringify(arg, null, 2);
+        }
+        return arg;
+      }).join(' ') + '</span><br>';
+      
+      originalConsoleError.apply(console, arguments);
+    };
+    
+    // ボタンのイベントリスナーを設定
+    document.getElementById('fixButton').addEventListener('click', function() {
+      const output = document.getElementById('output');
+      const result = document.getElementById('result');
+      
+      output.innerHTML = '';
+      result.innerHTML = '';
+      result.className = 'result';
+      
+      try {
+        const message = fixLocalStorage();
+        result.innerHTML = message;
+        result.className = 'result success';
+      } catch (error) {
+        result.innerHTML = 'エラーが発生しました: ' + error.message;
+        result.className = 'result error';
+      }
+    });
+    
+    document.getElementById('checkButton').addEventListener('click', function() {
+      const output = document.getElementById('output');
+      const result = document.getElementById('result');
+      
+      output.innerHTML = '';
+      result.innerHTML = '';
+      result.className = 'result';
+      
+      try {
+        const message = checkLocalStorage();
+        result.innerHTML = message;
+        result.className = 'result success';
+      } catch (error) {
+        result.innerHTML = 'エラーが発生しました: ' + error.message;
+        result.className = 'result error';
+      }
+    });
+    
+    document.getElementById('clearButton').addEventListener('click', function() {
+      if (confirm('本当にローカルストレージをクリアしますか？')) {
+        const output = document.getElementById('output');
+        const result = document.getElementById('result');
+        
+        output.innerHTML = '';
+        result.innerHTML = '';
+        result.className = 'result';
+        
+        try {
+          const message = clearLocalStorage();
+          result.innerHTML = message;
+          result.className = 'result success';
+        } catch (error) {
+          result.innerHTML = 'エラーが発生しました: ' + error.message;
+          result.className = 'result error';
+        }
+      }
+    });
+  </script>
+</body>
+</html>

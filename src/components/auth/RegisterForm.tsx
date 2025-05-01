@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useUser } from '@/contexts/UserContext'
+import { useUser } from '@/contexts/UserContext/context' // パスを更新
 import { useRouter } from 'next/navigation'
 
 interface RegisterFormProps {
@@ -93,7 +93,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel 
           role: formData.role,
           companyId: companyId,
           department: formData.department || undefined,
-          position: formData.position || undefined
+          position: formData.position || undefined,
+          inviteToken: '' // 空の招待トークンを設定
         },
         formData.password
       )

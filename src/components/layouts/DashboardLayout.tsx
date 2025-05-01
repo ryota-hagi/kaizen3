@@ -1,27 +1,43 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useUser } from '@/contexts/UserContext'
+import { usePathname } from 'next/navigation'
+import { useUser } from '@/contexts/UserContext/context' // パスを更新
 import { useChat } from '@/contexts/ChatContext'
+import { CompanyInfo as CompanyInfoType } from '@/utils/api'
+import { CompanyMenu } from './CompanyMenu'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
   companyName?: string
 }
 
-export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, companyName = '株式会社サンプル' }) => {
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, companyName }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { currentUser } = useUser()
   const { isOpen, isExpanded } = useChat()
+  const [company, setCompany] = useState<string>(companyName || '株式会社サンプル')
   
-  // 現在のパスを取得する関数（クライアントサイドでのみ実行）
-  const getCurrentPath = () => {
+  // ローカルストレージから会社情報を取得
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      return window.location.pathname;
+      const savedCompanyInfo = localStorage.getItem('kaizen_company_info')
+      if (savedCompanyInfo) {
+        try {
+          const parsedCompanyInfo = JSON.parse(savedCompanyInfo) as CompanyInfoType
+          if (parsedCompanyInfo.name) {
+            setCompany(parsedCompanyInfo.name)
+          }
+        } catch (error) {
+          console.error('Failed to parse company info from localStorage:', error)
+        }
+      }
     }
-    return '/';
-  };
+  }, [companyName])
+  
+  // 現在のパスを取得
+  const pathname = usePathname();
   
   return (
     <div className="min-h-screen bg-secondary-50 flex">
@@ -45,9 +61,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
         
         <nav className="flex-1 p-4 space-y-1">
           <Link 
-            href="/" 
-            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-              getCurrentPath() === '/' 
+            href="/"
+            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full mb-2 cursor-pointer ${
+              pathname === '/' 
                 ? 'bg-primary-50 text-primary-700' 
                 : 'text-secondary-700 hover:bg-secondary-50'
             }`}
@@ -55,10 +71,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
             <span className={sidebarCollapsed ? 'hidden' : 'block'}>ダッシュボード</span>
             <span className={sidebarCollapsed ? 'block' : 'hidden'}>D</span>
           </Link>
+          
           <Link 
-            href="/mypage" 
-            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-              getCurrentPath() === '/mypage' 
+            href="/mypage"
+            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full mb-2 cursor-pointer ${
+              pathname === '/mypage' 
                 ? 'bg-primary-50 text-primary-700' 
                 : 'text-secondary-700 hover:bg-secondary-50'
             }`}
@@ -70,9 +87,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
           {/* 管理者向けメニュー */}
           {currentUser && currentUser.role === '管理者' && (
             <Link 
-              href="/dashboard/users" 
-              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                getCurrentPath() === '/dashboard/users' 
+              href="/dashboard/users"
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full mb-2 cursor-pointer ${
+                pathname === '/dashboard/users' 
                   ? 'bg-primary-50 text-primary-700' 
                   : 'text-secondary-700 hover:bg-secondary-50'
               }`}
@@ -84,12 +101,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
         </nav>
         
         <div className="p-4 border-t border-secondary-200">
-          <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-md text-secondary-700 ${
-            sidebarCollapsed ? 'justify-center' : ''
-          }`}>
-            <span className={sidebarCollapsed ? 'hidden' : 'block'}>{companyName}</span>
-            <span className={sidebarCollapsed ? 'block' : 'hidden'}>会</span>
-          </div>
+          {sidebarCollapsed ? (
+            <div className="flex items-center justify-center px-3 py-2 text-sm font-medium rounded-md text-secondary-700">
+              <span>会</span>
+            </div>
+          ) : (
+            <CompanyMenu 
+              companyName={company} 
+              isAdmin={currentUser?.role === '管理者'} 
+            />
+          )}
         </div>
       </div>
 

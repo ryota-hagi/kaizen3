@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { DashboardLayout } from '../components/layouts/DashboardLayout'
 import { WorkflowEditor } from '../components/workflow/WorkflowEditor'
 import { ChatInterface } from '../components/chat/ChatInterface'
-import { useUser } from '@/contexts/UserContext'
+import { useUser } from '@/contexts/UserContext/context' // パスを更新
 
 interface WorkflowStep {
   id: string
@@ -41,7 +42,37 @@ export default function Home() {
   const [companyInfo, setCompanyInfo] = useState<any>(null)
   const [employees, setEmployees] = useState<any[]>([])
   const router = useRouter()
-  const { getUserById } = useUser()
+  const { getUserById, loginWithSession } = useUser()
+  const { data: session, status } = useSession()
+  
+  // NextAuth.jsのセッション情報を使用してユーザー情報を設定
+  useEffect(() => {
+    // 既に処理済みのセッションIDを記録するためのフラグ
+    const sessionId = session?.user?.email || '';
+    const sessionKey = `processed_session_${sessionId}`;
+    
+    // このセッションが既に処理済みかどうかをチェック
+    if (sessionId && localStorage.getItem(sessionKey)) {
+      console.log('このセッションは既に処理済みです:', sessionId);
+      return;
+    }
+    
+    const syncUserWithSession = async () => {
+      if (status === 'authenticated' && session?.user) {
+        console.log('セッションユーザー情報でログイン処理を開始:', session.user.email);
+        // loginWithSessionを使用してユーザー情報を設定
+        const result = await loginWithSession(session.user);
+        
+        if (result && sessionId) {
+          // 処理済みとしてマーク
+          localStorage.setItem(sessionKey, 'true');
+          console.log('セッション処理完了:', sessionId);
+        }
+      }
+    }
+    
+    syncUserWithSession();
+  }, [session, status]) // loginWithSessionを依存配列から削除
   
   // 会社情報と従業員情報を取得
   useEffect(() => {

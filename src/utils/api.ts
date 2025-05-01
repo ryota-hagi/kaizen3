@@ -19,6 +19,7 @@ export interface UserInfo {
   isInvited?: boolean; // 招待ステータス（後方互換性のため残す）
   status?: UserStatus; // ユーザーステータス（'招待中' | 'ログアウト中' | 'アクティブ'）
   employeeId?: string; // 紐づけられた従業員ID
+  inviteToken: string; // 招待トークン（Google認証用）- 必須プロパティに変更
 }
 
 // 会社情報の型定義

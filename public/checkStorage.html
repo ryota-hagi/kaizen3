@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ローカルストレージ確認ツール</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2, h3 {
+      color: #2563eb;
+    }
+    .card {
+      background-color: #f9fafb;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    button.secondary {
+      background-color: #6b7280;
+    }
+    button.secondary:hover {
+      background-color: #4b5563;
+    }
+    button.danger {
+      background-color: #dc2626;
+    }
+    button.danger:hover {
+      background-color: #b91c1c;
+    }
+    pre {
+      background-color: #f1f5f9;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 14px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .storage-item {
+      margin-bottom: 20px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    .storage-key {
+      font-weight: bold;
+      color: #2563eb;
+    }
+    .storage-size {
+      color: #6b7280;
+      font-size: 0.9em;
+    }
+    .storage-actions {
+      margin-top: 10px;
+    }
+    .hidden {
+      display: none;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #d1fae5;
+      color: #065f46;
+    }
+    .error {
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+    .info {
+      background-color: #e0f2fe;
+      color: #0369a1;
+    }
+    .warning {
+      background-color: #fff7ed;
+      color: #9a3412;
+    }
+    .log-container {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 15px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .tab.active {
+      border-bottom: 2px solid #2563eb;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .copy-btn {
+      background-color: #6b7280;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+    .copy-btn:hover {
+      background-color: #4b5563;
+    }
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-family: monospace;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ローカルストレージ確認ツール</h1>
+  
+  <div class="tabs">
+    <div class="tab active" data-tab="storage">ストレージ一覧</div>
+    <div class="tab" data-tab="fix">修正ツール</div>
+    <div class="tab" data-tab="log">ログ</div>
+  </div>
+  
+  <div class="tab-content active" id="storage-tab">
+    <div class="card">
+      <h2>ローカルストレージの内容</h2>
+      <p>現在のローカルストレージに保存されているデータの一覧です。</p>
+      
+      <div>
+        <button id="refresh-btn">更新</button>
+        <button id="clear-all-btn" class="danger">すべてクリア</button>
+      </div>
+      
+      <div id="storage-items"></div>
+    </div>
+  </div>
+  
+  <div class="tab-content" id="fix-tab">
+    <div class="card">
+      <h2>招待ユーザーの修正</h2>
+      <p>招待中のユーザーが正しく認識されない問題を修正します。</p>
+      
+      <div>
+        <button id="fix-invited-users-btn">招待中のユーザーを修正</button>
+        <button id="copy-users-btn" class="secondary">ユーザーデータをコピー</button>
+        <button id="paste-users-btn" class="secondary">ユーザーデータを貼り付け</button>
+      </div>
+      
+      <div id="paste-area" class="hidden">
+        <h3>ユーザーデータを貼り付け</h3>
+        <textarea id="users-data" placeholder="ここにJSONデータを貼り付けてください"></textarea>
+        <button id="save-pasted-data-btn">保存</button>
+        <button id="cancel-paste-btn" class="secondary">キャンセル</button>
+      </div>
+      
+      <div id="fix-result" class="result hidden"></div>
+    </div>
+    
+    <div class="card">
+      <h2>ストレージキーの確認</h2>
+      <p>アプリケーションで使用されているストレージキーを確認します。</p>
+      
+      <pre id="storage-keys">
+USER_STORAGE_KEY = 'kaizen_user_info'
+USERS_STORAGE_KEY = 'kaizen_users'
+      </pre>
+      
+      <div>
+        <button id="check-keys-btn">キーの存在を確認</button>
+      </div>
+      
+      <div id="keys-result" class="result hidden"></div>
+    </div>
+  </div>
+  
+  <div class="tab-content" id="log-tab">
+    <div class="card">
+      <h2>ログ</h2>
+      <div class="log-container">
+        <pre id="log"></pre>
+      </div>
+      <button id="clear-log-btn" class="secondary">ログをクリア</button>
+    </div>
+  </div>
+  
+  <script>
+    // ログ出力用の関数
+    const log = (message) => {
+      const logElement = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      
+      if (typeof message === 'object') {
+        logElement.textContent += `[${timestamp}] ${JSON.stringify(message, null, 2)}\n`;
+      } else {
+        logElement.textContent += `[${timestamp}] ${message}\n`;
+      }
+      
+      // 自動スクロール
+      logElement.scrollTop = logElement.scrollHeight;
+    };
+    
+    // コンソールログをオーバーライド
+    const originalConsoleLog = console.log;
+    console.log = function() {
+      originalConsoleLog.apply(console, arguments);
+      
+      // 引数を文字列に変換
+      const args = Array.from(arguments).map(arg => {
+        if (typeof arg === 'object') {
+          return JSON.stringify(arg, null, 2);
+        }
+        return String(arg);
+      });
+      
+      log(args.join(' '));
+    };
+    
+    // コンソールエラーをオーバーライド
+    const originalConsoleError = console.error;
+    console.error = function() {
+      originalConsoleError.apply(console, arguments);
+      
+      // 引数を文字列に変換
+      const args = Array.from(arguments).map(arg => {
+        if (typeof arg === 'object') {
+          return JSON.stringify(arg, null, 2);
+        }
+        return String(arg);
+      });
+      
+      log(`エラー: ${args.join(' ')}`);
+    };
+    
+    // 結果を表示
+    const showResult = (elementId, message, type = 'info') => {
+      const resultElement = document.getElementById(elementId);
+      resultElement.textContent = message;
+      resultElement.className = `result ${type}`;
+      resultElement.classList.remove('hidden');
+    };
+    
+    // ローカルストレージの内容を表示
+    const displayStorageItems = () => {
+      const storageItemsElement = document.getElementById('storage-items');
+      storageItemsElement.innerHTML = '';
+      
+      if (typeof localStorage === 'undefined') {
+        storageItemsElement.innerHTML = '<p>ローカルストレージは利用できません。</p>';
+        return;
+      }
+      
+      if (localStorage.length === 0) {
+        storageItemsElement.innerHTML = '<p>ローカルストレージは空です。</p>';
+        return;
+      }
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        const value = localStorage.getItem(key);
+        let displayValue = value;
+        let size = new Blob([value]).size;
+        let formattedSize = `${size} バイト`;
+        
+        if (size > 1024) {
+          formattedSize = `${(size / 1024).toFixed(2)} KB`;
+        }
+        
+        if (size > 1024 * 1024) {
+          formattedSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+        }
+        
+        try {
+          // JSONの場合は整形して表示
+          const parsedValue = JSON.parse(value);
+          displayValue = JSON.stringify(parsedValue, null, 2);
+        } catch (e) {
+          // JSONでない場合はそのまま表示
+        }
+        
+        const itemElement = document.createElement('div');
+        itemElement.className = 'storage-item';
+        
+        const keyElement = document.createElement('div');
+        keyElement.className = 'storage-key';
+        keyElement.textContent = key;
+        
+        const sizeElement = document.createElement('div');
+        sizeElement.className = 'storage-size';
+        sizeElement.textContent = `サイズ: ${formattedSize}`;
+        
+        const actionsElement = document.createElement('div');
+        actionsElement.className = 'storage-actions';
+        
+        const toggleButton = document.createElement('button');
+        toggleButton.textContent = '表示';
+        toggleButton.className = 'secondary';
+        toggleButton.onclick = () => {
+          const valueElement = itemElement.querySelector('.storage-value');
+          if (valueElement.classList.contains('hidden')) {
+            valueElement.classList.remove('hidden');
+            toggleButton.textContent = '隠す';
+          } else {
+            valueElement.classList.add('hidden');
+            toggleButton.textContent = '表示';
+          }
+        };
+        
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '削除';
+        deleteButton.className = 'danger';
+        deleteButton.onclick = () => {
+          if (confirm(`"${key}"を削除してもよろしいですか？`)) {
+            localStorage.removeItem(key);
+            displayStorageItems();
+            console.log(`"${key}"を削除しました。`);
+          }
+        };
+        
+        const copyButton = document.createElement('button');
+        copyButton.textContent = 'コピー';
+        copyButton.className = 'copy-btn';
+        copyButton.onclick = () => {
+          navigator.clipboard.writeText(value)
+            .then(() => {
+              console.log(`"${key}"の値をクリップボードにコピーしました。`);
+              copyButton.textContent = 'コピー済み';
+              setTimeout(() => {
+                copyButton.textContent = 'コピー';
+              }, 2000);
+            })
+            .catch(err => {
+              console.error('クリップボードへのコピーに失敗しました:', err);
+            });
+        };
+        
+        actionsElement.appendChild(toggleButton);
+        actionsElement.appendChild(deleteButton);
+        actionsElement.appendChild(copyButton);
+        
+        const valueElement = document.createElement('pre');
+        valueElement.className = 'storage-value hidden';
+        valueElement.textContent = displayValue;
+        
+        itemElement.appendChild(keyElement);
+        itemElement.appendChild(sizeElement);
+        itemElement.appendChild(actionsElement);
+        itemElement.appendChild(valueElement);
+        
+        storageItemsElement.appendChild(itemElement);
+      }
+    };
+    
+    // 招待中のユーザーを修正
+    const fixInvitedUsers = () => {
+      console.log('=== 招待中のユーザーを修正 ===');
+      
+      const USERS_STORAGE_KEY = 'kaizen_users';
+      const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+      
+      if (!savedUsers) {
+        console.log('ユーザーデータがありません');
+        return '修正するユーザーデータがありません';
+      }
+      
+      try {
+        const parsedData = JSON.parse(savedUsers);
+        console.log('現在のユーザーデータ:', parsedData.length, '件');
+        
+        // URLパラメータから招待トークンを取得（存在する場合）
+        let urlToken = '';
+        const urlParams = new URLSearchParams(window.location.search);
+        urlToken = urlParams.get('token') || '';
+        
+        // 招待中のユーザーを確認
+        const invitedUsers = parsedData.filter(item => 
+          item.user && (item.user.status === '招待中' || item.user.isInvited === true)
+        );
+        console.log('修正前の招待中のユーザー:', invitedUsers.length, '件');
+        
+        // 招待中のユーザーの詳細を表示
+        invitedUsers.forEach((item, index) => {
+          console.log(`修正前の招待中ユーザー${index}:`, {
+            id: item.user.id,
+            email: item.user.email,
+            inviteToken: item.user.inviteToken || '',
+            status: item.user.status,
+            isInvited: item.user.isInvited
+          });
+        });
+        
+        // 修正が必要なユーザーを確認
+        let hasChanges = false;
+        let fixedCount = 0;
+        
+        parsedData.forEach(item => {
+          if (!item.user) return;
+          
+          // ステータスが招待中の場合、isInvitedフラグを設定
+          if (item.user.status === '招待中' && item.user.isInvited !== true) {
+            item.user.isInvited = true;
+            console.log(`ユーザー ${item.user.email} のisInvitedフラグを設定`);
+            hasChanges = true;
+            fixedCount++;
+          }
+          
+          // isInvitedフラグがtrueの場合、ステータスを招待中に設定
+          if (item.user.isInvited === true && item.user.status !== '招待中') {
+            item.user.status = '招待中';
+            console.log(`ユーザー ${item.user.email} のステータスを招待中に設定`);
+            hasChanges = true;
+            fixedCount++;
+          }
+          
+          // 招待中のユーザーには必ずトークンを設定
+          if ((item.user.status === '招待中' || item.user.isInvited === true) && 
+              (!item.user.inviteToken || item.user.inviteToken === '')) {
+            item.user.inviteToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            console.log(`ユーザー ${item.user.email} のトークンを生成: ${item.user.inviteToken}`);
+            hasChanges = true;
+            fixedCount++;
+          }
+          
+          // URLトークンが指定されている場合、一致するユーザーを確認
+          if (urlToken && item.user.inviteToken === urlToken) {
+            console.log(`URLトークンに一致するユーザーを確認: ${item.user.email}`);
+            
+            // ステータスとisInvitedフラグを確認
+            if (item.user.status !== '招待中') {
+              item.user.status = '招待中';
+              console.log(`ユーザー ${item.user.email} のステータスを招待中に設定`);
+              hasChanges = true;
+              fixedCount++;
+            }
+            
+            if (item.user.isInvited !== true) {
+              item.user.isInvited = true;
+              console.log(`ユーザー ${item.user.email} のisInvitedフラグを設定`);
+              hasChanges = true;
+              fixedCount++;
+            }
+          }
+        });
+        
+        // URLトークンが指定されていて、一致するユーザーが見つからない場合
+        if (urlToken && !parsedData.some(item => item.user && item.user.inviteToken === urlToken)) {
+          console.log(`URLトークン ${urlToken} に一致するユーザーが見つかりません`);
+          
+          // 招待中のユーザーが存在する場合、最初のユーザーのトークンを更新
+          if (invitedUsers.length > 0) {
+            const firstInvitedUser = invitedUsers[0];
+            console.log(`ユーザー ${firstInvitedUser.user.email} のトークンを ${urlToken} に更新`);
+            firstInvitedUser.user.inviteToken = urlToken;
+            hasChanges = true;
+            fixedCount++;
+          } else {
+            // 招待中のユーザーが存在しない場合、新しい招待ユーザーを作成
+            const newInvitedUser = {
+              user: {
+                id: Date.now().toString(),
+                username: 'inviteduser',
+                email: 'arigat.cl01@gmail.com',
+                fullName: '招待ユーザー',
+                role: '一般ユーザー',
+                companyId: parsedData[0]?.user?.companyId || '株式会社サンプル',
+                createdAt: new Date().toISOString(),
+                lastLogin: null,
+                status: '招待中',
+                isInvited: true,
+                inviteToken: urlToken
+              },
+              password: ''
+            };
+            
+            console.log('新しい招待ユーザーを作成:', newInvitedUser.user);
+            parsedData.push(newInvitedUser);
+            hasChanges = true;
+            fixedCount++;
+          }
+        }
+        
+        // 変更があった場合のみ保存
+        if (hasChanges) {
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
+          console.log('ユーザーデータを修正して保存しました');
+          
+          // 修正後の招待中のユーザーを確認
+          const fixedInvitedUsers = parsedData.filter(item => 
+            item.user && (item.user.status === '招待中' || item.user.isInvited === true)
+          );
+          console.log('修正後の招待中のユーザー:', fixedInvitedUsers.length, '件');
+          
+          // 招待中のユーザーの詳細を表示
+          fixedInvitedUsers.forEach((item, index) => {
+            console.log(`修正後の招待中ユーザー${index}:`, {
+              id: item.user.id,
+              email: item.user.email,
+              inviteToken: item.user.inviteToken || '',
+              status: item.user.status,
+              isInvited: item.user.isInvited
+            });
+          });
+          
+          // セッションストレージにも同じデータを保存
+          try {
+            sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
+            console.log('ユーザーデータをセッションストレージにも保存しました');
+          } catch (e) {
+            console.error('セッションストレージへの保存に失敗しました:', e);
+          }
+          
+          return `${fixedCount}件のユーザーデータを修正しました。招待中のユーザー: ${fixedInvitedUsers.length}件`;
+        } else {
+          console.log('修正が必要なユーザーはありませんでした');
+          return '修正が必要なユーザーはありませんでした';
+        }
+      } catch (error) {
+        console.error('ユーザーデータの解析に失敗しました:', error);
+        return 'エラーが発生しました: ' + error.message;
+      }
+    };
+    
+    // ストレージキーの存在を確認
+    const checkStorageKeys = () => {
+      console.log('=== ストレージキーの存在を確認 ===');
+      
+      const keys = [
+        'kaizen_user_info',
+        'kaizen_users'
+      ];
+      
+      const results = [];
+      
+      keys.forEach(key => {
+        const localValue = localStorage.getItem(key);
+        const sessionValue = sessionStorage.getItem(key);
+        
+        console.log(`キー "${key}" の確認:`);
+        console.log(`- localStorage: ${localValue ? '存在します' : '存在しません'}`);
+        console.log(`- sessionStorage: ${sessionValue ? '存在します' : '存在しません'}`);
+        
+        results.push({
+          key,
+          localStorage: !!localValue,
+          sessionStorage: !!sessionValue
+        });
+      });
+      
+      // 結果をテーブル形式で表示
+      let resultHtml = '<table border="1" style="width: 100%; border-collapse: collapse;">';
+      resultHtml += '<tr><th>キー</th><th>localStorage</th><th>sessionStorage</th></tr>';
+      
+      results.forEach(result => {
+        resultHtml += `<tr>
+          <td>${result.key}</td>
+          <td style="text-align: center; color: ${result.localStorage ? 'green' : 'red'}">
+            ${result.localStorage ? '✓' : '✗'}
+          </td>
+          <td style="text-align: center; color: ${result.sessionStorage ? 'green' : 'red'}">
+            ${result.sessionStorage ? '✓' : '✗'}
+          </td>
+        </tr>`;
+      });
+      
+      resultHtml += '</table>';
+      
+      document.getElementById('keys-result').innerHTML = resultHtml;
+      document.getElementById('keys-result').classList.remove('hidden');
+      
+      return '確認が完了しました';
+    };
+    
+    // ユーザーデータをコピー
+    const copyUsersData = () => {
+      const USERS_STORAGE_KEY = 'kaizen_users';
+      const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+      
+      if (!savedUsers) {
+        console.log('ユーザーデータがありません');
+        return 'コピーするユーザーデータがありません';
+      }
+      
+      navigator.clipboard.writeText(savedUsers)
+        .then(() => {
+          console.log('ユーザーデータをクリップボードにコピーしました');
+          showResult('fix-result', 'ユーザーデータをクリップボードにコピーしました', 'success');
+        })
+        .catch(err => {
+          console.error('クリップボードへのコピーに失敗しました:', err);
+          showResult('fix-result', 'クリップボードへのコピーに失敗しました: ' + err.message, 'error');
+        });
+      
+      return 'ユーザーデータをコピーしました';
+    };
+    
+    // ユーザーデータを貼り付け
+    const showPasteArea = () => {
+      document.getElementById('paste-area').classList.remove('hidden');
+    };
+    
+    // 貼り付けたユーザーデータを保存
+    const savePastedData = () => {
+      const USERS_STORAGE_KEY = 'kaizen_users';
+      const pastedData = document.getElementById('users-data').value;
+      
+      if (!pastedData) {
+        console.log('データが入力されていません');
+        return 'データが入力されていません';
+      }
+      
+      try {
+        // JSONとして解析できるか確認
+        const parsedData = JSON.parse(pastedData);
+        
+        // ユーザーデータの形式を確認
+        if (!Array.isArray(parsedData)) {
+          console.error('ユーザーデータは配列である必要があります');
+          return 'ユーザーデータは配列である必要があります';
+        }
+        
+        // ユーザーデータを保存
+        localStorage.setItem(USERS_STORAGE_KEY, pastedData);
+        console.log('ユーザーデータを保存しました');
+        
+        // セッションストレージにも同じデータを保存
+        try {
+          sessionStorage.setItem(USERS_STORAGE_KEY, pastedData);
+          console.log('ユーザーデータをセッションストレージにも保存しました');
+        } catch (e) {
+          console.error('セッションストレージへの保存に失敗しました:', e);
+        }
+        
+        // 貼り付けエリアを隠す
+        document.getElementById('paste-area').classList.add('hidden');
+        document.getElementById('users-data').value = '';
+        
+        // ストレージ一覧を更新
+        displayStorageItems();
+        
+        return 'ユーザーデータを保存しました';
+      } catch (error) {
+        console.error('ユーザーデータの解析に失敗しました:', error);
+        return 'JSONの解析に失敗しました: ' + error.message;
+      }
+    };
+    
+    // ページ読み込み時の処理
+    document.addEventListener('DOMContentLoaded', () => {
+      // タブの切り替え
+      const tabs = document.querySelectorAll('.tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          // アクティブなタブを切り替え
+          document.querySelector('.tab.active').classList.remove('active');
+          tab.classList.add('active');
+          
+          // タブコンテンツを切り替え
+          const tabId = tab.getAttribute('data-tab');
+          document.querySelector('.tab-content.active').classList.remove('active');
+          document.getElementById(`${tabId}-tab`).classList.add('active');
+        });
+      });
+      
+      // ストレージ一覧を表示
+      displayStorageItems();
+      
+      // 更新ボタン
+      document.getElementById('refresh-btn').addEventListener('click', () => {
+        displayStorageItems();
+        console.log('ストレージ一覧を更新しました');
+      });
+      
+      // すべてクリアボタン
+      document.getElementById('clear-all-btn').addEventListener('click', () => {
+        if (confirm('すべてのローカルストレージをクリアしてもよろしいですか？この操作は元に戻せません。')) {
+          localStorage.clear();
+          displayStorageItems();
+          console.log('すべてのローカルストレージをクリアしました');
+        }
+      });
+      
+      // 招待中のユーザーを修正ボタン
+      document.getElementById('fix-invited-users-btn').addEventListener('click', () => {
+        const result = fixInvitedUsers();
+        showResult('fix-result', result, result.includes('エラー') ? 'error' : 'success');
+        displayStorageItems();
+      });
+      
+      // ユーザーデータをコピーボタン
+      document.getElementById('copy-users-btn').addEventListener('click', () => {
+        copyUsersData();
+      });
+      
+      // ユーザーデータを貼り付けボタン
+      document.getElementById('paste-users-btn').addEventListener('click', () => {
+        showPasteArea();
+      });
+      
+      // 保存ボタン
+      document.getElementById('save-pasted-data-btn').addEventListener('click', () => {
+        const result = savePastedData();
+        showResult('fix-result', result, result.includes('エラー') ? 'error' : 'success');
+      });
+      
+      // キャンセルボタン
+      document.getElementById('cancel-paste-btn').addEventListener('click', () => {
+        document.getElementById('paste-area').classList.add('hidden');
+        document.getElementById('users-data').value = '';
+      });
+      
+      // キーの存在を確認ボタン
+      document.getElementById('check-keys-btn').addEventListener('click', () => {
+        checkStorageKeys();
+      });
+      
+      // ログをクリアボタン
+      document.getElementById('clear-log-

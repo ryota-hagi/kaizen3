@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useUser } from '@/contexts/UserContext'
+import { useUser } from '@/contexts/UserContext/context' // パスを更新
 import { UserInfo } from '@/utils/api'
 
 interface UserProfileProps {
@@ -107,10 +107,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
   }
   
   // ログアウト処理
-  const handleLogout = () => {
-    logout()
-    if (onLogout) {
-      onLogout()
+  const handleLogout = async () => {
+    try {
+      logout()
+      if (onLogout) {
+        onLogout()
+      }
+      // ログアウト後にリダイレクト
+      window.location.href = '/auth/login'
+    } catch (error) {
+      console.error('ログアウト中にエラーが発生しました:', error)
     }
   }
   
@@ -209,31 +215,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-secondary-900">ユーザープロフィール</h2>
         <div className="flex space-x-2">
-          {!isEditing && !isChangingPassword ? (
-            <>
-              <button
-                onClick={() => setIsChangingPassword(true)}
-                className="px-3 py-1 text-sm bg-secondary-100 text-secondary-700 rounded hover:bg-secondary-200 transition-colors"
-              >
-                パスワード変更
-              </button>
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-3 py-1 text-sm bg-secondary-100 text-secondary-700 rounded hover:bg-secondary-200 transition-colors"
-              >
-                編集
-              </button>
-            </>
-          ) : isEditing ? (
+          {!isEditing ? (
             <button
-              onClick={handleCancel}
+              onClick={() => setIsEditing(true)}
               className="px-3 py-1 text-sm bg-secondary-100 text-secondary-700 rounded hover:bg-secondary-200 transition-colors"
             >
-              キャンセル
+              編集
             </button>
           ) : (
             <button
-              onClick={handlePasswordCancel}
+              onClick={handleCancel}
               className="px-3 py-1 text-sm bg-secondary-100 text-secondary-700 rounded hover:bg-secondary-200 transition-colors"
             >
               キャンセル
@@ -272,67 +263,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
         </div>
       )}
       
-      {isChangingPassword ? (
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="currentPassword" className="block text-sm font-medium text-secondary-700 mb-1">
-              現在のパスワード <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="password"
-              id="currentPassword"
-              name="currentPassword"
-              value={passwordData.currentPassword}
-              onChange={handlePasswordChange}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-secondary-700 mb-1">
-              新しいパスワード <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="password"
-              id="newPassword"
-              name="newPassword"
-              value={passwordData.newPassword}
-              onChange={handlePasswordChange}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
-            <p className="text-xs text-secondary-500 mt-1">6文字以上で設定してください</p>
-          </div>
-          
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-secondary-700 mb-1">
-              新しいパスワード（確認） <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              name="confirmPassword"
-              value={passwordData.confirmPassword}
-              onChange={handlePasswordChange}
-              className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
-          </div>
-          
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={passwordLoading}
-              className={`px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors ${
-                passwordLoading ? 'opacity-70 cursor-not-allowed' : ''
-              }`}
-            >
-              {passwordLoading ? '更新中...' : 'パスワードを変更'}
-            </button>
-          </div>
-        </form>
-      ) : isEditing ? (
+      {isEditing ? (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-secondary-700 mb-1">

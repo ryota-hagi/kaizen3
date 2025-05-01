@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 import { CompanyInfo as CompanyInfoType, Employee } from '@/utils/api'
 import { useUser } from '@/contexts/UserContext'
@@ -26,9 +27,22 @@ const TEMPLATES_STORAGE_KEY = 'kaizen_templates'
 
 export default function MyPage() {
   // 認証状態とユーザー情報
-  const { isAuthenticated, currentUser } = useUser()
+  const { isAuthenticated, currentUser, loginWithSession } = useUser()
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  
+  // NextAuth.jsのセッション情報を使用してユーザー情報を設定
+  useEffect(() => {
+    const syncUserWithSession = async () => {
+      if (status === 'authenticated' && session?.user && !isAuthenticated) {
+        // loginWithSessionを使用してユーザー情報を設定（未認証の場合のみ）
+        await loginWithSession(session.user)
+      }
+    }
+    
+    syncUserWithSession()
+  }, [session, status, loginWithSession, isAuthenticated])
   
   // タブの状態管理
   const [activeTab, setActiveTab] = useState<'profile' | 'company' | 'employees' | 'templates'>('profile')
@@ -292,13 +306,13 @@ export default function MyPage() {
   
   // 認証状態をチェック
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (status === 'unauthenticated') {
       router.push('/auth/login')
     }
-  }, [isAuthenticated])
+  }, [status, router])
   
   // 認証されていない場合はローディング表示
-  if (!isAuthenticated) {
+  if (status === 'loading' || !session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>

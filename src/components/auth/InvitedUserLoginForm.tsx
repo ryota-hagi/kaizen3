@@ -3,13 +3,12 @@
 import React, { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 
-interface LoginFormProps {
+interface InvitedUserLoginFormProps {
   onSuccess?: () => void
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
+export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({ onSuccess }) => {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +21,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       
       // Google認証を開始（直接リダイレクト）
       await signIn('google', {
-        callbackUrl: '/', // ログイン後にルートパスにリダイレクト
+        callbackUrl: '/dashboard', // ログイン後にダッシュボードにリダイレクト
         redirect: true,
       })
       
@@ -35,7 +34,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   }
   
   return (
-    <>
+    <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full mx-auto">
+      <h2 className="text-2xl font-bold text-secondary-900 mb-2">招待ユーザーログイン</h2>
+      <p className="text-secondary-600 mb-6">招待されたユーザーはこちらからログインしてください</p>
+      
       {error && (
         <div className="bg-red-50 text-red-700 p-3 rounded-md mb-4">
           {error}
@@ -89,14 +91,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         </div>
 
         <div className="mt-6">
-          <Link
-            href="/auth/register"
+          <a
+            href="/auth/login"
             className="w-full flex justify-center py-2 px-4 border border-secondary-300 rounded-md shadow-sm text-sm font-medium text-secondary-700 bg-white hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           >
-            新規登録
-          </Link>
+            通常のログインへ
+          </a>
         </div>
       </div>
-    </>
+    </div>
   )
 }

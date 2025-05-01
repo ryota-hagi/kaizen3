@@ -2,20 +2,34 @@
 
 import React, { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 import { useUser } from '@/contexts/UserContext'
 import Link from 'next/link'
 
 export default function DashboardPage() {
-  const { isAuthenticated, currentUser } = useUser()
+  const { isAuthenticated, currentUser, loginWithSession } = useUser()
+  const { data: session, status } = useSession()
   const router = useRouter()
+  
+  // NextAuth.jsのセッション情報を使用してユーザー情報を設定
+  useEffect(() => {
+    const syncUserWithSession = async () => {
+      if (status === 'authenticated' && session?.user && !isAuthenticated) {
+        // loginWithSessionを使用してユーザー情報を設定
+        await loginWithSession(session.user)
+      }
+    }
+    
+    syncUserWithSession()
+  }, [session, status, isAuthenticated, loginWithSession])
   
   // 認証状態をチェック
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (status === 'unauthenticated') {
       router.push('/auth/login')
     }
-  }, [isAuthenticated, router])
+  }, [status, router])
   
   // 認証されていない場合はローディング表示
   if (!isAuthenticated || !currentUser) {
@@ -34,13 +48,6 @@ export default function DashboardPage() {
       icon: '👥',
       link: '/dashboard/users',
       color: 'bg-blue-100'
-    },
-    {
-      title: 'ユーザー招待',
-      description: '新規ユーザーを招待してシステムへのアクセス権を付与します',
-      icon: '✉️',
-      link: '/dashboard/invite',
-      color: 'bg-purple-100'
     },
     {
       title: '会社情報',
