@@ -22,6 +22,15 @@ export const updateUserProfile = async (
     return false;
   }
 
+  // 管理者から一般ユーザーへの変更の場合、他に管理者がいるか確認
+  if (currentUser.role === '管理者' && userData.role && userData.role !== '管理者') {
+    const adminCount = currentUsers.filter(u => u.role === '管理者' && u.id !== currentUser.id).length;
+    if (adminCount === 0) {
+      console.error('[updateUserProfile] Cannot change role from admin: no other admin exists.');
+      return false;
+    }
+  }
+
   const updatedUser = { ...currentUser, ...userData };
   setCurrentUser(updatedUser);
 
@@ -90,6 +99,61 @@ export const clearInvitedUsers = (
   }
 };
 
+/**
+ * 会社内の管理者が0人になる場合に、新しい管理者を自動的に選出する関数
+ * @param users 現在のユーザーリスト
+ * @param companyId 会社ID
+ * @returns 更新されたユーザーリスト
+ */
+export const ensureAdminExists = (users: UserInfo[], companyId: string): UserInfo[] => {
+  // 指定された会社に所属するユーザーのみをフィルタリング
+  const companyUsers = users.filter(user => user.companyId === companyId);
+  
+  // 管理者の数をカウント
+  const adminCount = companyUsers.filter(user => user.role === '管理者').length;
+  
+  // 管理者が存在する場合は何もしない
+  if (adminCount > 0) {
+    return users;
+  }
+  
+  console.log('[ensureAdminExists] No admin found for company:', companyId);
+  
+  // 管理者が存在しない場合、新しい管理者を選出
+  // まずマネージャーから選出
+  const managers = companyUsers.filter(user => user.role === 'マネージャー');
+  if (managers.length > 0) {
+    // 最初のマネージャーを管理者に昇格
+    const newAdmin = managers[0];
+    console.log(`[ensureAdminExists] Promoting manager to admin: ${newAdmin.email}`);
+    
+    return users.map(user => {
+      if (user.id === newAdmin.id) {
+        return { ...user, role: '管理者' };
+      }
+      return user;
+    });
+  }
+  
+  // マネージャーもいない場合、一般ユーザーから選出
+  const regularUsers = companyUsers.filter(user => user.role !== '管理者' && user.role !== 'マネージャー');
+  if (regularUsers.length > 0) {
+    // 最初の一般ユーザーを管理者に昇格
+    const newAdmin = regularUsers[0];
+    console.log(`[ensureAdminExists] Promoting regular user to admin: ${newAdmin.email}`);
+    
+    return users.map(user => {
+      if (user.id === newAdmin.id) {
+        return { ...user, role: '管理者' };
+      }
+      return user;
+    });
+  }
+  
+  // ユーザーが存在しない場合は元のリストを返す
+  return users;
+};
+
 // ユーザー削除処理
 export const deleteUser = async (
   userId: string,
@@ -112,9 +176,46 @@ export const deleteUser = async (
   
   // 管理者ユーザーの場合、他に管理者がいるか確認
   if (userToDelete.role === '管理者') {
-    const adminCount = currentUsers.filter(u => u.role === '管理者').length;
+    const companyId = userToDelete.companyId;
+    const companyUsers = currentUsers.filter(u => u.companyId === companyId);
+    const adminCount = companyUsers.filter(u => u.role === '管理者').length;
+    
     if (adminCount <= 1) {
-      return {success: false, message: '最後の管理者は削除できません。他のユーザーを管理者に設定してから削除してください'};
+      // 他の管理者がいない場合、マネージャーまたは一般ユーザーを管理者に昇格させる
+      const managers = companyUsers.filter(u => u.role === 'マネージャー' && u.id !== userId);
+      const regularUsers = companyUsers.filter(u => u.role !== '管理者' && u.role !== 'マネージャー' && u.id !== userId);
+      
+      if (managers.length === 0 && regularUsers.length === 0) {
+        return {success: false, message: '最後のユーザーは削除できません'};
+      }
+      
+      // 昇格させるユーザーを選択
+      const userToPromote = managers.length > 0 ? managers[0] : regularUsers[0];
+      console.log(`[deleteUser] Promoting user ${userToPromote.email} to admin role`);
+      
+      // ユーザーを昇格
+      const updatedUsersList = currentUsers.map(u => {
+        if (u.id === userToPromote.id) {
+          return { ...u, role: '管理者' };
+        }
+        return u;
+      }).filter(u => u.id !== userId);
+      
+      const updatedPasswordsMap = { ...currentPasswords };
+      delete updatedPasswordsMap[userId];
+      
+      setUsers(updatedUsersList);
+      setUserPasswords(updatedPasswordsMap);
+      
+      if (typeof window !== 'undefined') {
+        const usersToSave = updatedUsersList.map(u => ({
+          user: u,
+          password: updatedPasswordsMap[u.id] || ''
+        }));
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        console.log(`[deleteUser] User ${userId} deleted and ${userToPromote.email} promoted to admin.`);
+      }
+      return {success: true, message: `ユーザーを削除しました。${userToPromote.email}が新しい管理者に設定されました。`};
     }
   }
 
@@ -194,6 +295,18 @@ export const updateUser = async (
   if (userData.email && userData.email !== user.email && currentUsers.some(u => u.email === userData.email && u.id !== userId)) {
     console.error(`[updateUser] Email ${userData.email} already exists.`);
     return false;
+  }
+
+  // 管理者から一般ユーザーへの変更の場合、他に管理者がいるか確認
+  if (user.role === '管理者' && userData.role && userData.role !== '管理者') {
+    const companyId = user.companyId;
+    const companyUsers = currentUsers.filter(u => u.companyId === companyId);
+    const adminCount = companyUsers.filter(u => u.role === '管理者' && u.id !== userId).length;
+    
+    if (adminCount === 0) {
+      console.error('[updateUser] Cannot change role from admin: no other admin exists.');
+      return false;
+    }
   }
 
   const updatedUser = { ...user, ...userData };

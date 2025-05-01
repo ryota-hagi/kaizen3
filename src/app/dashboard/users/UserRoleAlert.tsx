@@ -4,43 +4,75 @@ import React, { useState, useEffect } from 'react'
 import { useUser } from '@/contexts/UserContext/context'
 
 export const UserRoleAlert = () => {
-  const { users, updateUser } = useUser()
+  const { users, updateUser, currentUser } = useUser()
   const [showAlert, setShowAlert] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
-  const [nonAdminUsers, setNonAdminUsers] = useState<Array<{id: string, fullName: string}>>([])
+  const [nonAdminUsers, setNonAdminUsers] = useState<Array<{id: string, fullName: string, role: string}>>([])
 
   // 管理者が存在するかチェック
   useEffect(() => {
-    const adminUsers = users.filter(user => user.role === '管理者')
-    if (adminUsers.length === 0 && users.length > 0) {
+    if (!currentUser || !currentUser.companyId) return;
+    
+    // 現在の会社に所属するユーザーのみをフィルタリング
+    const companyUsers = users.filter(user => user.companyId === currentUser.companyId);
+    
+    // 管理者の数をカウント
+    const adminUsers = companyUsers.filter(user => user.role === '管理者');
+    
+    if (adminUsers.length === 0 && companyUsers.length > 0) {
       // 管理者が存在しない場合、アラートを表示
-      const availableUsers = users.map(user => ({
-        id: user.id,
-        fullName: user.fullName
-      }))
-      setNonAdminUsers(availableUsers)
-      setShowAlert(true)
+      
+      // 優先順位に基づいてユーザーをソート
+      // 1. マネージャー
+      // 2. 一般ユーザー
+      const managers = companyUsers
+        .filter(user => user.role === 'マネージャー')
+        .map(user => ({
+          id: user.id,
+          fullName: user.fullName,
+          role: user.role
+        }));
+      
+      const regularUsers = companyUsers
+        .filter(user => user.role !== '管理者' && user.role !== 'マネージャー')
+        .map(user => ({
+          id: user.id,
+          fullName: user.fullName,
+          role: user.role
+        }));
+      
+      // マネージャーを先頭に、次に一般ユーザーを配置
+      const sortedUsers = [...managers, ...regularUsers];
+      
+      setNonAdminUsers(sortedUsers);
+      
+      // 自動的に最初のユーザーを選択
+      if (sortedUsers.length > 0) {
+        setSelectedUserId(sortedUsers[0].id);
+      }
+      
+      setShowAlert(true);
     } else {
-      setShowAlert(false)
+      setShowAlert(false);
     }
-  }, [users])
+  }, [users, currentUser]);
 
   // 管理者に設定する
   const handleSetAdmin = async () => {
-    if (!selectedUserId) return
+    if (!selectedUserId) return;
 
     try {
-      const result = await updateUser(selectedUserId, { role: '管理者' })
+      const result = await updateUser(selectedUserId, { role: '管理者' });
       if (result) {
-        setShowAlert(false)
+        setShowAlert(false);
       }
     } catch (error) {
-      console.error('管理者設定に失敗しました:', error)
+      console.error('管理者設定に失敗しました:', error);
     }
-  }
+  };
 
   if (!showAlert) {
-    return null
+    return null;
   }
 
   return (
@@ -67,7 +99,7 @@ export const UserRoleAlert = () => {
             <option value="">選択してください</option>
             {nonAdminUsers.map(user => (
               <option key={user.id} value={user.id}>
-                {user.fullName}
+                {user.fullName} ({user.role})
               </option>
             ))}
           </select>
@@ -86,5 +118,5 @@ export const UserRoleAlert = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
