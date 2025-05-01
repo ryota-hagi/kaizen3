@@ -1,13 +1,21 @@
 import '@/styles/globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Noto_Sans_JP } from 'next/font/google'
 import React from 'react'
 import { WorkflowContextProvider } from '../contexts/WorkflowContext'
 import { UserContextProvider } from '../contexts/UserContext'
 import { ChatContextProvider } from '../contexts/ChatContext'
 import { Providers } from './providers'
 
-const inter = Inter({ subsets: ['latin'] })
+// 日本語フォントを設定（Noto Sans JP）
+const notoSansJP = Noto_Sans_JP({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  display: 'swap',
+  preload: true,
+  // 可変フォントを使用して最適化
+  variable: '--font-noto-sans-jp',
+})
 
 export const metadata: Metadata = {
   title: 'Kaizen - 業務改善支援アプリ',
@@ -21,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body className={inter.className}>
+      <body className={notoSansJP.className}>
         <Providers>
           <UserContextProvider>
             <WorkflowContextProvider>

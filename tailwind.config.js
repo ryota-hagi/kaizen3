@@ -40,7 +40,10 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        // Noto Sans JPを優先的に使用し、フォールバックとしてsans-serifを設定
+        sans: ['var(--font-noto-sans-jp)', 'sans-serif'],
+        // 元のInterフォントも使用可能に
+        inter: ['Inter', 'sans-serif'],
       },
     },
   },
