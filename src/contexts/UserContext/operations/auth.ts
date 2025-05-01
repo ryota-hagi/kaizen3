@@ -32,19 +32,23 @@ export const loginWithGoogle = async (
       return false;
     }
     
+    // ローカルストレージからユーザーリストを取得
+    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+    const existingUser = currentUsers.find(u => u.id === user.id);
+    
     // UserInfo形式に変換
     const userInfo: UserInfo = {
       id: user.id,
       username: user.email?.split('@')[0] || '',
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
-      role: 'ユーザー',
+      role: existingUser?.role || 'ユーザー',
       status: 'アクティブ',
-      createdAt: user.created_at || new Date().toISOString(),
+      createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
-      isInvited: false,
-      inviteToken: '',
-      companyId: ''
+      isInvited: existingUser?.isInvited || false,
+      inviteToken: existingUser?.inviteToken || '',
+      companyId: existingUser?.companyId || '' // 既存ユーザーの会社IDを使用、新規ユーザーは空文字
     };
     
     // ユーザー情報を保存
@@ -56,7 +60,6 @@ export const loginWithGoogle = async (
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
       
       // ユーザーリストを更新
-      const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
       const existingUserIndex = currentUsers.findIndex(u => u.id === userInfo.id);
       
       let updatedUsers;

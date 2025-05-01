@@ -39,9 +39,16 @@ export default function CallbackClient() {
         const isInvited = searchParams?.get('invite') === 'true'
         const inviteToken = sessionStorage.getItem('invite_token')
         
-        if (isInvited && inviteToken) {
+        if (isInvited) {
           // 招待ユーザーの場合
           console.log('Invited user login with token:', inviteToken)
+          
+          if (!inviteToken) {
+            console.error('No invite token found')
+            setError('招待トークンが見つかりません。招待メールのリンクから再度アクセスしてください。')
+            setLoading(false)
+            return
+          }
           
           // ユーザー情報を更新
           const success = await updateUserAfterGoogleSignIn({
@@ -64,9 +71,23 @@ export default function CallbackClient() {
           const success = await loginWithGoogle()
           
           if (success) {
-            // リダイレクト先を決定
-            const redirectTo = searchParams?.get('redirectTo') || '/dashboard'
-            router.push(redirectTo)
+            // ユーザーが既存かどうかを確認
+            const { data: { user } } = await supabase.auth.getUser()
+            
+            // ローカルストレージからユーザーリストを取得
+            const usersJson = localStorage.getItem('kaizen_users')
+            const users = usersJson ? JSON.parse(usersJson) : []
+            
+            // ユーザーが既存かどうかを確認（ユーザーIDで検索）
+            const existingUser = users.find((u: any) => u.user && u.user.id === user?.id)
+            
+            if (existingUser && existingUser.user.companyId) {
+              // 既存ユーザーで会社IDがある場合はダッシュボードへ
+              router.push('/dashboard')
+            } else {
+              // 新規ユーザーまたは会社IDがない場合は会社登録ページへ
+              router.push('/auth/register/company')
+            }
           } else {
             setError('ログインに失敗しました')
           }

@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabaseClient'
 
 interface InvitedUserLoginFormProps {
@@ -11,19 +11,41 @@ interface InvitedUserLoginFormProps {
 
 export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({ 
   onSuccess,
-  inviteToken
+  inviteToken: propInviteToken
 }) => {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(null)
+  
+  // URLパラメータまたはpropsからトークンを取得
+  useEffect(() => {
+    const urlToken = searchParams?.get('token')
+    if (urlToken) {
+      setToken(urlToken)
+      // トークンをセッションストレージに保存（コールバック後に使用するため）
+      sessionStorage.setItem('invite_token', urlToken)
+    } else if (propInviteToken) {
+      setToken(propInviteToken)
+      // トークンをセッションストレージに保存（コールバック後に使用するため）
+      sessionStorage.setItem('invite_token', propInviteToken)
+    } else {
+      // セッションストレージからトークンを取得（既に保存されている場合）
+      const storedToken = sessionStorage.getItem('invite_token')
+      if (storedToken) {
+        setToken(storedToken)
+      }
+    }
+  }, [searchParams, propInviteToken])
   
   const handleGoogleLogin = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      if (!inviteToken) {
-        setError('招待トークンが見つかりません')
+      if (!token) {
+        setError('招待トークンが見つかりません。招待メールのリンクから再度アクセスしてください。')
         setLoading(false)
         return
       }
@@ -31,7 +53,7 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
       const supabase = getSupabaseClient()
       
       // 招待トークンをセッションストレージに保存（コールバック後に使用するため）
-      sessionStorage.setItem('invite_token', inviteToken)
+      sessionStorage.setItem('invite_token', token)
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

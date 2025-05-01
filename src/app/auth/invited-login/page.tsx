@@ -3,8 +3,12 @@
 import React from 'react'
 import { InvitedUserLoginForm } from '@/components/auth/InvitedUserLoginForm'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 export default function InvitedLoginPage() {
+  const searchParams = useSearchParams()
+  const token = searchParams?.get('token') || undefined
+  
   return (
     <div className="min-h-screen bg-secondary-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -17,7 +21,7 @@ export default function InvitedLoginPage() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <InvitedUserLoginForm />
+        <InvitedUserLoginForm inviteToken={token} />
         
         <div className="mt-6 text-center">
           <Link href="/auth/login" className="text-sm text-primary-600 hover:text-primary-500">
