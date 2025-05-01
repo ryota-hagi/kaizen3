@@ -24,6 +24,7 @@ export interface UserInfo {
 
 // 会社情報の型定義
 export interface CompanyInfo {
+  id?: string; // ユニークな会社ID（新規追加）
   name: string;
   industry: string;
   size: string;
@@ -32,6 +33,11 @@ export interface CompanyInfo {
   foundedYear?: string; // 設立年
   website?: string; // Webサイト
   contactEmail?: string; // 連絡先メール
+  userCounts?: {
+    admin: number; // 管理者数
+    manager: number; // マネージャー数
+    user: number; // 一般ユーザー数
+  };
 }
 
 // 従業員情報の型定義
@@ -100,6 +106,7 @@ export async function callClaudeAPI(
     // 会社情報の詳細なログ
     if (companyInfo) {
       console.log('Company Info Details:');
+      console.log('- id:', companyInfo.id);
       console.log('- name:', companyInfo.name);
       console.log('- industry:', companyInfo.industry);
       console.log('- businessDescription:', companyInfo.businessDescription);
@@ -148,4 +155,51 @@ export async function callClaudeAPI(
     console.error('Error calling Claude API:', error);
     throw error;
   }
+}
+
+/**
+ * ユニークな会社IDを生成する関数
+ * @returns ユニークな会社ID（KZ-で始まる10桁の英数字）
+ */
+export function generateCompanyId(): string {
+  const prefix = 'KZ-';
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = prefix;
+  
+  // 7桁のランダムな英数字を生成
+  for (let i = 0; i < 7; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  
+  return result;
+}
+
+/**
+ * ユーザーロールごとの人数をカウントする関数
+ * @param users ユーザー情報の配列
+ * @param companyId 会社ID
+ * @returns ロールごとのユーザー数
+ */
+export function countUsersByRole(users: UserInfo[], companyId: string): { admin: number; manager: number; user: number } {
+  // 指定された会社に所属するユーザーのみをフィルタリング
+  const companyUsers = users.filter(user => user.companyId === companyId);
+  
+  // ロールごとにカウント
+  const counts = {
+    admin: 0,
+    manager: 0,
+    user: 0
+  };
+  
+  companyUsers.forEach(user => {
+    if (user.role === '管理者') {
+      counts.admin++;
+    } else if (user.role === 'マネージャー') {
+      counts.manager++;
+    } else {
+      counts.user++;
+    }
+  });
+  
+  return counts;
 }

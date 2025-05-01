@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layouts/DashboardLayout'
-import { CompanyInfo as CompanyInfoType, Employee } from '@/utils/api'
+import { CompanyInfo as CompanyInfoType, Employee, generateCompanyId, countUsersByRole } from '@/utils/api'
 import { useUser } from '@/contexts/UserContext'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { RegisterForm } from '@/components/auth/RegisterForm'
@@ -26,7 +26,7 @@ const TEMPLATES_STORAGE_KEY = 'kaizen_templates'
 
 export default function MyPage() {
   // 認証状態とユーザー情報
-  const { isAuthenticated, currentUser } = useUser()
+  const { isAuthenticated, currentUser, users } = useUser()
   const router = useRouter()
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   
@@ -46,6 +46,7 @@ export default function MyPage() {
   
   // デフォルトの会社情報
   const defaultCompanyInfo: CompanyInfoType = {
+    id: generateCompanyId(), // ユニークな会社IDを生成
     name: '株式会社サンプル',
     industry: 'IT',
     size: '50-100人',
@@ -119,12 +120,25 @@ export default function MyPage() {
         try {
           const parsedCompanyInfo = JSON.parse(savedCompanyInfo);
           console.log('Parsed Company Info:', parsedCompanyInfo);
+          
+          // 会社IDがない場合は生成して追加
+          if (!parsedCompanyInfo.id) {
+            parsedCompanyInfo.id = generateCompanyId();
+            console.log('Generated new company ID:', parsedCompanyInfo.id);
+            
+            // 更新した会社情報をローカルストレージに保存
+            localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(parsedCompanyInfo));
+          }
+          
           setCompanyInfo(parsedCompanyInfo)
         } catch (error) {
           console.error('Failed to parse company info from localStorage:', error)
         }
       } else {
         console.log('No company info found in localStorage, using default');
+        
+        // デフォルトの会社情報をローカルストレージに保存
+        localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(defaultCompanyInfo));
       }
       
       // 従業員情報の読み込み
@@ -176,6 +190,16 @@ export default function MyPage() {
   
   // 会社情報の保存ハンドラ
   const handleSaveCompanyInfo = (updatedInfo: CompanyInfoType) => {
+    // 会社IDが存在することを確認
+    if (!updatedInfo.id) {
+      updatedInfo.id = companyInfo.id || generateCompanyId();
+    }
+    
+    // ユーザー数をカウント
+    if (users && users.length > 0 && updatedInfo.id) {
+      updatedInfo.userCounts = countUsersByRole(users, updatedInfo.id);
+    }
+    
     setCompanyInfo(updatedInfo)
     
     // ローカルストレージに保存
@@ -185,6 +209,12 @@ export default function MyPage() {
     
     // 保存成功メッセージを表示
     setSaveSuccess(true)
+    
+    // 現在のユーザーの会社IDを更新
+    if (currentUser && currentUser.companyId !== updatedInfo.id) {
+      // ここでUserContextの更新関数を呼び出す（実装が必要）
+      console.log('Company ID updated for current user:', updatedInfo.id);
+    }
   }
   
   // 従業員の追加ハンドラ
@@ -306,6 +336,15 @@ export default function MyPage() {
     )
   }
   
+  // ユーザー数をカウント
+  const userCounts = companyInfo.id ? countUsersByRole(users, companyInfo.id) : { admin: 0, manager: 0, user: 0 };
+  
+  // 会社情報にユーザー数を追加
+  const companyInfoWithUserCounts: CompanyInfoType = {
+    ...companyInfo,
+    userCounts
+  };
+  
   return (
     <DashboardLayout companyName={companyInfo.name}>
       <div className="p-8">
@@ -374,9 +413,10 @@ export default function MyPage() {
               <UserProfile />
             ) : activeTab === 'company' ? (
               <CompanyInfo 
-                companyInfo={companyInfo} 
+                companyInfo={companyInfoWithUserCounts} 
                 onSave={handleSaveCompanyInfo}
                 isEditable={isAdmin}
+                users={users}
               />
             ) : activeTab === 'employees' && isAdmin ? (
               <EmployeeList 

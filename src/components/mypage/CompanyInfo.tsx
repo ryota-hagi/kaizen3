@@ -1,15 +1,21 @@
 'use client'
 
 import React, { useState } from 'react'
-import { CompanyInfo as CompanyInfoType } from '@/utils/api'
+import { CompanyInfo as CompanyInfoType, UserInfo } from '@/utils/api'
 
 interface CompanyInfoProps {
   companyInfo: CompanyInfoType
   onSave: (companyInfo: CompanyInfoType) => void
   isEditable?: boolean
+  users?: UserInfo[] // ユーザー情報を追加
 }
 
-export const CompanyInfo: React.FC<CompanyInfoProps> = ({ companyInfo, onSave, isEditable = true }) => {
+export const CompanyInfo: React.FC<CompanyInfoProps> = ({ 
+  companyInfo, 
+  onSave, 
+  isEditable = true,
+  users = []
+}) => {
   const [isEditing, setIsEditing] = useState(false)
   const [editedInfo, setEditedInfo] = useState<CompanyInfoType>(companyInfo)
   
@@ -33,6 +39,36 @@ export const CompanyInfo: React.FC<CompanyInfoProps> = ({ companyInfo, onSave, i
     setEditedInfo(companyInfo)
     setIsEditing(false)
   }
+  
+  // ユーザー数をカウント
+  const countUsersByRole = () => {
+    if (!users || users.length === 0 || !companyInfo.id) return { admin: 0, manager: 0, user: 0 }
+    
+    // 指定された会社に所属するユーザーのみをフィルタリング
+    const companyUsers = users.filter(user => user.companyId === companyInfo.id)
+    
+    // ロールごとにカウント
+    const counts = {
+      admin: 0,
+      manager: 0,
+      user: 0
+    }
+    
+    companyUsers.forEach(user => {
+      if (user.role === '管理者') {
+        counts.admin++
+      } else if (user.role === 'マネージャー') {
+        counts.manager++
+      } else {
+        counts.user++
+      }
+    })
+    
+    return counts
+  }
+  
+  // ユーザー数を取得
+  const userCounts = companyInfo.userCounts || countUsersByRole()
   
   return (
     <div>
@@ -65,6 +101,23 @@ export const CompanyInfo: React.FC<CompanyInfoProps> = ({ companyInfo, onSave, i
       
       {isEditing ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 会社IDは編集不可 */}
+          {companyInfo.id && (
+            <div>
+              <label htmlFor="id" className="block text-sm font-medium text-secondary-700 mb-1">
+                会社ID（変更不可）
+              </label>
+              <input
+                type="text"
+                id="id"
+                name="id"
+                value={companyInfo.id}
+                disabled
+                className="w-full px-3 py-2 border border-secondary-300 rounded-md bg-secondary-100 text-secondary-500"
+              />
+            </div>
+          )}
+          
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-secondary-700 mb-1">
               会社名
@@ -180,6 +233,14 @@ export const CompanyInfo: React.FC<CompanyInfoProps> = ({ companyInfo, onSave, i
       ) : (
         <div className="bg-secondary-50 p-4 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 会社ID表示 */}
+            {companyInfo.id && (
+              <div>
+                <h3 className="text-sm font-medium text-secondary-500">会社ID</h3>
+                <p className="text-secondary-900 font-mono">{companyInfo.id}</p>
+              </div>
+            )}
+            
             <div>
               <h3 className="text-sm font-medium text-secondary-500">会社名</h3>
               <p className="text-secondary-900">{companyInfo.name}</p>
@@ -198,6 +259,16 @@ export const CompanyInfo: React.FC<CompanyInfoProps> = ({ companyInfo, onSave, i
             <div>
               <h3 className="text-sm font-medium text-secondary-500">所在地</h3>
               <p className="text-secondary-900">{companyInfo.address}</p>
+            </div>
+            
+            {/* ユーザー数表示 */}
+            <div>
+              <h3 className="text-sm font-medium text-secondary-500">システム利用者数</h3>
+              <div className="flex flex-col space-y-1 mt-1">
+                <p className="text-secondary-900 text-sm">管理者: {userCounts.admin}人</p>
+                <p className="text-secondary-900 text-sm">マネージャー: {userCounts.manager}人</p>
+                <p className="text-secondary-900 text-sm">一般ユーザー: {userCounts.user}人</p>
+              </div>
             </div>
             
             {companyInfo.businessDescription && (
