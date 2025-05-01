@@ -53,7 +53,7 @@ export default function CallbackClient() {
         
         // 全ユーザーのトークンをログに出力
         users.forEach((user, index) => {
-          console.log(`[DEBUG] User ${index} token:`, user.inviteToken, 'isInvited:', user.isInvited, 'status:', user.status, 'companyId:', user.companyId)
+          console.log(`[DEBUG] User ${index} token:`, user.inviteToken, 'isInvited:', user.isInvited, 'status:', user.status, 'companyId:', user.companyId || 'not set')
         })
         
         if (isInvited) {
@@ -93,7 +93,7 @@ export default function CallbackClient() {
               // 会社IDを取得（ユーザーの会社IDまたは他のユーザーから）
               let companyId = userByToken.companyId
               
-              if (!companyId) {
+              if (!companyId || companyId.trim() === '') {
                 // 他のユーザーから会社IDを取得
                 const otherUser = users.find(u => u.companyId && u.companyId.trim() !== '')
                 if (otherUser) {
@@ -128,6 +128,74 @@ export default function CallbackClient() {
               return
             }
             
+            // ユーザー管理画面のユーザーリストを直接確認
+            console.log('[DEBUG] Checking localStorage directly for invited users')
+            try {
+              const savedUsers = localStorage.getItem('kaizen_users')
+              if (savedUsers) {
+                const parsedData = JSON.parse(savedUsers)
+                console.log('[DEBUG] Found users in localStorage:', parsedData.length)
+                
+                // 招待中のユーザーを検索
+                const storedInvitedUsers = parsedData.filter((item: any) => 
+                  item.user && 
+                  item.user.inviteToken && 
+                  item.user.inviteToken.toLowerCase() === inviteToken.toLowerCase() &&
+                  (item.user.isInvited === true || item.user.status === '招待中')
+                )
+                
+                console.log('[DEBUG] Found invited users in localStorage:', storedInvitedUsers.length)
+                
+                if (storedInvitedUsers.length > 0) {
+                  const storedInvitedUser = storedInvitedUsers[0].user
+                  console.log('[DEBUG] Using invited user from localStorage:', storedInvitedUser.email)
+                  
+                  // 会社IDを取得
+                  let companyId = storedInvitedUser.companyId
+                  
+                  if (!companyId || companyId.trim() === '') {
+                    // 他のユーザーから会社IDを取得
+                    const otherStoredUser = parsedData.find((item: any) => 
+                      item.user && item.user.companyId && item.user.companyId.trim() !== ''
+                    )
+                    
+                    if (otherStoredUser) {
+                      companyId = otherStoredUser.user.companyId
+                      console.log('[DEBUG] Using company ID from other stored user:', companyId)
+                    } else {
+                      console.error('[DEBUG] No company ID found in localStorage')
+                      setError('会社情報が見つかりません。')
+                      setLoading(false)
+                      return
+                    }
+                  }
+                  
+                  // ユーザー情報を更新
+                  const success = await updateUserAfterGoogleSignIn({
+                    isInvited: true,
+                    inviteToken,
+                    role: storedInvitedUser.role || 'メンバー',
+                    companyId
+                  })
+                  
+                  if (success) {
+                    // 招待トークンをクリア
+                    sessionStorage.removeItem('invite_token')
+                    localStorage.removeItem('invite_token')
+                    
+                    // ダッシュボードにリダイレクト
+                    router.push('/dashboard')
+                    return
+                  } else {
+                    setError('ユーザー情報の更新に失敗しました')
+                    return
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('[DEBUG] Error checking localStorage:', e)
+            }
+            
             console.error('[DEBUG] No invited user found with token:', inviteToken)
             setError('招待ユーザーが見つかりません。招待メールのリンクから再度アクセスしてください。')
             setLoading(false)
@@ -136,7 +204,7 @@ export default function CallbackClient() {
           
           // 最初に見つかった招待ユーザーを使用
           const invitedUser = invitedUsers[0]
-          console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId)
+          console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId || 'not set')
           
           // 会社IDを取得
           let companyId = invitedUser.companyId

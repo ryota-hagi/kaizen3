@@ -79,7 +79,8 @@ export const fixUserData = (parsedData: any[]): any[] => {
       email: item.user.email,
       inviteToken: item.user.inviteToken || '',
       status: item.user.status,
-      isInvited: item.user.isInvited
+      isInvited: item.user.isInvited,
+      companyId: item.user.companyId || 'not set'
     });
   });
   
@@ -136,6 +137,13 @@ export const loadUserDataFromLocalStorage = (
         // inviteTokenプロパティが存在しない場合は追加
         if (user.inviteToken === undefined || user.inviteToken === null) {
           user.inviteToken = '';
+        }
+
+        // URLトークンと一致するユーザーを招待中に設定
+        if (urlToken && user.inviteToken && user.inviteToken.toLowerCase() === urlToken.toLowerCase() && user.status !== '招待中') {
+          console.log(`[fixUserData Integrated] Setting status to '招待中' for ${user.email} based on URL token match.`);
+          user.status = '招待中';
+          user.isInvited = true;
         }
 
         // statusが'招待中'でinviteTokenが空の場合、新しいトークンを生成
@@ -267,6 +275,11 @@ export const loadUserDataFromLocalStorage = (
           user.inviteToken = '';
         }
         
+        // 会社IDが設定されていない場合は空文字列を設定
+        if (user.companyId === undefined || user.companyId === null) {
+          user.companyId = '';
+        }
+        
         return user;
       }).filter(user => user != null) as UserInfo[]; // nullを除外
       
@@ -301,6 +314,11 @@ export const loadUserDataFromLocalStorage = (
               loadedUsers[existingUserIndex].status = '招待中';
               loadedUsers[existingUserIndex].isInvited = true;
               loadedUsers[existingUserIndex].inviteToken = invitedUser.inviteToken || Math.random().toString(36).substring(2, 10);
+              
+              // 会社IDを設定（存在する場合のみ）
+              if (invitedUser.companyId) {
+                loadedUsers[existingUserIndex].companyId = invitedUser.companyId;
+              }
             } else {
               // 新しいユーザーとして追加
               console.log(`招待中ユーザーを追加: ${invitedUser.email}`);
@@ -309,6 +327,12 @@ export const loadUserDataFromLocalStorage = (
               if (!invitedUser.inviteToken || invitedUser.inviteToken === '') {
                 invitedUser.inviteToken = Math.random().toString(36).substring(2, 10);
               }
+              
+              // 会社IDが設定されていない場合は空文字列を設定
+              if (invitedUser.companyId === undefined || invitedUser.companyId === null) {
+                invitedUser.companyId = '';
+              }
+              
               loadedUsers.push(invitedUser);
             }
           });
@@ -334,7 +358,8 @@ export const loadUserDataFromLocalStorage = (
               email: user.email,
               inviteToken: user.inviteToken,
               status: user.status,
-              isInvited: user.isInvited
+              isInvited: user.isInvited,
+              companyId: user.companyId || 'not set'
             });
           });
           
@@ -353,7 +378,8 @@ export const loadUserDataFromLocalStorage = (
             email: user.email,
             inviteToken: user.inviteToken,
             status: user.status,
-            isInvited: user.isInvited
+            isInvited: user.isInvited,
+            companyId: user.companyId || 'not set'
           });
         });
       }
@@ -378,7 +404,8 @@ export const loadUserDataFromLocalStorage = (
           email: user.email,
           inviteToken: user.inviteToken || '',
           status: user.status,
-          isInvited: user.isInvited
+          isInvited: user.isInvited,
+          companyId: user.companyId || 'not set'
         });
       });
     } catch (error) {
