@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
 import { getSupabaseClient } from '@/lib/supabaseClient'
-import { verifyInviteToken } from '@/contexts/UserContext/operations/invite'
 
 export default function CallbackClient() {
   const router = useRouter()
@@ -51,18 +50,21 @@ export default function CallbackClient() {
             return
           }
           
-          // トークンを検証して招待情報を取得
-          const verifyResult = await verifyInviteToken(inviteToken, users)
+          // ローカルストレージから招待ユーザーを検索
+          const invitedUser = users.find(user => 
+            user.inviteToken === inviteToken && 
+            (user.status === '招待中' || user.isInvited === true)
+          )
           
-          if (!verifyResult.valid || !verifyResult.user) {
-            console.error('Invalid invite token')
-            setError('無効な招待トークンです。招待メールのリンクから再度アクセスしてください。')
+          if (!invitedUser) {
+            console.error('No invited user found with token:', inviteToken)
+            setError('招待ユーザーが見つかりません。招待メールのリンクから再度アクセスしてください。')
             setLoading(false)
             return
           }
           
           // 招待ユーザーの会社IDを取得
-          const companyId = verifyResult.user.companyId
+          const companyId = invitedUser.companyId
           
           if (!companyId) {
             console.error('No company ID found for invited user')
@@ -70,6 +72,8 @@ export default function CallbackClient() {
             setLoading(false)
             return
           }
+          
+          console.log('Found invited user with company ID:', companyId)
           
           // ユーザー情報を更新
           const success = await updateUserAfterGoogleSignIn({
@@ -96,12 +100,18 @@ export default function CallbackClient() {
             // ユーザーが既存かどうかを確認
             const { data: { user } } = await supabase.auth.getUser()
             
+            if (!user) {
+              setError('ユーザー情報の取得に失敗しました')
+              setLoading(false)
+              return
+            }
+            
             // ローカルストレージからユーザーリストを取得
             const usersJson = localStorage.getItem('kaizen_users')
             const localUsers = usersJson ? JSON.parse(usersJson) : []
             
             // ユーザーが既存かどうかを確認（ユーザーIDで検索）
-            const existingUser = localUsers.find((u: any) => u.user && u.user.id === user?.id)
+            const existingUser = localUsers.find((u: any) => u.user && u.user.id === user.id)
             
             if (existingUser && existingUser.user.companyId) {
               // 既存ユーザーで会社IDがある場合はダッシュボードへ

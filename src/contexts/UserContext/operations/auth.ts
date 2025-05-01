@@ -34,6 +34,8 @@ export const loginWithGoogle = async (
     
     // ローカルストレージからユーザーリストを取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+    
+    // ユーザーIDで既存ユーザーを検索
     const existingUser = currentUsers.find(u => u.id === user.id);
     
     // UserInfo形式に変換
@@ -71,8 +73,18 @@ export const loginWithGoogle = async (
       
       let updatedUsers;
       if (existingUserIndex >= 0) {
-        // 既存ユーザーを更新
-        updatedUsers = currentUsers.map(u => u.id === userInfo.id ? userInfo : u);
+        // 既存ユーザーを更新（会社IDは保持）
+        const updatedUser = {
+          ...currentUsers[existingUserIndex],
+          lastLogin: new Date().toISOString(),
+          fullName: userInfo.fullName,
+          email: userInfo.email
+        };
+        updatedUsers = [...currentUsers];
+        updatedUsers[existingUserIndex] = updatedUser;
+        
+        // 現在のユーザー情報も更新
+        setCurrentUser(updatedUser);
       } else {
         // 新規ユーザーを追加
         updatedUsers = [...currentUsers, userInfo];
@@ -173,6 +185,8 @@ export const updateUserAfterGoogleSignIn = async (
       companyId: userData.companyId || existingUser?.companyId || ''
     };
     
+    console.log('[updateUserAfterGoogleSignIn] Updating user with company ID:', updatedUserInfo.companyId);
+    
     // ユーザー情報を保存
     setCurrentUser(updatedUserInfo);
     setIsAuthenticated(true);
@@ -194,7 +208,8 @@ export const updateUserAfterGoogleSignIn = async (
       let updatedUsers;
       if (existingUserIndex >= 0) {
         // 既存ユーザーを更新
-        updatedUsers = currentUsers.map(u => u.id === updatedUserInfo.id ? updatedUserInfo : u);
+        updatedUsers = [...currentUsers];
+        updatedUsers[existingUserIndex] = updatedUserInfo;
       } else {
         // 新規ユーザーを追加
         updatedUsers = [...currentUsers, updatedUserInfo];
