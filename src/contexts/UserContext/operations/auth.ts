@@ -1,4 +1,4 @@
-import { UserInfo } from '@/utils/api';
+import { UserInfo, UserStatus } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 
@@ -45,7 +45,7 @@ export const loginWithGoogle = async (
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
       role: existingUser?.role || '管理者', // 新規ユーザーは管理者として設定
-      status: 'アクティブ',
+      status: 'アクティブ' as UserStatus,
       createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isInvited: existingUser?.isInvited || false,
@@ -74,11 +74,12 @@ export const loginWithGoogle = async (
       let updatedUsers;
       if (existingUserIndex >= 0) {
         // 既存ユーザーを更新（会社IDは保持）
-        const updatedUser = {
+        const updatedUser: UserInfo = {
           ...currentUsers[existingUserIndex],
           lastLogin: new Date().toISOString(),
           fullName: userInfo.fullName,
-          email: userInfo.email
+          email: userInfo.email,
+          status: 'アクティブ' as UserStatus // ステータスを更新
         };
         updatedUsers = [...currentUsers];
         updatedUsers[existingUserIndex] = updatedUser;
@@ -177,7 +178,7 @@ export const updateUserAfterGoogleSignIn = async (
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
       role: userData.role || existingUser?.role || '管理者', // 新規ユーザーは管理者として設定
-      status: 'アクティブ',
+      status: 'アクティブ' as UserStatus,
       createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isInvited: userData.isInvited || existingUser?.isInvited || false,
