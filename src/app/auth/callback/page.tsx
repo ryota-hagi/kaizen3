@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { getSupabaseClient } from '@/lib/supabaseClient'
 import { useUser } from '@/contexts/UserContext/context'
 import Link from 'next/link'
 
@@ -22,6 +22,9 @@ export default function CallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
+        // Supabaseクライアントを取得
+        const supabase = getSupabaseClient();
+        
         // Supabaseのセッション情報を取得
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         

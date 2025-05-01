@@ -1,21 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-// 環境変数を確実に取得
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// 環境変数のチェック
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-  console.error('Missing environment variables for Supabase');
-  throw new Error('Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-}
-
-// サーバーサイドでのSupabaseクライアント（管理者権限）
-const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
-
 export async function POST(req: Request) {
   try {
     const { email, redirectTo } = await req.json();
+    
+    // 関数内でSupabaseクライアントを作成
+    const admin = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } } // セッション不要
+    );
     
     // リダイレクトURLを設定（デフォルトはcallbackページ）
     const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
