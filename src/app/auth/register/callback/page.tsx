@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import { useUser } from '@/contexts/UserContext/context'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
-// SearchParamsを使用するコンポーネントを分離
+// クライアントコンポーネントとして明示的に宣言
 function CallbackContent() {
   const router = useRouter()
-  const { useSearchParams } = require('next/navigation')
   const searchParams = useSearchParams()
   const { data: session, status } = useSession()
   const { verifyInviteToken, completeInvitation, setUsers } = useUser()

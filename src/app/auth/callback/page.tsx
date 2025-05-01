@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { useUser } from '@/contexts/UserContext/context'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
-// SearchParamsを使用するコンポーネントを分離
+// クライアントコンポーネントとして明示的に宣言
 function CallbackContent() {
   const router = useRouter()
-  const { useSearchParams } = require('next/navigation')
   const searchParams = useSearchParams()
   const { loginWithSession } = useUser()
   

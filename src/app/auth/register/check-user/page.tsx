@@ -4,11 +4,11 @@ import React, { useEffect, useState, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useUser } from '@/contexts/UserContext/context'
+import { useSearchParams } from 'next/navigation'
 
-// SearchParamsを使用するコンポーネントを分離
+// クライアントコンポーネントとして明示的に宣言
 function CheckUserContent() {
   const router = useRouter()
-  const { useSearchParams } = require('next/navigation')
   const searchParams = useSearchParams()
   const { data: session, status } = useSession()
   const { users, loginWithSession } = useUser()

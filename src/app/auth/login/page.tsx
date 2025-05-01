@@ -1,18 +1,18 @@
 'use client'
 
-import React, { useEffect, useState, Suspense } from 'react'
+import React, { Suspense } from 'react'
 import { LoginForm } from '@/components/auth/LoginForm'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
-// SearchParamsを使用するコンポーネントを分離
+// クライアントコンポーネントとして明示的に宣言
 function LoginContent() {
-  const { useSearchParams } = require('next/navigation')
   const searchParams = useSearchParams()
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
   
-  useEffect(() => {
+  React.useEffect(() => {
     // URLパラメータからエラーメッセージを取得
-    const errorParam = searchParams.get('error')
+    const errorParam = searchParams?.get('error')
     if (errorParam === 'already_registered') {
       setError('このGoogleアカウントは既に登録されています。ログインしてください。')
     } else if (errorParam === 'company_already_registered') {
