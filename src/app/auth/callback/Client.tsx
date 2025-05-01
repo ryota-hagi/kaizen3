@@ -38,17 +38,27 @@ export default function CallbackClient() {
         // 招待ユーザーかどうかを確認
         const isInvited = searchParams?.get('invite') === 'true'
         
-        // トークンを取得（URLパラメータ、セッションストレージ、ローカルストレージの順に確認）
+        // トークンと会社IDを取得（URLパラメータ、セッションストレージ、ローカルストレージの順に確認）
         const urlToken = searchParams?.get('token')
         const sessionToken = sessionStorage.getItem('invite_token')
         const localToken = localStorage.getItem('invite_token')
         const inviteToken = urlToken || sessionToken || localToken
+        
+        // 会社IDを取得
+        const urlCompanyId = searchParams?.get('companyId')
+        const sessionCompanyId = sessionStorage.getItem('invite_company_id')
+        const localCompanyId = localStorage.getItem('invite_company_id')
+        const companyIdFromUrl = urlCompanyId || sessionCompanyId || localCompanyId
         
         console.log('[DEBUG] Is invited user:', isInvited)
         console.log('[DEBUG] URL token:', urlToken)
         console.log('[DEBUG] Session token:', sessionToken)
         console.log('[DEBUG] Local token:', localToken)
         console.log('[DEBUG] Using token:', inviteToken)
+        console.log('[DEBUG] URL companyId:', urlCompanyId)
+        console.log('[DEBUG] Session companyId:', sessionCompanyId)
+        console.log('[DEBUG] Local companyId:', localCompanyId)
+        console.log('[DEBUG] Using companyId:', companyIdFromUrl)
         console.log('[DEBUG] Total users in context:', users.length)
         
         // 全ユーザーのトークンをログに出力
@@ -206,8 +216,8 @@ export default function CallbackClient() {
           const invitedUser = invitedUsers[0]
           console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId || 'not set')
           
-          // 会社IDを取得
-          let companyId = invitedUser.companyId
+          // 会社IDを取得（URLパラメータ優先、次にユーザーの会社ID、最後に他のユーザーから）
+          let companyId = companyIdFromUrl || invitedUser.companyId
           
           if (!companyId || companyId.trim() === '') {
             console.log('[DEBUG] No company ID found for invited user, searching for company ID from other users')
