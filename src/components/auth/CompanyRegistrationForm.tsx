@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@/contexts/UserContext/context'
+import { generateCompanyId } from '@/utils/api'
 
 interface CompanyRegistrationFormProps {
   onSuccess?: () => void
@@ -12,10 +13,11 @@ interface CompanyRegistrationFormProps {
 
 export const CompanyRegistrationForm: React.FC<CompanyRegistrationFormProps> = ({ onSuccess, onCancel }) => {
   const router = useRouter()
-  const { users } = useUser()
+  const { users, currentUser, updateUserProfile } = useUser()
   
   // 会社情報のフォーム状態
   const [companyInfo, setCompanyInfo] = useState({
+    id: generateCompanyId(), // ユニークな会社IDを生成
     name: '',
     industry: '',
     size: '',
@@ -61,6 +63,31 @@ export const CompanyRegistrationForm: React.FC<CompanyRegistrationFormProps> = (
       // 会社情報をローカルストレージに保存
       if (typeof window !== 'undefined') {
         localStorage.setItem('kaizen_company_info', JSON.stringify(companyInfo))
+        
+        // 現在のユーザーの会社IDを更新
+        if (currentUser) {
+          console.log('現在のユーザーの会社IDを更新:', companyInfo.id)
+          await updateUserProfile({ companyId: companyInfo.id })
+          
+          // 他のユーザーも同じ会社IDに更新（同じ会社に所属するユーザーがいる場合）
+          const usersData = JSON.parse(localStorage.getItem('kaizen_users') || '[]')
+          const updatedUsersData = usersData.map((item: any) => {
+            // 会社IDが空または現在のユーザーと同じ会社IDを持つユーザーの場合、新しい会社IDを設定
+            if (item.user && (!item.user.companyId || item.user.companyId === currentUser.companyId)) {
+              return {
+                ...item,
+                user: {
+                  ...item.user,
+                  companyId: companyInfo.id
+                }
+              }
+            }
+            return item
+          })
+          
+          localStorage.setItem('kaizen_users', JSON.stringify(updatedUsersData))
+          console.log('全ユーザーの会社IDを更新しました')
+        }
       }
       
       // ダッシュボードにリダイレクト
@@ -84,6 +111,23 @@ export const CompanyRegistrationForm: React.FC<CompanyRegistrationFormProps> = (
       )}
       
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* 会社ID（表示のみ） */}
+        <div>
+          <label htmlFor="companyId" className="block text-sm font-medium text-secondary-700 mb-1">
+            会社ID（自動生成・変更不可）
+          </label>
+          <input
+            type="text"
+            id="companyId"
+            value={companyInfo.id}
+            className="w-full px-3 py-2 border border-secondary-300 rounded-md bg-secondary-100 text-secondary-500 font-mono"
+            disabled
+          />
+          <p className="mt-1 text-xs text-secondary-500">
+            この会社IDはシステム内で会社を一意に識別するために使用されます
+          </p>
+        </div>
+        
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-secondary-700 mb-1">
             会社名 <span className="text-red-500">*</span>
