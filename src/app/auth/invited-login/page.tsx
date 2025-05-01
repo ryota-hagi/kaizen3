@@ -1,13 +1,17 @@
-'use client'
-
 import React from 'react'
 import { InvitedUserLoginForm } from '@/components/auth/InvitedUserLoginForm'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 
-export default function InvitedLoginPage() {
-  const searchParams = useSearchParams()
-  const token = searchParams?.get('token') || undefined
+// 静的プリレンダを強制的にオフ
+export const dynamic = 'force-dynamic'
+
+export default function InvitedLoginPage({
+  searchParams
+}: {
+  searchParams?: { [key: string]: string | string[] | undefined }
+}) {
+  // サーバーコンポーネントでsearchParamsを受け取る
+  const token = searchParams?.token as string | undefined
   
   return (
     <div className="min-h-screen bg-secondary-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
