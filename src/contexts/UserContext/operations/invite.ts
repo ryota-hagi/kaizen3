@@ -34,6 +34,15 @@ export const inviteUser = async (
     };
   }
 
+  // 会社IDが空の場合は現在のユーザーの会社IDを使用
+  const companyId = inviteData.companyId || (currentUser ? currentUser.companyId : '');
+  if (!companyId) {
+    return {
+      success: false,
+      message: '会社IDが設定されていません'
+    };
+  }
+
   try {
     // 招待トークンを生成
     const inviteToken = generateInviteToken();
@@ -42,12 +51,13 @@ export const inviteUser = async (
     const supabaseResult = await saveInvitation({
       email: inviteData.email,
       role: inviteData.role,
-      company_id: inviteData.companyId,
+      company_id: companyId, // 確実に会社IDを設定
       invite_token: inviteToken,
       status: 'pending'
     });
     
     console.log('[inviteUser] Supabase result:', supabaseResult);
+    console.log('[inviteUser] Using company ID:', companyId);
     
     // ローカルストレージにも保存（フォールバック）
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
@@ -62,7 +72,7 @@ export const inviteUser = async (
           return {
             ...user,
             role: inviteData.role,
-            companyId: inviteData.companyId,
+            companyId: companyId, // 確実に会社IDを設定
             status: '招待中' as const,
             inviteToken: inviteToken,
             isInvited: true
@@ -82,7 +92,7 @@ export const inviteUser = async (
         }));
         
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        console.log(`[inviteUser] Updated user in localStorage with token ${inviteToken}`);
+        console.log(`[inviteUser] Updated user in localStorage with token ${inviteToken} and company ID ${companyId}`);
         
         // セッションストレージにも同じデータを保存
         try {
@@ -100,13 +110,15 @@ export const inviteUser = async (
         email: inviteData.email,
         fullName: inviteData.email.split('@')[0],
         role: inviteData.role,
-        companyId: inviteData.companyId,
+        companyId: companyId, // 確実に会社IDを設定
         createdAt: new Date().toISOString(),
         lastLogin: null,
         status: '招待中' as const, // 必ず招待中に設定
         inviteToken: inviteToken, // 必ずトークンを設定
         isInvited: true // 必ずisInvitedをtrueに設定
       };
+      
+      console.log('[inviteUser] Creating new invited user with company ID:', companyId);
       
       // ユーザーリストに追加
       const updatedUsersList = [...currentUsers, invitedUser];
@@ -125,7 +137,7 @@ export const inviteUser = async (
         
         // ローカルストレージに保存
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        console.log(`[inviteUser] User invited with token ${inviteToken}`);
+        console.log(`[inviteUser] User invited with token ${inviteToken} and company ID ${companyId}`);
         
         // セッションストレージにも同じデータを保存
         try {
@@ -167,6 +179,11 @@ export const verifyInviteToken = async (
       // Supabaseから招待情報を取得できた場合
       const invitation = supabaseResult.invitation;
       
+      // 会社IDが設定されているか確認
+      if (!invitation.company_id) {
+        console.error('[verifyInviteToken] Company ID is missing in Supabase invitation');
+      }
+      
       // UserInfo形式に変換
       const user: UserInfo = {
         id: invitation.id,
@@ -174,7 +191,7 @@ export const verifyInviteToken = async (
         email: invitation.email,
         fullName: invitation.email.split('@')[0],
         role: invitation.role,
-        companyId: invitation.company_id,
+        companyId: invitation.company_id, // 会社IDを確実に設定
         createdAt: invitation.created_at,
         lastLogin: null,
         status: '招待中' as const,
@@ -221,12 +238,12 @@ export const verifyInviteToken = async (
     const invitedUsers = mergedUsers.filter(user => user.status === '招待中' || user.isInvited === true);
     console.log('[verifyInviteToken] Invited users in localStorage:', invitedUsers.length);
     invitedUsers.forEach((user, index) => {
-      console.log(`[verifyInviteToken] Invited user ${index + 1}: token: ${user.inviteToken}, status: ${user.status}, isInvited: ${user.isInvited}`);
+      console.log(`[verifyInviteToken] Invited user ${index + 1}: token: ${user.inviteToken}, status: ${user.status}, isInvited: ${user.isInvited}, companyId: ${user.companyId || 'not set'}`);
     });
     
-    // トークンが一致するユーザーを検索
+    // トークンが一致するユーザーを検索（大文字小文字を区別せず比較）
     for (const user of mergedUsers) {
-      const tokenMatch = user.inviteToken === token;
+      const tokenMatch = user.inviteToken && user.inviteToken.toLowerCase() === token.toLowerCase();
       
       // 招待中のステータスチェック - 画面表示とストレージの不一致を考慮
       let statusMatch = false;
@@ -234,7 +251,12 @@ export const verifyInviteToken = async (
         statusMatch = true;
       }
       
-      console.log(`[verifyInviteToken] User check: tokenMatch=${tokenMatch}, statusMatch=${statusMatch}`);
+      // 会社IDが設定されているか確認
+      if (!user.companyId) {
+        console.warn(`[verifyInviteToken] User with token ${user.inviteToken} has no company ID`);
+      }
+      
+      console.log(`[verifyInviteToken] User check: tokenMatch=${tokenMatch}, statusMatch=${statusMatch}, companyId=${user.companyId || 'not set'}`);
       
       // トークンが一致し、招待中のユーザーを見つけた場合
       if (tokenMatch && statusMatch) {
@@ -310,20 +332,64 @@ export const verifyInviteToken = async (
           }
         }
         
+        // 会社IDが設定されていない場合、他のユーザーから会社IDを取得
+        if (!user.companyId || user.companyId.trim() === '') {
+          console.log('[verifyInviteToken] No company ID found for user, searching for company ID from other users');
+          
+          // 他のユーザーから会社IDを取得
+          const otherUser = mergedUsers.find(u => u.companyId && u.companyId.trim() !== '');
+          if (otherUser) {
+            user.companyId = otherUser.companyId;
+            console.log(`[verifyInviteToken] Setting company ID to ${otherUser.companyId} from other user`);
+            
+            // ローカルストレージを更新
+            if (typeof window !== 'undefined') {
+              try {
+                const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+                if (savedUsers) {
+                  const parsedData = JSON.parse(savedUsers);
+                  const userToUpdate = parsedData.find((item: any) => 
+                    item.user && item.user.id === user.id
+                  );
+                  
+                  if (userToUpdate) {
+                    userToUpdate.user.companyId = otherUser.companyId;
+                    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
+                    console.log('[verifyInviteToken] Updated company ID in localStorage');
+                    
+                    // セッションストレージも更新
+                    try {
+                      sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
+                      console.log('[verifyInviteToken] Also updated sessionStorage');
+                    } catch (e) {
+                      console.error('[verifyInviteToken] Failed to update sessionStorage:', e);
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error('[verifyInviteToken] Error updating localStorage:', e);
+              }
+            }
+          }
+        }
+        
         // 招待ユーザーを返す前に、メールアドレスを一時的に「招待ユーザー」に置き換える
         // これにより、ログにメールアドレスが表示されなくなる
         const userCopy = { ...user };
         
         // 実際のメールアドレスをログに出力しないようにする
         console.log('[verifyInviteToken] Found valid invited user in localStorage');
-        console.log('[verifyInviteToken] User company ID:', userCopy.companyId);
+        console.log('[verifyInviteToken] User company ID:', userCopy.companyId || 'not set');
         
         return { valid: true, user: userCopy };
       }
     }
     
-    // トークンが一致するユーザーが見つからない場合、トークンだけで検索
-    const userByToken = mergedUsers.find(user => user.inviteToken === token);
+    // トークンが一致するユーザーが見つからない場合、トークンのみで検索（大文字小文字を区別せず比較）
+    const userByToken = mergedUsers.find(user => 
+      user.inviteToken && user.inviteToken.toLowerCase() === token.toLowerCase()
+    );
+    
     if (userByToken) {
       console.log('[verifyInviteToken] Found user by token only in localStorage');
       console.log('[verifyInviteToken] Fixing user status to 招待中');
@@ -331,6 +397,20 @@ export const verifyInviteToken = async (
       // ユーザーのステータスを招待中に修正
       userByToken.status = '招待中';
       userByToken.isInvited = true;
+      
+      // 会社IDが設定されているか確認
+      if (!userByToken.companyId || userByToken.companyId.trim() === '') {
+        console.log('[verifyInviteToken] No company ID found for user, searching for company ID from other users');
+        
+        // 他のユーザーから会社IDを取得
+        const otherUser = mergedUsers.find(u => u.companyId && u.companyId.trim() !== '');
+        if (otherUser) {
+          userByToken.companyId = otherUser.companyId;
+          console.log(`[verifyInviteToken] Setting company ID to ${otherUser.companyId} from other user`);
+        } else {
+          console.warn(`[verifyInviteToken] No company ID found from other users`);
+        }
+      }
       
       // ローカルストレージを更新
       if (typeof window !== 'undefined') {
@@ -345,6 +425,9 @@ export const verifyInviteToken = async (
             if (userToUpdate) {
               userToUpdate.user.status = '招待中';
               userToUpdate.user.isInvited = true;
+              if (userByToken.companyId) {
+                userToUpdate.user.companyId = userByToken.companyId;
+              }
               localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
               console.log('[verifyInviteToken] Updated user status in localStorage');
               
@@ -367,7 +450,7 @@ export const verifyInviteToken = async (
       
       // 実際のメールアドレスをログに出力しないようにする
       console.log('[verifyInviteToken] Found valid invited user by token in localStorage');
-      console.log('[verifyInviteToken] User company ID:', userCopy.companyId);
+      console.log('[verifyInviteToken] User company ID:', userCopy.companyId || 'not set');
       
       return { valid: true, user: userCopy };
     }
@@ -400,8 +483,10 @@ export const completeInvitation = async (
     // ローカルストレージでも招待を完了（フォールバック）
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
     
-    // 招待ユーザーを検索
-    const invitedUserIndex = currentUsers.findIndex(user => user.inviteToken === token);
+    // 招待ユーザーを検索（大文字小文字を区別せず比較）
+    const invitedUserIndex = currentUsers.findIndex(user => 
+      user.inviteToken && user.inviteToken.toLowerCase() === token.toLowerCase()
+    );
     
     if (invitedUserIndex === -1) {
       console.error('[completeInvitation] Invited user not found with token:', token);
@@ -410,19 +495,38 @@ export const completeInvitation = async (
       if (supabaseResult.success && supabaseResult.data) {
         // Supabaseの情報からユーザーを作成
         const invitation = supabaseResult.data;
+        
+        // 会社IDを確認
+        let companyId = userData.companyId || invitation.company_id;
+        if (!companyId || companyId.trim() === '') {
+          console.log('[completeInvitation] No company ID found, searching for company ID from other users');
+          
+          // 他のユーザーから会社IDを取得
+          const otherUser = currentUsers.find(u => u.companyId && u.companyId.trim() !== '');
+          if (otherUser) {
+            companyId = otherUser.companyId;
+            console.log(`[completeInvitation] Using company ID ${companyId} from other user`);
+          } else {
+            console.error('[completeInvitation] Company ID is missing in both userData and Supabase invitation');
+            companyId = 'default-company-id'; // デフォルト値を設定
+          }
+        }
+        
         const newUser: UserInfo = {
           id: Date.now().toString(),
           username: userData.fullName.split('@')[0],
           email: userData.fullName,
           fullName: userData.fullName,
           role: invitation.role,
-          companyId: userData.companyId || invitation.company_id,
+          companyId: companyId, // 確実に会社IDを設定
           createdAt: new Date().toISOString(),
           lastLogin: new Date().toISOString(),
           status: 'アクティブ' as const,
           inviteToken: token,
           isInvited: false
         };
+        
+        console.log('[completeInvitation] Creating new user with company ID:', companyId);
         
         // ユーザーリストに追加
         const updatedUsersList = [...currentUsers, newUser];
@@ -461,6 +565,22 @@ export const completeInvitation = async (
     
     const invitedUser = currentUsers[invitedUserIndex];
     
+    // 会社IDを確認
+    let companyId = userData.companyId || invitedUser.companyId;
+    if (!companyId || companyId.trim() === '') {
+      console.log('[completeInvitation] No company ID found for invited user, searching for company ID from other users');
+      
+      // 他のユーザーから会社IDを取得
+      const otherUser = currentUsers.find(u => u.companyId && u.companyId.trim() !== '' && u.id !== invitedUser.id);
+      if (otherUser) {
+        companyId = otherUser.companyId;
+        console.log(`[completeInvitation] Using company ID ${companyId} from other user`);
+      } else {
+        console.error('[completeInvitation] Company ID is missing in both userData and invited user');
+        companyId = 'default-company-id'; // デフォルト値を設定
+      }
+    }
+    
     // トークンの照合のみを行い、メールアドレスの照合は行わない
     console.log('[completeInvitation] Using token verification only, skipping email verification');
     
@@ -469,8 +589,7 @@ export const completeInvitation = async (
       ...invitedUser,
       email: userData.fullName,
       fullName: userData.fullName,
-      // 会社IDが指定されている場合は更新
-      companyId: userData.companyId || invitedUser.companyId,
+      companyId: companyId, // 確実に会社IDを設定
       status: 'アクティブ' as const,
       isInvited: false,
       lastLogin: new Date().toISOString()

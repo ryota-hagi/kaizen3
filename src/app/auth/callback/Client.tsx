@@ -70,12 +70,64 @@ export default function CallbackClient() {
           // 招待ユーザーを検索（大文字小文字を区別せず比較）
           const invitedUsers = users.filter(user => 
             user.inviteToken && 
-            user.inviteToken.toLowerCase() === inviteToken.toLowerCase()
+            user.inviteToken.toLowerCase() === inviteToken.toLowerCase() &&
+            (user.isInvited === true || user.status === '招待中')
           )
           
           console.log('[DEBUG] Found invited users:', invitedUsers.length)
           
           if (invitedUsers.length === 0) {
+            // トークンのみで検索（会社IDやステータスを考慮しない）
+            const usersByTokenOnly = users.filter(user => 
+              user.inviteToken && 
+              user.inviteToken.toLowerCase() === inviteToken.toLowerCase()
+            )
+            
+            console.log('[DEBUG] Found users by token only:', usersByTokenOnly.length)
+            
+            if (usersByTokenOnly.length > 0) {
+              // トークンのみで一致するユーザーが見つかった場合
+              const userByToken = usersByTokenOnly[0]
+              console.log('[DEBUG] Using user found by token only:', userByToken.email)
+              
+              // 会社IDを取得（ユーザーの会社IDまたは他のユーザーから）
+              let companyId = userByToken.companyId
+              
+              if (!companyId) {
+                // 他のユーザーから会社IDを取得
+                const otherUser = users.find(u => u.companyId && u.companyId.trim() !== '')
+                if (otherUser) {
+                  companyId = otherUser.companyId
+                  console.log('[DEBUG] Using company ID from other user:', companyId)
+                } else {
+                  console.error('[DEBUG] No company ID found')
+                  setError('会社情報が見つかりません。')
+                  setLoading(false)
+                  return
+                }
+              }
+              
+              // ユーザー情報を更新
+              const success = await updateUserAfterGoogleSignIn({
+                isInvited: true,
+                inviteToken,
+                role: userByToken.role || 'メンバー',
+                companyId
+              })
+              
+              if (success) {
+                // 招待トークンをクリア
+                sessionStorage.removeItem('invite_token')
+                localStorage.removeItem('invite_token')
+                
+                // ダッシュボードにリダイレクト
+                router.push('/dashboard')
+              } else {
+                setError('ユーザー情報の更新に失敗しました')
+              }
+              return
+            }
+            
             console.error('[DEBUG] No invited user found with token:', inviteToken)
             setError('招待ユーザーが見つかりません。招待メールのリンクから再度アクセスしてください。')
             setLoading(false)
@@ -87,13 +139,22 @@ export default function CallbackClient() {
           console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId)
           
           // 会社IDを取得
-          const companyId = invitedUser.companyId
+          let companyId = invitedUser.companyId
           
-          if (!companyId) {
-            console.error('[DEBUG] No company ID found for invited user')
-            setError('招待ユーザーの会社情報が見つかりません。')
-            setLoading(false)
-            return
+          if (!companyId || companyId.trim() === '') {
+            console.log('[DEBUG] No company ID found for invited user, searching for company ID from other users')
+            
+            // 他のユーザーから会社IDを取得
+            const otherUser = users.find(u => u.companyId && u.companyId.trim() !== '')
+            if (otherUser) {
+              companyId = otherUser.companyId
+              console.log('[DEBUG] Using company ID from other user:', companyId)
+            } else {
+              console.error('[DEBUG] No company ID found')
+              setError('招待ユーザーの会社情報が見つかりません。')
+              setLoading(false)
+              return
+            }
           }
           
           console.log('[DEBUG] Using company ID:', companyId)
