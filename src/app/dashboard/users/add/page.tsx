@@ -42,12 +42,21 @@ export default function AddUserPage() {
     
     try {
       // 会社情報を取得
-      if (!currentUser || !currentUser.companyId) {
-        setError('会社情報が見つかりません。再度ログインしてください。')
+      if (!currentUser) {
+        setError('ログインしていません。再度ログインしてください。')
         setIsSubmitting(false)
         return
       }
       
+      // 会社IDを取得
+      if (!currentUser.companyId) {
+        // 会社IDがない場合は、会社情報の登録ページにリダイレクト
+        setError('会社情報が登録されていません。マイページから会社情報を登録してください。')
+        setIsSubmitting(false)
+        return
+      }
+      
+      // 会社IDを使用
       const companyId = currentUser.companyId
       console.log('[DEBUG] Using company ID for invitation:', companyId)
       
