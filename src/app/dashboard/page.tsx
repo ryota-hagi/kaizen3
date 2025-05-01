@@ -2,34 +2,20 @@
 
 import React, { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 import { useUser } from '@/contexts/UserContext'
 import Link from 'next/link'
 
 export default function DashboardPage() {
-  const { isAuthenticated, currentUser, loginWithSession } = useUser()
-  const { data: session, status } = useSession()
+  const { isAuthenticated, currentUser } = useUser()
   const router = useRouter()
-  
-  // NextAuth.jsのセッション情報を使用してユーザー情報を設定
-  useEffect(() => {
-    const syncUserWithSession = async () => {
-      if (status === 'authenticated' && session?.user && !isAuthenticated) {
-        // loginWithSessionを使用してユーザー情報を設定
-        await loginWithSession(session.user)
-      }
-    }
-    
-    syncUserWithSession()
-  }, [session, status, isAuthenticated, loginWithSession])
   
   // 認証状態をチェック
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!isAuthenticated) {
       router.push('/auth/login')
     }
-  }, [status, router])
+  }, [isAuthenticated, router])
   
   // 認証されていない場合はローディング表示
   if (!isAuthenticated || !currentUser) {
