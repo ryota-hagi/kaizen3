@@ -9,11 +9,10 @@ interface UserProfileProps {
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
-  const { currentUser, updateUserProfile, changePassword, logout } = useUser()
+  const { currentUser, updateUserProfile, logout } = useUser()
   
   // 編集モードの状態
   const [isEditing, setIsEditing] = useState(false)
-  const [isChangingPassword, setIsChangingPassword] = useState(false)
   
   // フォームの状態
   const [formData, setFormData] = useState<Partial<UserInfo>>(
@@ -25,20 +24,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
     } : {}
   )
   
-  // パスワード変更フォームの状態
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  })
-  
   // エラーメッセージの状態
   const [error, setError] = useState<string | null>(null)
-  const [passwordError, setPasswordError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [passwordLoading, setPasswordLoading] = useState(false)
   
   // 入力値の変更ハンドラ
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,18 +39,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
     
     // エラーをクリア
     setError(null)
-  }
-  
-  // パスワード入力値の変更ハンドラ
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setPasswordData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-    
-    // エラーをクリア
-    setPasswordError(null)
   }
   
   // フォーム送信ハンドラ
@@ -135,72 +112,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
     setError(null)
   }
   
-  // パスワード変更キャンセル
-  const handlePasswordCancel = () => {
-    // パスワードフォームをリセット
-    setPasswordData({
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: ''
-    })
-    setIsChangingPassword(false)
-    setPasswordError(null)
-  }
-  
-  // パスワード変更フォーム送信ハンドラ
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPasswordLoading(true)
-    setPasswordError(null)
-    setPasswordSuccess(null)
-    
-    // バリデーション
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      setPasswordError('すべての項目を入力してください')
-      setPasswordLoading(false)
-      return
-    }
-    
-    // 新しいパスワードと確認用パスワードが一致するか確認
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError('新しいパスワードと確認用パスワードが一致しません')
-      setPasswordLoading(false)
-      return
-    }
-    
-    // パスワードの強度チェック（最低6文字）
-    if (passwordData.newPassword.length < 6) {
-      setPasswordError('パスワードは6文字以上で設定してください')
-      setPasswordLoading(false)
-      return
-    }
-    
-    try {
-      // パスワード変更
-      const success = await changePassword(passwordData.currentPassword, passwordData.newPassword)
-      
-      if (success) {
-        // 変更成功
-        setPasswordSuccess('パスワードを変更しました')
-        // フォームをリセット
-        setPasswordData({
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        })
-        setIsChangingPassword(false)
-      } else {
-        // 変更失敗
-        setPasswordError('現在のパスワードが正しくありません')
-      }
-    } catch (err) {
-      setPasswordError('パスワード変更中にエラーが発生しました')
-      console.error('Password change error:', err)
-    } finally {
-      setPasswordLoading(false)
-    }
-  }
-  
   // ユーザーが存在しない場合
   if (!currentUser) {
     return (
@@ -245,21 +156,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
         </div>
       )}
       
-      {passwordError && (
-        <div className="bg-red-50 text-red-700 p-3 rounded-md mb-4">
-          {passwordError}
-        </div>
-      )}
-      
       {success && (
         <div className="bg-green-50 text-green-700 p-3 rounded-md mb-4">
           {success}
-        </div>
-      )}
-      
-      {passwordSuccess && (
-        <div className="bg-green-50 text-green-700 p-3 rounded-md mb-4">
-          {passwordSuccess}
         </div>
       )}
       
