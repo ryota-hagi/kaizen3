@@ -6,7 +6,9 @@ function fixInviteToken() {
   
   // ユーザーデータを取得
   const USERS_STORAGE_KEY = 'kaizen_users';
+  const USER_STORAGE_KEY = 'kaizen_user_info';
   const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
+  const currentUserData = localStorage.getItem(USER_STORAGE_KEY);
   
   if (!savedUsers) {
     console.log('ユーザーデータがありません');
@@ -16,6 +18,34 @@ function fixInviteToken() {
   try {
     const parsedData = JSON.parse(savedUsers);
     console.log('現在のユーザーデータ:', parsedData.length, '件');
+    
+    // 現在のユーザー情報を取得（会社IDを取得するため）
+    let currentCompanyId = '';
+    if (currentUserData) {
+      try {
+        const currentUser = JSON.parse(currentUserData);
+        currentCompanyId = currentUser.companyId;
+        console.log('現在のユーザーの会社ID:', currentCompanyId);
+      } catch (e) {
+        console.error('現在のユーザー情報の解析に失敗しました:', e);
+      }
+    }
+    
+    // 会社IDを取得（現在のユーザー、または既存ユーザーから）
+    let companyId = currentCompanyId;
+    if (!companyId) {
+      // 既存ユーザーから会社IDを取得
+      const existingUser = parsedData.find(item => item.user && item.user.companyId);
+      if (existingUser) {
+        companyId = existingUser.user.companyId;
+        console.log('既存ユーザーから会社IDを取得:', companyId);
+      }
+    }
+    
+    if (!companyId) {
+      console.log('会社IDが見つかりません。デフォルト値を使用します。');
+      companyId = '会社情報なし';
+    }
     
     // URLパラメータから招待トークンを取得（存在する場合）
     let urlToken = '';
@@ -44,6 +74,12 @@ function fixInviteToken() {
           console.log(`ユーザー ${matchingUser.user.email} のisInvitedフラグを設定`);
         }
         
+        // 会社IDを設定
+        if (companyId && (!matchingUser.user.companyId || matchingUser.user.companyId === '株式会社サンプル')) {
+          matchingUser.user.companyId = companyId;
+          console.log(`ユーザー ${matchingUser.user.email} の会社IDを ${companyId} に設定`);
+        }
+        
         // 変更を保存
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
         console.log('ユーザーデータを修正して保存しました');
@@ -65,7 +101,8 @@ function fixInviteToken() {
             email: item.user.email,
             inviteToken: item.user.inviteToken || '',
             status: item.user.status,
-            isInvited: item.user.isInvited
+            isInvited: item.user.isInvited,
+            companyId: item.user.companyId
           });
         });
         
@@ -74,6 +111,12 @@ function fixInviteToken() {
           const firstInvitedUser = invitedUsers[0];
           console.log(`ユーザー ${firstInvitedUser.user.email} のトークンを ${urlToken} に設定`);
           firstInvitedUser.user.inviteToken = urlToken;
+          
+          // 会社IDを設定
+          if (companyId && (!firstInvitedUser.user.companyId || firstInvitedUser.user.companyId === '株式会社サンプル')) {
+            firstInvitedUser.user.companyId = companyId;
+            console.log(`ユーザー ${firstInvitedUser.user.email} の会社IDを ${companyId} に設定`);
+          }
           
           // 変更を保存
           localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
@@ -90,7 +133,7 @@ function fixInviteToken() {
             email: 'arigat.cl01@gmail.com', // 実際の招待メールアドレスに変更してください
             fullName: '招待ユーザー',
             role: '一般ユーザー',
-            companyId: parsedData[0]?.user?.companyId || '株式会社サンプル',
+            companyId: companyId,
             createdAt: new Date().toISOString(),
             lastLogin: null,
             status: '招待中',
@@ -125,7 +168,8 @@ function fixInviteToken() {
           email: item.user.email,
           inviteToken: item.user.inviteToken || '',
           status: item.user.status,
-          isInvited: item.user.isInvited
+          isInvited: item.user.isInvited,
+          companyId: item.user.companyId
         });
       });
       
@@ -138,7 +182,7 @@ function fixInviteToken() {
             email: 'arigat.cl01@gmail.com', // 実際の招待メールアドレスに変更してください
             fullName: '招待ユーザー',
             role: '一般ユーザー',
-            companyId: parsedData[0]?.user?.companyId || '株式会社サンプル',
+            companyId: companyId,
             createdAt: new Date().toISOString(),
             lastLogin: null,
             status: '招待中',

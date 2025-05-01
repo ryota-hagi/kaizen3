@@ -42,10 +42,14 @@ export default function AddUserPage() {
     
     try {
       // 会社情報を取得
-      let companyId = '株式会社サンプル'
-      if (currentUser && currentUser.companyId) {
-        companyId = currentUser.companyId
+      if (!currentUser || !currentUser.companyId) {
+        setError('会社情報が見つかりません。再度ログインしてください。')
+        setIsSubmitting(false)
+        return
       }
+      
+      const companyId = currentUser.companyId
+      console.log('[DEBUG] Using company ID for invitation:', companyId)
       
       // ユーザー招待
       const result = await inviteUser({
@@ -144,6 +148,16 @@ export default function AddUserPage() {
             />
           )}
         </div>
+        
+        {/* デバッグ情報（開発環境のみ） */}
+        {process.env.NODE_ENV === 'development' && currentUser && (
+          <div className="mt-6 p-3 bg-gray-100 rounded text-xs">
+            <p>デバッグ情報:</p>
+            <p>現在のユーザー: {currentUser.email}</p>
+            <p>会社ID: {currentUser.companyId || 'なし'}</p>
+            <p>ロール: {currentUser.role}</p>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   )
