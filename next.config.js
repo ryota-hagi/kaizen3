@@ -11,25 +11,12 @@ const nextConfig = {
     // サーバーコンポーネントの最適化
     serverComponentsExternalPackages: [],
   },
-  // 静的生成から除外するページを指定
-  exportPathMap: async function (
-    defaultPathMap,
-    { dev, dir, outDir, distDir, buildId }
-  ) {
-    // 開発環境では全てのページを含める
-    if (dev) {
-      return defaultPathMap;
-    }
-
-    // 認証関連ページを除外
-    const pathMap = { ...defaultPathMap };
-    delete pathMap['/auth/callback'];
-    delete pathMap['/auth/login'];
-    delete pathMap['/auth/register/callback'];
-    delete pathMap['/auth/register/check-user'];
-    
-    return pathMap;
+  // App Routerでは画像ドメインを指定
+  images: {
+    domains: ['lh3.googleusercontent.com'],
   },
+  // 認証関連ページを静的生成から除外
+  output: 'standalone',
 }
 
 module.exports = nextConfig
