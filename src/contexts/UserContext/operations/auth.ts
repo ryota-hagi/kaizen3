@@ -42,7 +42,7 @@ export const loginWithGoogle = async (
       username: user.email?.split('@')[0] || '',
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
-      role: existingUser?.role || 'ユーザー',
+      role: existingUser?.role || '管理者', // 新規ユーザーは管理者として設定
       status: 'アクティブ',
       createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
@@ -55,9 +55,16 @@ export const loginWithGoogle = async (
     setCurrentUser(userInfo);
     setIsAuthenticated(true);
     
-    // ローカルストレージに保存
+    // ローカルストレージとセッションストレージに保存
     if (typeof window !== 'undefined') {
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
+      
+      // セッションストレージにも保存（ページ更新時のログアウト防止）
+      try {
+        sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
+      } catch (e) {
+        console.error('[Supabase] Failed to save to sessionStorage:', e);
+      }
       
       // ユーザーリストを更新
       const existingUserIndex = currentUsers.findIndex(u => u.id === userInfo.id);
@@ -76,6 +83,13 @@ export const loginWithGoogle = async (
       // ユーザーリストを保存
       const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      
+      // セッションストレージにも保存
+      try {
+        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      } catch (e) {
+        console.error('[Supabase] Failed to save users to sessionStorage:', e);
+      }
     }
     
     return true;
@@ -105,6 +119,7 @@ export const logout = async (
     
     if (typeof window !== 'undefined') {
       localStorage.removeItem(USER_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
     }
     
     console.log('[Logout] User logged out successfully');
@@ -149,7 +164,7 @@ export const updateUserAfterGoogleSignIn = async (
       username: user.email?.split('@')[0] || '',
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
-      role: userData.role || existingUser?.role || 'ユーザー',
+      role: userData.role || existingUser?.role || '管理者', // 新規ユーザーは管理者として設定
       status: 'アクティブ',
       createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
@@ -162,9 +177,16 @@ export const updateUserAfterGoogleSignIn = async (
     setCurrentUser(updatedUserInfo);
     setIsAuthenticated(true);
     
-    // ローカルストレージに保存
+    // ローカルストレージとセッションストレージに保存
     if (typeof window !== 'undefined') {
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUserInfo));
+      
+      // セッションストレージにも保存（ページ更新時のログアウト防止）
+      try {
+        sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUserInfo));
+      } catch (e) {
+        console.error('[Supabase] Failed to save to sessionStorage:', e);
+      }
       
       // ユーザーリストを更新
       const existingUserIndex = currentUsers.findIndex(u => u.id === updatedUserInfo.id);
@@ -183,6 +205,13 @@ export const updateUserAfterGoogleSignIn = async (
       // ユーザーリストを保存
       const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      
+      // セッションストレージにも保存
+      try {
+        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      } catch (e) {
+        console.error('[Supabase] Failed to save users to sessionStorage:', e);
+      }
     }
     
     return true;

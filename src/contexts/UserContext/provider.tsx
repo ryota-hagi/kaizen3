@@ -28,7 +28,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // 初期値はfalse
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 初期化フラグ
 
-  // 初期化時にローカルストレージからデータを読み込む（マウント時のみ実行）
+  // 初期化時にローカルストレージとセッションストレージからデータを読み込む（マウント時のみ実行）
   useEffect(() => {
     // 初期化処理が複数回実行されないようにフラグを確認
     if (isInitialized) {
@@ -81,43 +81,74 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       }
       
-      // 現在ログイン中のユーザー情報も復元
-      const savedUserInfo = localStorage.getItem(USER_STORAGE_KEY);
-      if (savedUserInfo) {
+      // 現在ログイン中のユーザー情報を復元（セッションストレージを優先）
+      let savedUserInfo = null;
+      
+      // まずセッションストレージから取得を試みる
+      try {
+        const sessionUserInfo = sessionStorage.getItem(USER_STORAGE_KEY);
+        if (sessionUserInfo) {
+          savedUserInfo = JSON.parse(sessionUserInfo);
+          console.log('[Provider Init] Restored user from sessionStorage');
+        }
+      } catch (error) {
+        console.error('[Provider Init] Failed to parse user from sessionStorage:', error);
+      }
+      
+      // セッションストレージになければローカルストレージから取得
+      if (!savedUserInfo) {
         try {
-          const parsedUserInfo = JSON.parse(savedUserInfo);
-          // 保存されているユーザーが実際にリストに存在するか確認
-          if (loadedUsers.some(u => u.id === parsedUserInfo.id)) {
-            if (!parsedUserInfo.status) {
-              parsedUserInfo.status = 'アクティブ';
-            }
-            setCurrentUser(parsedUserInfo);
-            setIsAuthenticated(true);
-            console.log('[Provider Init] Restored current user:', parsedUserInfo.email);
-          } else {
-            // ユーザーリストに存在しない場合でも、クリアせずに使用する
-            console.warn('[Provider Init] Saved current user not found in user list. Using anyway.');
-            if (!parsedUserInfo.status) {
-              parsedUserInfo.status = 'アクティブ';
-            }
-            setCurrentUser(parsedUserInfo);
-            setIsAuthenticated(true);
+          const localUserInfo = localStorage.getItem(USER_STORAGE_KEY);
+          if (localUserInfo) {
+            savedUserInfo = JSON.parse(localUserInfo);
+            console.log('[Provider Init] Restored user from localStorage');
             
-            // ユーザーリストに追加
-            const updatedUsers = [...loadedUsers, parsedUserInfo];
-            setUsers(updatedUsers);
-            
-            // ローカルストレージに保存
-            const usersToSave = updatedUsers.map(u => ({
-              user: u,
-              password: ''
-            }));
-            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-            console.log('[Provider Init] Added current user to user list:', parsedUserInfo.email);
+            // セッションストレージにも保存（ページ更新時のログアウト防止）
+            try {
+              sessionStorage.setItem(USER_STORAGE_KEY, localUserInfo);
+            } catch (e) {
+              console.error('[Provider Init] Failed to save to sessionStorage:', e);
+            }
           }
         } catch (error) {
-          console.error('[Provider Init] Failed to parse current user info:', error);
-          localStorage.removeItem(USER_STORAGE_KEY);
+          console.error('[Provider Init] Failed to parse user from localStorage:', error);
+        }
+      }
+      
+      if (savedUserInfo) {
+        // 保存されているユーザーが実際にリストに存在するか確認
+        if (loadedUsers.some(u => u.id === savedUserInfo.id)) {
+          if (!savedUserInfo.status) {
+            savedUserInfo.status = 'アクティブ';
+          }
+          setCurrentUser(savedUserInfo);
+          setIsAuthenticated(true);
+          console.log('[Provider Init] Restored current user:', savedUserInfo.email);
+        } else {
+          // ユーザーリストに存在しない場合でも、クリアせずに使用する
+          console.warn('[Provider Init] Saved current user not found in user list. Using anyway.');
+          if (!savedUserInfo.status) {
+            savedUserInfo.status = 'アクティブ';
+          }
+          setCurrentUser(savedUserInfo);
+          setIsAuthenticated(true);
+          
+          // ユーザーリストに追加
+          const updatedUsers = [...loadedUsers, savedUserInfo];
+          setUsers(updatedUsers);
+          
+          // ローカルストレージとセッションストレージに保存
+          const usersToSave = updatedUsers.map(u => ({
+            user: u,
+            password: ''
+          }));
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          try {
+            sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          } catch (e) {
+            console.error('[Provider Init] Failed to save users to sessionStorage:', e);
+          }
+          console.log('[Provider Init] Added current user to user list:', savedUserInfo.email);
         }
       }
       

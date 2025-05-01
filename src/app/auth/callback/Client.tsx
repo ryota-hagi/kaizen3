@@ -4,11 +4,12 @@ import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { verifyInviteToken } from '@/contexts/UserContext/operations/invite'
 
 export default function CallbackClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { loginWithGoogle, updateUserAfterGoogleSignIn } = useUser()
+  const { loginWithGoogle, updateUserAfterGoogleSignIn, users } = useUser()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   
@@ -50,11 +51,32 @@ export default function CallbackClient() {
             return
           }
           
+          // トークンを検証して招待情報を取得
+          const verifyResult = await verifyInviteToken(inviteToken, users)
+          
+          if (!verifyResult.valid || !verifyResult.user) {
+            console.error('Invalid invite token')
+            setError('無効な招待トークンです。招待メールのリンクから再度アクセスしてください。')
+            setLoading(false)
+            return
+          }
+          
+          // 招待ユーザーの会社IDを取得
+          const companyId = verifyResult.user.companyId
+          
+          if (!companyId) {
+            console.error('No company ID found for invited user')
+            setError('招待ユーザーの会社情報が見つかりません。')
+            setLoading(false)
+            return
+          }
+          
           // ユーザー情報を更新
           const success = await updateUserAfterGoogleSignIn({
             isInvited: true,
             inviteToken,
-            role: 'メンバー'
+            role: 'メンバー',
+            companyId // 招待ユーザーの会社IDを設定
           })
           
           if (success) {
@@ -76,10 +98,10 @@ export default function CallbackClient() {
             
             // ローカルストレージからユーザーリストを取得
             const usersJson = localStorage.getItem('kaizen_users')
-            const users = usersJson ? JSON.parse(usersJson) : []
+            const localUsers = usersJson ? JSON.parse(usersJson) : []
             
             // ユーザーが既存かどうかを確認（ユーザーIDで検索）
-            const existingUser = users.find((u: any) => u.user && u.user.id === user?.id)
+            const existingUser = localUsers.find((u: any) => u.user && u.user.id === user?.id)
             
             if (existingUser && existingUser.user.companyId) {
               // 既存ユーザーで会社IDがある場合はダッシュボードへ
@@ -101,7 +123,7 @@ export default function CallbackClient() {
     }
     
     handleCallback()
-  }, [router, searchParams, loginWithGoogle, updateUserAfterGoogleSignIn])
+  }, [router, searchParams, loginWithGoogle, updateUserAfterGoogleSignIn, users])
   
   if (error) {
     return (
