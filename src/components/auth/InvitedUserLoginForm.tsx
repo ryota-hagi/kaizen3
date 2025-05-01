@@ -1,34 +1,70 @@
 'use client'
 
 import React, { useState } from 'react'
-import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { useUser } from '@/contexts/UserContext'
 
 interface InvitedUserLoginFormProps {
   onSuccess?: () => void
+  inviteToken?: string
 }
 
-export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({ onSuccess }) => {
+export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({ 
+  onSuccess,
+  inviteToken
+}) => {
   const router = useRouter()
+  const { verifyInviteToken, completeInvitation } = useUser()
+  const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // Googleログインハンドラ
-  const handleGoogleLogin = async () => {
+  // フォーム送信ハンドラ
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!inviteToken) {
+      setError('招待トークンが見つかりません')
+      return
+    }
+    
+    if (!fullName) {
+      setError('氏名を入力してください')
+      return
+    }
+    
     try {
       setLoading(true)
       setError(null)
       
-      // Google認証を開始（直接リダイレクト）
-      await signIn('google', {
-        callbackUrl: '/dashboard', // ログイン後にダッシュボードにリダイレクト
-        redirect: true,
+      // トークンの検証
+      const { valid, user } = await verifyInviteToken(inviteToken)
+      
+      if (!valid) {
+        setError('無効な招待トークンです')
+        setLoading(false)
+        return
+      }
+      
+      // 招待の完了
+      const success = await completeInvitation(inviteToken, {
+        fullName,
+        companyId: user?.companyId
       })
       
-      // redirect: true を指定しているため、ここには到達しない
+      if (success) {
+        if (onSuccess) {
+          onSuccess()
+        } else {
+          router.push('/dashboard')
+        }
+      } else {
+        setError('アカウントの有効化に失敗しました')
+      }
     } catch (err) {
-      setError('ログイン中にエラーが発生しました')
-      console.error('Login error:', err)
+      console.error('Error completing invitation:', err)
+      setError('アカウントの有効化中にエラーが発生しました')
+    } finally {
       setLoading(false)
     }
   }
@@ -36,7 +72,7 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({ onSu
   return (
     <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full mx-auto">
       <h2 className="text-2xl font-bold text-secondary-900 mb-2">招待ユーザーログイン</h2>
-      <p className="text-secondary-600 mb-6">招待されたユーザーはこちらからログインしてください</p>
+      <p className="text-secondary-600 mb-6">招待されたユーザーはこちらからアカウントを有効化してください</p>
       
       {error && (
         <div className="bg-red-50 text-red-700 p-3 rounded-md mb-4">
@@ -44,39 +80,32 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({ onSu
         </div>
       )}
       
-      <div className="space-y-6">
-        <button
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          className="w-full flex items-center justify-center px-4 py-2 border border-secondary-300 rounded-md shadow-sm text-sm font-medium text-secondary-700 bg-white hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-        >
-          <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
-              fill="#4285F4"
-            />
-            <path
-              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
-              fill="#34A853"
-              clipPath="url(#b)"
-              transform="translate(0 6)"
-            />
-            <path
-              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
-              fill="#FBBC05"
-              clipPath="url(#c)"
-              transform="translate(0 12)"
-            />
-            <path
-              d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"
-              fill="#EA4335"
-              clipPath="url(#d)"
-              transform="translate(0 18)"
-            />
-          </svg>
-          {loading ? 'ログイン中...' : 'Googleでログイン'}
-        </button>
-      </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label htmlFor="fullName" className="block text-sm font-medium text-secondary-700">
+            氏名
+          </label>
+          <input
+            type="text"
+            id="fullName"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="mt-1 block w-full px-3 py-2 border border-secondary-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+            placeholder="例: 山田太郎"
+            required
+          />
+        </div>
+        
+        <div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            {loading ? 'アカウント有効化中...' : 'アカウントを有効化'}
+          </button>
+        </div>
+      </form>
       
       <div className="mt-6">
         <div className="relative">
