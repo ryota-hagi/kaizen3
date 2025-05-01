@@ -387,7 +387,6 @@ export const completeInvitation = async (
     fullName: string;
     companyId?: string; // 会社IDを追加
   },
-  sessionUser: any,
   setCurrentUser: React.Dispatch<React.SetStateAction<UserInfo | null>>,
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
   setUserPasswords: React.Dispatch<React.SetStateAction<Record<string, string>>>,
@@ -395,7 +394,7 @@ export const completeInvitation = async (
 ): Promise<boolean> => {
   try {
     // まずSupabaseで招待を完了
-    const supabaseResult = await completeSupabaseInvitation(token, { email: sessionUser.email });
+    const supabaseResult = await completeSupabaseInvitation(token, { email: userData.fullName });
     console.log('[completeInvitation] Supabase result:', supabaseResult);
     
     // ローカルストレージでも招待を完了（フォールバック）
@@ -413,9 +412,9 @@ export const completeInvitation = async (
         const invitation = supabaseResult.data;
         const newUser: UserInfo = {
           id: Date.now().toString(),
-          username: sessionUser.email.split('@')[0],
-          email: sessionUser.email,
-          fullName: userData.fullName || sessionUser.name || sessionUser.email.split('@')[0],
+          username: userData.fullName.split('@')[0],
+          email: userData.fullName,
+          fullName: userData.fullName,
           role: invitation.role,
           companyId: userData.companyId || invitation.company_id,
           createdAt: new Date().toISOString(),
@@ -464,13 +463,12 @@ export const completeInvitation = async (
     
     // トークンの照合のみを行い、メールアドレスの照合は行わない
     console.log('[completeInvitation] Using token verification only, skipping email verification');
-    console.log('[completeInvitation] Session user email:', sessionUser.email);
     
     // ユーザー情報を更新
     const updatedUser: UserInfo = {
       ...invitedUser,
-      email: sessionUser.email, // セッションのメールアドレスを使用
-      fullName: userData.fullName || sessionUser.name || invitedUser.fullName,
+      email: userData.fullName,
+      fullName: userData.fullName,
       // 会社IDが指定されている場合は更新
       companyId: userData.companyId || invitedUser.companyId,
       status: 'アクティブ' as const,

@@ -6,7 +6,6 @@ import { UserContext, UserContextType, defaultUserContext } from './context';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from './utils';
 import {
   login,
-  loginWithSession,
   logout,
   register,
   updateUserProfile,
@@ -144,13 +143,6 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       setUserPasswords, 
       setIsAuthenticated
     ),
-    loginWithSession: (sessionUser) => loginWithSession(
-      sessionUser, 
-      setCurrentUser, 
-      setUsers, 
-      setUserPasswords, 
-      setIsAuthenticated
-    ),
     logout: () => logout(
       currentUser, 
       setCurrentUser, 
@@ -209,10 +201,9 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       setUserPasswords
     ),
     verifyInviteToken: (token) => verifyInviteToken(token, users), // 非同期関数として呼び出し
-    completeInvitation: (token, userData, sessionUser) => completeInvitation(
+    completeInvitation: (token, userData) => completeInvitation(
       token,
       userData,
-      sessionUser,
       setCurrentUser,
       setUsers,
       setUserPasswords,

@@ -13,7 +13,7 @@ export default function LoginClient() {
     // URLパラメータからエラーメッセージを取得
     const errorParam = searchParams?.get('error')
     if (errorParam === 'already_registered') {
-      setError('このGoogleアカウントは既に登録されています。ログインしてください。')
+      setError('このアカウントは既に登録されています。ログインしてください。')
     } else if (errorParam === 'company_already_registered') {
       setError('この会社名は既に登録されています。ログインしてください。')
     }
