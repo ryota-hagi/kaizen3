@@ -275,10 +275,21 @@ export const loadUserDataFromLocalStorage = (
           user.inviteToken = '';
         }
         
-        // 会社IDが設定されていない場合は空文字列を設定
-        if (user.companyId === undefined || user.companyId === null) {
-          user.companyId = '';
-        }
+    // 会社IDが設定されていない場合は他のユーザーから取得
+    if (user.companyId === undefined || user.companyId === null || user.companyId === '') {
+      // 他のユーザーから会社IDを取得
+      const otherUser = parsedData.find((item: any) => 
+        item.user && item.user.companyId && item.user.companyId.trim() !== ''
+      );
+      
+      if (otherUser && otherUser.user) {
+        user.companyId = otherUser.user.companyId;
+        console.log(`ユーザー ${user.email} の会社IDを他のユーザーから設定: ${user.companyId}`);
+      } else {
+        user.companyId = '';
+        console.log(`ユーザー ${user.email} の会社IDを設定できませんでした`);
+      }
+    }
         
         return user;
       }).filter(user => user != null) as UserInfo[]; // nullを除外

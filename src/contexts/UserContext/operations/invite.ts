@@ -35,12 +35,25 @@ export const inviteUser = async (
   }
 
   // 会社IDが空の場合は現在のユーザーの会社IDを使用
-  const companyId = inviteData.companyId || (currentUser ? currentUser.companyId : '');
-  if (!companyId) {
-    return {
-      success: false,
-      message: '会社IDが設定されていません'
-    };
+  let companyId = inviteData.companyId || (currentUser ? currentUser.companyId : '');
+  
+  // 会社IDが空の場合は他のユーザーから取得
+  if (!companyId || companyId.trim() === '') {
+    console.log('[inviteUser] No company ID provided, searching for company ID from other users');
+    
+    // 他のユーザーから会社IDを取得
+    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
+    const otherUser = currentUsers.find(u => u.companyId && u.companyId.trim() !== '');
+    
+    if (otherUser) {
+      companyId = otherUser.companyId;
+      console.log(`[inviteUser] Using company ID ${companyId} from other user`);
+    } else {
+      return {
+        success: false,
+        message: '会社IDが設定されていません。会社情報を先に登録してください。'
+      };
+    }
   }
 
   try {
