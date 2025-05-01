@@ -6,7 +6,7 @@ import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 import Link from 'next/link'
 
 export default function InvitePage() {
-  const { currentUser } = useUser()
+  const { currentUser, inviteUser } = useUser()
   
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('一般ユーザー')
@@ -14,6 +14,7 @@ export default function InvitePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [inviteToken, setInviteToken] = useState<string | null>(null)
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,36 +31,40 @@ export default function InvitePage() {
     
     try {
       // 会社IDを取得（現在のユーザーから）
-      const companyId = currentUser?.companyId || '株式会社ariGaT'
+      const companyId = currentUser?.companyId
       
-      // カスタムリダイレクトURLを作成（会社IDを含める）
-      const redirectTo = `${window.location.origin}/auth/callback?companyId=${encodeURIComponent(companyId)}&role=${encodeURIComponent(role)}`
+      if (!companyId) {
+        setError('会社情報が見つかりません。管理者に連絡してください。')
+        setIsSubmitting(false)
+        return
+      }
       
-      // APIエンドポイントを呼び出してユーザーを招待
-      const response = await fetch('/api/invite', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          redirectTo,
-        }),
+      console.log('[DEBUG] Inviting user with company ID:', companyId)
+      
+      // UserContextのinviteUser関数を使用
+      const result = await inviteUser({
+        email,
+        role,
+        companyId
       })
-      
-      const result = await response.json()
       
       if (result.success) {
         setSuccess(`${email}に招待メールを送信しました`)
         
-        // 招待リンクを生成（実際のリンクはメールに送信されるため、ここでは表示用）
-        const inviteLink = `${window.location.origin}/auth/callback?email=${encodeURIComponent(email)}&companyId=${encodeURIComponent(companyId)}&role=${encodeURIComponent(role)}`
-        setInviteLink(inviteLink)
+        // 招待トークンを保存
+        const token = result.inviteToken || null
+        setInviteToken(token)
+        
+        // 招待リンクを生成
+        if (token) {
+          const inviteLink = `${window.location.origin}/auth/invited-login?token=${encodeURIComponent(token)}`
+          setInviteLink(inviteLink)
+        }
         
         setEmail('')
         setRole('一般ユーザー')
       } else {
-        setError(result.error?.message || '招待に失敗しました')
+        setError(result.message || '招待に失敗しました')
       }
     } catch (err) {
       console.error('Error inviting user:', err)
@@ -152,6 +157,15 @@ export default function InvitePage() {
                   リンクをコピー
                 </button>
               </div>
+            </div>
+          )}
+          
+          {/* デバッグ情報（開発環境のみ） */}
+          {process.env.NODE_ENV === 'development' && inviteToken && (
+            <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
+              <p>デバッグ情報:</p>
+              <p>会社ID: {currentUser?.companyId || 'なし'}</p>
+              <p>招待トークン: {inviteToken}</p>
             </div>
           )}
         </div>
