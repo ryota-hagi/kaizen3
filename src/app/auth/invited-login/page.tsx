@@ -12,6 +12,8 @@ export default function InvitedLoginPage({
 }) {
   // サーバーコンポーネントでsearchParamsを受け取る
   const token = searchParams?.token as string | undefined
+  const companyId = searchParams?.companyId as string | undefined
+  const invite = searchParams?.invite as string | undefined
   
   return (
     <div className="min-h-screen bg-secondary-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -25,7 +27,11 @@ export default function InvitedLoginPage({
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <InvitedUserLoginForm inviteToken={token} />
+        <InvitedUserLoginForm 
+          inviteToken={token} 
+          companyId={companyId}
+          isInvite={invite === 'true'}
+        />
         
         <div className="mt-6 text-center">
           <Link href="/auth/login" className="text-sm text-primary-600 hover:text-primary-500">

@@ -7,25 +7,34 @@ import { getSupabaseClient } from '@/lib/supabaseClient'
 interface InvitedUserLoginFormProps {
   onSuccess?: () => void
   inviteToken?: string
+  companyId?: string
+  isInvite?: boolean
 }
 
 export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({ 
   onSuccess,
-  inviteToken: propInviteToken
+  inviteToken: propInviteToken,
+  companyId: propCompanyId,
+  isInvite: propIsInvite
 }) => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [companyId, setCompanyId] = useState<string | null>(null)
   
-  // URLパラメータまたはpropsからトークンを取得
+  // URLパラメータまたはpropsからトークンと会社IDを取得
   useEffect(() => {
     const urlToken = searchParams?.get('token')
+    const urlCompanyId = searchParams?.get('companyId')
     
     console.log('[DEBUG] URL token:', urlToken)
     console.log('[DEBUG] Prop token:', propInviteToken)
+    console.log('[DEBUG] URL companyId:', urlCompanyId)
+    console.log('[DEBUG] Prop companyId:', propCompanyId)
     
+    // トークンの設定
     if (urlToken) {
       console.log('[DEBUG] Using URL token')
       setToken(urlToken)
@@ -47,11 +56,36 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
       }
     }
     
-    // 現在のトークンをログに出力
+    // 会社IDの設定
+    if (urlCompanyId) {
+      console.log('[DEBUG] Using URL companyId')
+      setCompanyId(urlCompanyId)
+      // 会社IDをセッションストレージとローカルストレージに保存
+      sessionStorage.setItem('invite_company_id', urlCompanyId)
+      localStorage.setItem('invite_company_id', urlCompanyId)
+    } else if (propCompanyId) {
+      console.log('[DEBUG] Using prop companyId')
+      setCompanyId(propCompanyId)
+      // 会社IDをセッションストレージとローカルストレージに保存
+      sessionStorage.setItem('invite_company_id', propCompanyId)
+      localStorage.setItem('invite_company_id', propCompanyId)
+    } else {
+      // セッションストレージまたはローカルストレージから会社IDを取得
+      const storedCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id')
+      if (storedCompanyId) {
+        console.log('[DEBUG] Using stored companyId:', storedCompanyId)
+        setCompanyId(storedCompanyId)
+      }
+    }
+    
+    // 現在の状態をログに出力
     console.log('[DEBUG] Current token state:', token)
+    console.log('[DEBUG] Current companyId state:', companyId)
     console.log('[DEBUG] Session storage token:', sessionStorage.getItem('invite_token'))
     console.log('[DEBUG] Local storage token:', localStorage.getItem('invite_token'))
-  }, [searchParams, propInviteToken])
+    console.log('[DEBUG] Session storage companyId:', sessionStorage.getItem('invite_company_id'))
+    console.log('[DEBUG] Local storage companyId:', localStorage.getItem('invite_company_id'))
+  }, [searchParams, propInviteToken, propCompanyId])
   
   const handleGoogleLogin = async () => {
     try {
@@ -74,8 +108,26 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
       sessionStorage.setItem('invite_token', currentToken)
       localStorage.setItem('invite_token', currentToken)
       
-      // URLパラメータにトークンを含める
-      const redirectTo = `${window.location.origin}/auth/callback?invite=true&token=${encodeURIComponent(currentToken)}`
+      // 現在の会社IDを取得
+      const currentCompanyId = companyId || 
+        sessionStorage.getItem('invite_company_id') || 
+        localStorage.getItem('invite_company_id');
+      
+      // URLパラメータにトークンと会社IDを含める
+      let redirectUrl = `${window.location.origin}/auth/callback?invite=true&token=${encodeURIComponent(currentToken)}`;
+      
+      // 会社IDがある場合は追加
+      if (currentCompanyId) {
+        redirectUrl += `&companyId=${encodeURIComponent(currentCompanyId)}`;
+        
+        // 会社IDをセッションストレージとローカルストレージに保存
+        sessionStorage.setItem('invite_company_id', currentCompanyId);
+        localStorage.setItem('invite_company_id', currentCompanyId);
+        
+        console.log('[DEBUG] Added companyId to redirect URL:', currentCompanyId);
+      }
+      
+      const redirectTo = redirectUrl;
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -157,8 +209,14 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
           <p>URL Token: {searchParams?.get('token') || 'なし'}</p>
           <p>Prop Token: {propInviteToken || 'なし'}</p>
           <p>Current Token: {token || 'なし'}</p>
-          <p>Session Storage: {typeof window !== 'undefined' ? sessionStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
-          <p>Local Storage: {typeof window !== 'undefined' ? localStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
+          <p>URL CompanyId: {searchParams?.get('companyId') || 'なし'}</p>
+          <p>Prop CompanyId: {propCompanyId || 'なし'}</p>
+          <p>Current CompanyId: {companyId || 'なし'}</p>
+          <p>Session Storage Token: {typeof window !== 'undefined' ? sessionStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
+          <p>Local Storage Token: {typeof window !== 'undefined' ? localStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
+          <p>Session Storage CompanyId: {typeof window !== 'undefined' ? sessionStorage.getItem('invite_company_id') || 'なし' : 'なし'}</p>
+          <p>Local Storage CompanyId: {typeof window !== 'undefined' ? localStorage.getItem('invite_company_id') || 'なし' : 'なし'}</p>
+          <p>Is Invite: {propIsInvite ? 'true' : 'false'}</p>
         </div>
       )}
     </div>
