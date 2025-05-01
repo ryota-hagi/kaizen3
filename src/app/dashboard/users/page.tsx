@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 import { useUser } from '@/contexts/UserContext'
 import Link from 'next/link'
@@ -12,7 +11,6 @@ import { UserRoleAlert } from './UserRoleAlert'
 export default function UsersPage() {
   const { isAuthenticated, currentUser, users, getUserById, deleteUser, updateUser, getEmployees } = useUser()
   const router = useRouter()
-  const { data: session, status } = useSession()
   
   // 状態管理
   const [searchTerm, setSearchTerm] = useState('')
@@ -39,17 +37,16 @@ export default function UsersPage() {
   
   // 認証状態をチェック
   useEffect(() => {
-    // NextAuth.jsのセッション情報を使用して認証状態をチェック
-    if (status === 'unauthenticated') {
+    if (!isAuthenticated) {
       router.push('/auth/login')
-    } else if (status === 'authenticated' && currentUser && currentUser.role !== '管理者') {
+    } else if (currentUser && currentUser.role !== '管理者') {
       // 管理者以外はダッシュボードにリダイレクト
       router.push('/dashboard')
     }
-  }, [status, currentUser, router])
+  }, [isAuthenticated, currentUser, router])
   
   // 認証されていない場合はローディング表示
-  if (status === 'loading' || !currentUser) {
+  if (!isAuthenticated || !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
@@ -422,13 +419,13 @@ export default function UsersPage() {
                     <div className="flex items-center">
                       <input
                         type="text"
-                        value={`${window.location.origin}/auth/register/callback?token=${selectedUser.inviteToken}`}
+                        value={`${window.location.origin}/auth/invited-login?token=${selectedUser.inviteToken}`}
                         readOnly
                         className="flex-1 px-3 py-2 text-xs border border-secondary-300 rounded-l-md focus:outline-none"
                       />
                       <button
                         onClick={() => {
-                          const link = `${window.location.origin}/auth/register/callback?token=${selectedUser.inviteToken}`;
+                          const link = `${window.location.origin}/auth/invited-login?token=${selectedUser.inviteToken}`;
                           navigator.clipboard.writeText(link)
                             .then(() => {
                               alert('招待リンクをクリップボードにコピーしました');
@@ -443,7 +440,7 @@ export default function UsersPage() {
                       </button>
                     </div>
                     <p className="text-xs text-yellow-600 mt-1">
-                      このリンクを招待したユーザーに共有してください。リンクをクリックするとGoogle認証を行い、アカウントを有効化できます。
+                      このリンクを招待したユーザーに共有してください。リンクをクリックするとアカウントを有効化できます。
                     </p>
                   </div>
                 )}
