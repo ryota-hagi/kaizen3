@@ -77,7 +77,7 @@ export default function AddUserPage() {
         // 招待リンクを生成
         if (result.inviteToken) {
           const baseUrl = window.location.origin
-          const inviteUrl = `${baseUrl}/auth/register/callback?token=${result.inviteToken}`
+          const inviteUrl = `${baseUrl}/auth/invited-login?token=${result.inviteToken}`
           setInviteLink(inviteUrl)
         }
         
@@ -161,7 +161,7 @@ export default function AddUserPage() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium text-secondary-900">招待リンク</h3>
                   <p className="text-secondary-600 text-sm">
-                    以下の招待リンクを招待したユーザーに共有してください。ユーザーはこのリンクからGoogle認証を行い、アカウントを有効化できます。
+                    以下の招待リンクを招待したユーザーに共有してください。ユーザーはこのリンクからアカウントを有効化できます。
                   </p>
                   
                   <div className="flex items-center">
@@ -224,7 +224,7 @@ export default function AddUserPage() {
                     placeholder="例: user@example.com"
                   />
                   <p className="mt-1 text-xs text-secondary-500">
-                    招待するユーザーのGoogleアカウントのメールアドレスを入力してください
+                    招待するユーザーのメールアドレスを入力してください
                   </p>
                 </div>
                 
@@ -250,7 +250,7 @@ export default function AddUserPage() {
               <div className="pt-4">
                 <p className="text-sm text-secondary-600 mb-4">
                   招待メールは送信されません。招待リンクが生成されますので、そのリンクを招待するユーザーに共有してください。<br />
-                  ユーザーはリンクをクリックしてGoogle認証を行うことで、アカウントを有効化できます。
+                  ユーザーはリンクをクリックしてアカウントを有効化できます。
                 </p>
                 
                 <div className="flex justify-end">
