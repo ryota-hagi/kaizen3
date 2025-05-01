@@ -5,13 +5,12 @@ import { UserInfo } from '@/utils/api';
 import { UserContext, UserContextType, defaultUserContext } from './context';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from './utils';
 import {
-  login,
+  loginWithGoogle,
   logout,
-  register,
+  updateUserAfterGoogleSignIn,
   updateUserProfile,
   getUserById,
   deleteUser,
-  changePassword,
   updateUser,
   getEmployees,
   deleteCompanyAccount,
@@ -19,6 +18,7 @@ import {
   verifyInviteToken,
   completeInvitation
 } from './operations/index';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
 // プロバイダーコンポーネント
 export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -121,6 +121,23 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       }
       
+      // Supabaseのセッションを確認
+      const checkSupabaseSession = async () => {
+        try {
+          const supabase = getSupabaseClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session) {
+            console.log('[Provider] Supabase session found, updating user info');
+            await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
+          }
+        } catch (error) {
+          console.error('[Provider] Error checking Supabase session:', error);
+        }
+      };
+      
+      checkSupabaseSession();
+      
       // 初期化完了後に再度ユーザーデータを読み込む（招待ユーザーが確実に読み込まれるようにするため）
       setTimeout(() => {
         console.log('[Provider] Re-loading user data after initialization');
@@ -135,12 +152,9 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     users,
     isAuthenticated,
     setUsers, // setUsers関数を追加
-    login: (usernameOrEmail, password) => login(
-      usernameOrEmail, 
-      password, 
+    loginWithGoogle: () => loginWithGoogle(
       setCurrentUser, 
       setUsers, 
-      setUserPasswords, 
       setIsAuthenticated
     ),
     logout: () => logout(
@@ -150,12 +164,10 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       setUserPasswords, 
       setIsAuthenticated
     ),
-    register: (userData, password) => register(
-      userData, 
-      password, 
-      setCurrentUser, 
-      setUsers, 
-      setUserPasswords, 
+    updateUserAfterGoogleSignIn: (userData) => updateUserAfterGoogleSignIn(
+      userData,
+      setCurrentUser,
+      setUsers,
       setIsAuthenticated
     ),
     updateUserProfile: (userData) => updateUserProfile(
@@ -170,13 +182,6 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       userData, 
       currentUser, 
       setCurrentUser, 
-      setUsers, 
-      setUserPasswords
-    ),
-    changePassword: (currentPassword, newPassword) => changePassword(
-      currentPassword, 
-      newPassword, 
-      currentUser, 
       setUsers, 
       setUserPasswords
     ),

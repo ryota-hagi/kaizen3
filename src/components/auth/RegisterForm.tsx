@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useUser } from '@/contexts/UserContext/context' // パスを更新
 import { useRouter } from 'next/navigation'
+import { getSupabaseClient } from '@/lib/supabaseClient'
 
 interface RegisterFormProps {
   onSuccess?: () => void
@@ -10,106 +10,27 @@ interface RegisterFormProps {
 }
 
 export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel }) => {
-  const { register } = useUser()
   const router = useRouter()
-  
-  // フォームの状態
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    fullName: '',
-    role: '',
-    department: '',
-    position: ''
-  })
-  
-  // エラーメッセージの状態
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
-  // 入力値の変更ハンドラ
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-    
-    // エラーをクリア
-    setError(null)
-  }
-  
-  // フォーム送信ハンドラ
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    
-    // バリデーション
-    if (!formData.username || !formData.email || !formData.password || !formData.fullName || !formData.role) {
-      setError('必須項目を入力してください')
-      setLoading(false)
-      return
-    }
-    
-    // パスワード確認
-    if (formData.password !== formData.confirmPassword) {
-      setError('パスワードが一致しません')
-      setLoading(false)
-      return
-    }
-    
-    // メールアドレスの形式チェック
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
-      setError('有効なメールアドレスを入力してください')
-      setLoading(false)
-      return
-    }
-    
+  const handleGoogleSignUp = async () => {
     try {
-      // 会社情報を取得（ローカルストレージから）
-      let companyId = 'default-company';
-      if (typeof window !== 'undefined') {
-        const savedCompanyInfo = localStorage.getItem('kaizen_company_info');
-        if (savedCompanyInfo) {
-          try {
-            const parsedCompanyInfo = JSON.parse(savedCompanyInfo);
-            companyId = parsedCompanyInfo.name;
-          } catch (error) {
-            console.error('Failed to parse company info from localStorage:', error);
-          }
-        }
-      }
+      setLoading(true)
+      setError(null)
       
-      // ユーザー登録
-      const success = await register(
-        {
-          username: formData.username,
-          email: formData.email,
-          fullName: formData.fullName,
-          role: formData.role,
-          companyId: companyId,
-          department: formData.department || undefined,
-          position: formData.position || undefined,
-          inviteToken: '' // 空の招待トークンを設定
-        },
-        formData.password
-      )
+      const supabase = getSupabaseClient()
       
-      if (success) {
-        // 登録成功
-        if (onSuccess) {
-          onSuccess()
-        } else {
-          // マイページにリダイレクト
-          router.push('/mypage')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/register/callback`
         }
-      } else {
-        // 登録失敗
-        setError('ユーザー名またはメールアドレスが既に使用されています')
+      })
+      
+      if (error) {
+        setError('登録中にエラーが発生しました')
+        console.error('Google sign up error:', error)
       }
     } catch (err) {
       setError('登録中にエラーが発生しました')
@@ -129,153 +50,36 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onCancel 
         </div>
       )}
       
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="username" className="block text-sm font-medium text-secondary-700 mb-1">
-            ユーザー名 <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
+      <div className="space-y-6">
+        <p className="text-secondary-600 mb-4">
+          Googleアカウントを使用して登録してください。メールアドレス、氏名などの情報はGoogleアカウントから取得します。
+        </p>
         
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-secondary-700 mb-1">
-            メールアドレス <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
+        <button
+          type="button"
+          onClick={handleGoogleSignUp}
+          disabled={loading}
+          className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+            <path
+              fill="currentColor"
+              d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"
+            />
+          </svg>
+          {loading ? '登録中...' : 'Googleで登録'}
+        </button>
         
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-secondary-700 mb-1">
-            パスワード <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-            minLength={6}
-          />
-          <p className="text-xs text-secondary-500 mt-1">6文字以上で入力してください</p>
-        </div>
-        
-        <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-secondary-700 mb-1">
-            パスワード（確認） <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="password"
-            id="confirmPassword"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="fullName" className="block text-sm font-medium text-secondary-700 mb-1">
-            氏名 <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            id="fullName"
-            name="fullName"
-            value={formData.fullName}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="role" className="block text-sm font-medium text-secondary-700 mb-1">
-            役割 <span className="text-red-500">*</span>
-          </label>
-          <select
-            id="role"
-            name="role"
-            value={formData.role}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            required
-          >
-            <option value="">選択してください</option>
-            <option value="管理者">管理者</option>
-            <option value="マネージャー">マネージャー</option>
-            <option value="一般ユーザー">一般ユーザー</option>
-          </select>
-        </div>
-        
-        <div>
-          <label htmlFor="department" className="block text-sm font-medium text-secondary-700 mb-1">
-            部署
-          </label>
-          <input
-            type="text"
-            id="department"
-            name="department"
-            value={formData.department}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="position" className="block text-sm font-medium text-secondary-700 mb-1">
-            役職
-          </label>
-          <input
-            type="text"
-            id="position"
-            name="position"
-            value={formData.position}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-        
-        <div className="flex space-x-4 pt-4">
+        {onCancel && (
           <button
-            type="submit"
-            disabled={loading}
-            className={`px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors flex-1 ${
-              loading ? 'opacity-70 cursor-not-allowed' : ''
-            }`}
+            type="button"
+            onClick={onCancel}
+            className="w-full flex justify-center py-2 px-4 border border-secondary-300 rounded-md shadow-sm text-sm font-medium text-secondary-700 bg-white hover:bg-secondary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 mt-4"
           >
-            {loading ? '登録中...' : '登録する'}
+            キャンセル
           </button>
-          
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors flex-1"
-            >
-              キャンセル
-            </button>
-          )}
-        </div>
-      </form>
+        )}
+      </div>
     </div>
   )
 }

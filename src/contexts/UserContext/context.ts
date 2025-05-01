@@ -7,12 +7,11 @@ export interface UserContextType {
   users: UserInfo[];
   isAuthenticated: boolean;
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>; // ユーザーリストを更新する関数を追加
-  login: (username: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => Promise<boolean>;
   logout: () => void;
-  register: (userData: Omit<UserInfo, 'id' | 'createdAt' | 'lastLogin'>, password: string) => Promise<boolean>;
+  updateUserAfterGoogleSignIn: (userData: Partial<UserInfo>) => Promise<boolean>;
   updateUserProfile: (userData: Partial<UserInfo>) => Promise<boolean>;
   updateUser: (userId: string, userData: Partial<UserInfo>) => Promise<boolean>; // 管理者用ユーザー編集関数
-  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   getUserById: (id: string) => UserInfo | undefined;
   deleteUser: (userId: string) => Promise<{success: boolean, message?: string}>;
   deleteCompanyAccount: () => Promise<{success: boolean, message?: string}>; // 会社アカウント削除関数
@@ -34,12 +33,11 @@ export const defaultUserContext: UserContextType = {
   users: [],
   isAuthenticated: false,
   setUsers: () => {}, // デフォルト値を追加
-  login: async () => false,
+  loginWithGoogle: async () => false,
   logout: () => {},
-  register: async () => false,
+  updateUserAfterGoogleSignIn: async () => false,
   updateUserProfile: async () => false,
   updateUser: async () => false,
-  changePassword: async () => false,
   getUserById: () => undefined,
   deleteUser: async () => ({ success: false }),
   deleteCompanyAccount: async () => ({ success: false }),

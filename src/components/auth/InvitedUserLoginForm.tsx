@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useUser } from '@/contexts/UserContext'
+import { getSupabaseClient } from '@/lib/supabaseClient'
 
 interface InvitedUserLoginFormProps {
   onSuccess?: () => void
@@ -14,56 +14,39 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
   inviteToken
 }) => {
   const router = useRouter()
-  const { verifyInviteToken, completeInvitation } = useUser()
-  const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // フォーム送信ハンドラ
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!inviteToken) {
-      setError('招待トークンが見つかりません')
-      return
-    }
-    
-    if (!fullName) {
-      setError('氏名を入力してください')
-      return
-    }
-    
+  const handleGoogleLogin = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      // トークンの検証
-      const { valid, user } = await verifyInviteToken(inviteToken)
-      
-      if (!valid) {
-        setError('無効な招待トークンです')
+      if (!inviteToken) {
+        setError('招待トークンが見つかりません')
         setLoading(false)
         return
       }
       
-      // 招待の完了
-      const success = await completeInvitation(inviteToken, {
-        fullName,
-        companyId: user?.companyId
+      const supabase = getSupabaseClient()
+      
+      // 招待トークンをセッションストレージに保存（コールバック後に使用するため）
+      sessionStorage.setItem('invite_token', inviteToken)
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?invite=true`
+        }
       })
       
-      if (success) {
-        if (onSuccess) {
-          onSuccess()
-        } else {
-          router.push('/dashboard')
-        }
-      } else {
-        setError('アカウントの有効化に失敗しました')
+      if (error) {
+        setError('ログイン中にエラーが発生しました')
+        console.error('Google login error:', error)
       }
     } catch (err) {
-      console.error('Error completing invitation:', err)
-      setError('アカウントの有効化中にエラーが発生しました')
+      setError('ログイン中にエラーが発生しました')
+      console.error('Login error:', err)
     } finally {
       setLoading(false)
     }
@@ -80,32 +63,26 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
         </div>
       )}
       
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label htmlFor="fullName" className="block text-sm font-medium text-secondary-700">
-            氏名
-          </label>
-          <input
-            type="text"
-            id="fullName"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-secondary-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-            placeholder="例: 山田太郎"
-            required
-          />
-        </div>
+      <div className="space-y-6">
+        <p className="text-secondary-600 mb-4">
+          Googleアカウントを使用してログインしてください。メールアドレス、氏名などの情報はGoogleアカウントから取得します。
+        </p>
         
-        <div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            {loading ? 'アカウント有効化中...' : 'アカウントを有効化'}
-          </button>
-        </div>
-      </form>
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+            <path
+              fill="currentColor"
+              d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"
+            />
+          </svg>
+          {loading ? 'ログイン中...' : 'Googleでログイン'}
+        </button>
+      </div>
       
       <div className="mt-6">
         <div className="relative">

@@ -1,124 +1,190 @@
 import { UserInfo } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
-// ログイン処理
-export const login = async (
-  usernameOrEmail: string, 
-  password: string,
+// Supabaseを使用したログイン処理
+export const loginWithGoogle = async (
   setCurrentUser: React.Dispatch<React.SetStateAction<UserInfo | null>>,
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
-  setUserPasswords: React.Dispatch<React.SetStateAction<Record<string, string>>>,
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ): Promise<boolean> => {
-  const { users: currentUsers, passwords: currentPasswords } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
-  const user = currentUsers.find(u => u.username === usernameOrEmail || u.email === usernameOrEmail);
-
-  if (!user || currentPasswords[user.id] !== password) {
-    console.error('[Login] Invalid username/email or password.');
+  try {
+    const supabase = getSupabaseClient();
+    
+    // 現在のセッションを取得
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('[Supabase] Session error:', sessionError);
+      return false;
+    }
+    
+    if (!session) {
+      console.log('[Supabase] No active session');
+      return false;
+    }
+    
+    // ユーザー情報を取得
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      console.error('[Supabase] User error:', userError);
+      return false;
+    }
+    
+    // UserInfo形式に変換
+    const userInfo: UserInfo = {
+      id: user.id,
+      username: user.email?.split('@')[0] || '',
+      email: user.email || '',
+      fullName: user.user_metadata?.full_name || '',
+      role: 'ユーザー',
+      status: 'アクティブ',
+      createdAt: user.created_at || new Date().toISOString(),
+      lastLogin: new Date().toISOString(),
+      isInvited: false,
+      inviteToken: '',
+      companyId: ''
+    };
+    
+    // ユーザー情報を保存
+    setCurrentUser(userInfo);
+    setIsAuthenticated(true);
+    
+    // ローカルストレージに保存
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
+      
+      // ユーザーリストを更新
+      const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+      const existingUserIndex = currentUsers.findIndex(u => u.id === userInfo.id);
+      
+      let updatedUsers;
+      if (existingUserIndex >= 0) {
+        // 既存ユーザーを更新
+        updatedUsers = currentUsers.map(u => u.id === userInfo.id ? userInfo : u);
+      } else {
+        // 新規ユーザーを追加
+        updatedUsers = [...currentUsers, userInfo];
+      }
+      
+      setUsers(updatedUsers);
+      
+      // ユーザーリストを保存
+      const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('[Supabase] Login error:', error);
     return false;
   }
-
-  const updatedUser: UserInfo = {
-    ...user,
-    lastLogin: new Date().toISOString(),
-    status: 'アクティブ' as const,
-    isInvited: false,
-    inviteToken: user.status === '招待中' ? '' : user.inviteToken
-  };
-
-  setCurrentUser(updatedUser);
-  setIsAuthenticated(true);
-
-  const updatedUsersList = currentUsers.map(u => u.id === user.id ? updatedUser : u);
-  setUsers(updatedUsersList);
-  setUserPasswords(currentPasswords); // パスワードは変更しない
-
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
-    const usersToSave = updatedUsersList.map(u => ({
-      user: u,
-      password: currentPasswords[u.id] || ''
-    }));
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-    console.log('[Login] Login successful, user data updated in localStorage.');
-  }
-  return true;
 };
 
 // ログアウト処理
-export const logout = (
+export const logout = async (
   currentUser: UserInfo | null,
   setCurrentUser: React.Dispatch<React.SetStateAction<UserInfo | null>>,
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
   setUserPasswords: React.Dispatch<React.SetStateAction<Record<string, string>>>,
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ) => {
-  const { users: currentUsers, passwords: currentPasswords } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
-  if (currentUser) {
-    const updatedUser = { ...currentUser, status: 'ログアウト中' as const }
+  try {
+    const supabase = getSupabaseClient();
+    
+    // Supabaseからログアウト
+    await supabase.auth.signOut();
+    
+    // ローカルの状態をクリア
     setCurrentUser(null);
     setIsAuthenticated(false);
-    const updatedUsersList = currentUsers.map(u => u.id === currentUser.id ? updatedUser : u);
-    setUsers(updatedUsersList);
-
+    
     if (typeof window !== 'undefined') {
       localStorage.removeItem(USER_STORAGE_KEY);
-      const usersToSave = updatedUsersList.map(u => ({ user: u, password: currentPasswords[u.id] || '' }));
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-      console.log('[Logout] User logged out, status updated.');
     }
-  } else {
-      setCurrentUser(null);
-      setIsAuthenticated(false);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(USER_STORAGE_KEY);
-      }
+    
+    console.log('[Logout] User logged out successfully');
+  } catch (error) {
+    console.error('[Logout] Error:', error);
   }
 };
 
-// ユーザー登録処理
-export const register = async (
-  userData: Omit<UserInfo, 'id' | 'createdAt' | 'lastLogin'>, 
-  password: string,
+// ユーザー登録処理（Googleログイン後のユーザー情報更新用）
+export const updateUserAfterGoogleSignIn = async (
+  userData: Partial<UserInfo>,
   setCurrentUser: React.Dispatch<React.SetStateAction<UserInfo | null>>,
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
-  setUserPasswords: React.Dispatch<React.SetStateAction<Record<string, string>>>,
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ): Promise<boolean> => {
-  console.log('[register] Start:', userData.email);
-  const { users: currentUsers, passwords: currentPasswords } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
-
-  if (currentUsers.some(u => u.username === userData.username)) {
-    console.error(`[register] Username ${userData.username} already exists.`);
+  try {
+    const supabase = getSupabaseClient();
+    
+    // 現在のセッションを取得
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error('[Supabase] Session error:', sessionError);
+      return false;
+    }
+    
+    // ユーザー情報を取得
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      console.error('[Supabase] User error:', userError);
+      return false;
+    }
+    
+    // 既存のユーザー情報を取得
+    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+    const existingUser = currentUsers.find(u => u.id === user.id);
+    
+    // UserInfo形式に変換して更新
+    const updatedUserInfo: UserInfo = {
+      id: user.id,
+      username: user.email?.split('@')[0] || '',
+      email: user.email || '',
+      fullName: user.user_metadata?.full_name || '',
+      role: userData.role || existingUser?.role || 'ユーザー',
+      status: 'アクティブ',
+      createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
+      lastLogin: new Date().toISOString(),
+      isInvited: userData.isInvited || existingUser?.isInvited || false,
+      inviteToken: userData.inviteToken || existingUser?.inviteToken || '',
+      companyId: userData.companyId || existingUser?.companyId || ''
+    };
+    
+    // ユーザー情報を保存
+    setCurrentUser(updatedUserInfo);
+    setIsAuthenticated(true);
+    
+    // ローカルストレージに保存
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUserInfo));
+      
+      // ユーザーリストを更新
+      const existingUserIndex = currentUsers.findIndex(u => u.id === updatedUserInfo.id);
+      
+      let updatedUsers;
+      if (existingUserIndex >= 0) {
+        // 既存ユーザーを更新
+        updatedUsers = currentUsers.map(u => u.id === updatedUserInfo.id ? updatedUserInfo : u);
+      } else {
+        // 新規ユーザーを追加
+        updatedUsers = [...currentUsers, updatedUserInfo];
+      }
+      
+      setUsers(updatedUsers);
+      
+      // ユーザーリストを保存
+      const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('[Supabase] Update user error:', error);
     return false;
   }
-  if (currentUsers.some(u => u.email === userData.email)) {
-    console.error(`[register] Email ${userData.email} already exists.`);
-    return false;
-  }
-
-  const newUser: UserInfo = {
-    id: Date.now().toString(),
-    ...userData,
-    createdAt: new Date().toISOString(),
-    lastLogin: new Date().toISOString(),
-    status: 'アクティブ' as const,
-    inviteToken: userData.inviteToken || '' // 招待トークンを設定
-  };
-
-  const updatedUsersList = [...currentUsers, newUser];
-  const updatedPasswordsMap = { ...currentPasswords, [newUser.id]: password };
-
-  setUsers(updatedUsersList);
-  setUserPasswords(updatedPasswordsMap);
-  setCurrentUser(newUser);
-  setIsAuthenticated(true);
-
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
-    const usersToSave = updatedUsersList.map(u => ({ user: u, password: updatedPasswordsMap[u.id] || '' }));
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-    console.log('[register] Registration successful.');
-  }
-  return true;
 };
