@@ -27,7 +27,11 @@ export async function POST(req: Request) {
     // サービスロールキーを使用したクライアントの作成
     const supabaseAdmin = createClient(url, serviceKey, {
       auth: { persistSession: false },
+      db: { schema: 'public' }
     });
+    
+    // テーブル名をログに出力
+    console.log(`[API] Using table name: ${INVITATIONS_TABLE}`);
 
     // リクエストボディの取得
     const invitation = await req.json();
