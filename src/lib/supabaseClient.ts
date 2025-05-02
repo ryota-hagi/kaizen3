@@ -13,6 +13,8 @@ export const supabase = () => {
       throw new Error('Supabase configuration is incomplete');
     }
     
+    // テーブル名を明示的に指定
+    console.log('► Creating Supabase client with public schema');
     _client = createClient(url, anon);
     console.log('► Created new Supabase client instance');
   } else {
