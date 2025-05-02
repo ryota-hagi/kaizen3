@@ -81,16 +81,11 @@ export const inviteUser = async (
     };
     console.log('[inviteUser] Invitation data:', invitationData);
     
-    // APIルートを使用して招待情報を保存
-    console.log('[inviteUser] Calling API directly...');
-    let supabaseResult;
+    // saveInvitation関数を使用して招待情報を保存
+    console.log('[inviteUser] Calling saveInvitation function...');
     
-    // 絶対パスでAPIエンドポイントを指定
-    const apiUrl = window.location.origin + '/api/invitations';
-    console.log('[inviteUser] API URL:', apiUrl);
-    
+    // テスト用に/api/pingを呼び出す（絶対パスで）
     try {
-      // テスト用に/api/pingを呼び出す（絶対パスで）
       const pingUrl = window.location.origin + '/api/ping';
       console.log('[inviteUser] Testing direct fetch to ping:', pingUrl);
       const pingResponse = await fetch(pingUrl, {
@@ -101,24 +96,17 @@ export const inviteUser = async (
       });
       const pingResult = await pingResponse.json();
       console.log('[inviteUser] Direct ping result:', pingResult);
-      
-      // 本来の呼び出し（絶対パスで）
-      console.log('[inviteUser] Calling invitations API:', apiUrl);
-      console.log('[inviteUser] With data:', JSON.stringify(invitationData));
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
-        },
-        body: JSON.stringify(invitationData),
-      });
-      
-      console.log('[inviteUser] API response status:', response.status);
-      
-      supabaseResult = await response.json();
-      console.log('[inviteUser] API result:', supabaseResult);
+    } catch (pingError) {
+      console.error('[inviteUser] Direct ping error:', pingError);
+    }
+    
+    // saveInvitation関数を呼び出す
+    console.log('[inviteUser] Calling saveInvitation with data:', JSON.stringify(invitationData));
+    
+    let supabaseResult;
+    try {
+      supabaseResult = await saveInvitation(invitationData);
+      console.log('[inviteUser] saveInvitation result:', supabaseResult);
     } catch (fetchError) {
       console.error('[inviteUser] Fetch error:', fetchError);
       return { 
