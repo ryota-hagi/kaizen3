@@ -35,9 +35,16 @@ export const generateInviteToken = (): string => {
 // 招待情報をSupabaseに保存する関数
 export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; data?: InvitationRecord; error?: any }> => {
   try {
+    // 注: insertはビューではなく元のテーブルに対して行う必要がある
     const { data, error } = await supabase
       .from(INVITATIONS_TABLE)
-      .insert([invitation])
+      .insert([{
+        email: invitation.email,
+        role: invitation.role,
+        company_id: invitation.company_id,
+        invite_token: invitation.invite_token,
+        status: invitation.status
+      }])
       .select()
       .single();
 
@@ -57,9 +64,9 @@ export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | '
 export const verifyInviteToken = async (token: string): Promise<{ valid: boolean; invitation?: InvitationRecord; error?: any }> => {
   try {
     const { data, error } = await supabase
-      .from(INVITATIONS_TABLE)
+      .from('invitations_v') // ビューを使用
       .select('*')
-      .eq('invite_token', token)
+      .eq('inviteToken', token) // camelCaseのカラム名を使用
       .eq('status', 'pending')
       .single();
 
@@ -78,14 +85,15 @@ export const verifyInviteToken = async (token: string): Promise<{ valid: boolean
 // 招待を完了する関数
 export const completeInvitation = async (token: string, userData: { email: string }): Promise<{ success: boolean; data?: InvitationRecord; error?: any }> => {
   try {
+    // 注: updateはビューではなく元のテーブルに対して行う必要がある
     const { data, error } = await supabase
       .from(INVITATIONS_TABLE)
       .update({ 
         status: 'completed',
-        updated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(), // snake_caseのカラム名を使用
         email: userData.email // 実際のユーザーのメールアドレスで更新
       })
-      .eq('invite_token', token)
+      .eq('invite_token', token) // snake_caseのカラム名を使用
       .select()
       .single();
 

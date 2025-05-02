@@ -98,11 +98,11 @@ export default function CallbackClient() {
             
             try {
               // Supabaseから招待ユーザーを検索
-              // src/utils/supabase.tsで定義されているINVITATIONS_TABLEを使用
+              // ビューを使用してcamelCaseのカラム名でアクセス
               const { data: dbUsers, error } = await supabase
-                .from(INVITATIONS_TABLE) // 'invitations'テーブルを使用
+                .from('invitations_v') // camelCaseに対応したビューを使用
                 .select('*')
-                .eq('invite_token', inviteToken) // カラム名はsnake_case
+                .eq('inviteToken', inviteToken) // camelCaseのカラム名を使用
               
               if (error) {
                 console.error('[DEBUG] Supabase query error:', error)
