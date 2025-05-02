@@ -62,7 +62,7 @@ export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | '
       const pingUrl = `${baseUrl}/api/ping`;
       console.log('► calling ping for testing:', pingUrl);
       const pingResponse = await fetch(pingUrl, {
-        method: 'POST',
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',

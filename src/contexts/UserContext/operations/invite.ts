@@ -89,7 +89,7 @@ export const inviteUser = async (
       const pingUrl = window.location.origin + '/api/ping';
       console.log('[inviteUser] Testing direct fetch to ping:', pingUrl);
       const pingResponse = await fetch(pingUrl, {
-        method: 'POST',
+        method: 'GET', // POSTからGETに変更
         headers: {
           'Content-Type': 'application/json',
         },
