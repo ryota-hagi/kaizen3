@@ -112,12 +112,32 @@ export default function CallbackClient() {
               }
               
               console.log('[DEBUG] Supabase query result:', dbUsers?.length || 0, 'users found')
-              matched = dbUsers || []
               
-              // Supabaseから取得したユーザーをコンテキストに追加
-              if (matched.length > 0) {
+              // Supabaseから取得したユーザーを処理
+              if (dbUsers && dbUsers.length > 0) {
+                // PostgRESTの仕様により、ビューでcamelCaseにしても小文字化されるため両方チェック
+                const supRaw = dbUsers[0]
+                
+                // camelCaseとsnake_caseの両方をチェック
+                const companyId = 
+                  supRaw.companyId      // camelCase (来ない場合あり)
+                  ?? supRaw.company_id  // snake_case
+                  ?? null
+                
+                // 会社IDを明示的に設定
+                const processedUsers = dbUsers.map((user: any) => ({
+                  ...user,
+                  companyId: user.companyId ?? user.company_id ?? companyId
+                }))
+                
+                console.log('[DEBUG] Processed users with companyId:', processedUsers[0].companyId)
+                matched = processedUsers
+                
+                // Supabaseから取得したユーザーをコンテキストに追加
                 console.log('[DEBUG] Adding Supabase user to context')
                 // TODO: ここでコンテキストにユーザーを追加する処理を実装
+              } else {
+                matched = []
               }
             } catch (e) {
               console.error('[DEBUG] Error querying Supabase:', e)
