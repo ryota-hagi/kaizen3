@@ -1,12 +1,12 @@
 import { UserInfo } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { 
-  supabase, 
   generateInviteToken as generateSupabaseToken, 
   saveInvitation, 
   verifyInviteToken as verifySupabaseToken,
   completeInvitation as completeSupabaseInvitation,
-  InvitationRecord
+  InvitationRecord,
+  ApiResponse
 } from '@/utils/supabase';
 
 // 招待トークンを生成（より安全なUUIDを使用）
@@ -59,16 +59,73 @@ export const inviteUser = async (
   try {
     console.log('[inviteUser] Creating invitation in Supabase with company ID:', companyId);
     
-    // Supabaseに招待情報を保存（トークンはサーバー側で生成）
-    const supabaseResult = await saveInvitation({
+    // 直接fetchを呼び出してテスト
+    try {
+      console.log('[inviteUser] Testing direct fetch to /api/ping');
+      const pingResponse = await fetch('/api/ping', {
+        method: 'POST'
+      });
+      const pingResult = await pingResponse.json();
+      console.log('[inviteUser] Direct ping result:', pingResult);
+    } catch (pingError) {
+      console.error('[inviteUser] Direct ping error:', pingError);
+    }
+    
+    // デバッグ用：招待情報を表示
+    const invitationData = {
       email: inviteData.email,
       role: inviteData.role,
       company_id: companyId,
       invite_token: crypto.randomUUID(), // サーバー側でトークンを生成
-      status: 'pending'
-    });
+      status: 'pending' as 'pending'
+    };
+    console.log('[inviteUser] Invitation data:', invitationData);
     
-    console.log('[inviteUser] Supabase result:', supabaseResult);
+    // APIルートを使用して招待情報を保存
+    console.log('[inviteUser] Calling API directly...');
+    let supabaseResult;
+    
+    // 絶対パスでAPIエンドポイントを指定
+    const apiUrl = window.location.origin + '/api/invitations';
+    console.log('[inviteUser] API URL:', apiUrl);
+    
+    try {
+      // テスト用に/api/pingを呼び出す（絶対パスで）
+      const pingUrl = window.location.origin + '/api/ping';
+      console.log('[inviteUser] Testing direct fetch to ping:', pingUrl);
+      const pingResponse = await fetch(pingUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const pingResult = await pingResponse.json();
+      console.log('[inviteUser] Direct ping result:', pingResult);
+      
+      // 本来の呼び出し（絶対パスで）
+      console.log('[inviteUser] Calling invitations API:', apiUrl);
+      console.log('[inviteUser] With data:', JSON.stringify(invitationData));
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify(invitationData),
+      });
+      
+      console.log('[inviteUser] API response status:', response.status);
+      
+      supabaseResult = await response.json();
+      console.log('[inviteUser] API result:', supabaseResult);
+    } catch (fetchError) {
+      console.error('[inviteUser] Fetch error:', fetchError);
+      return { 
+        success: false, 
+        message: 'APIリクエスト中にエラーが発生しました: ' + (fetchError instanceof Error ? fetchError.message : String(fetchError))
+      };
+    }
     
     // Supabaseからの結果が失敗の場合
     if (!supabaseResult.success) {

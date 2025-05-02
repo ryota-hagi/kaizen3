@@ -4,10 +4,11 @@ import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
 import { getSupabaseClient } from '@/lib/supabaseClient'
-import { INVITATIONS_TABLE } from '@/utils/supabase'
+import { INVITATIONS_TABLE, INVITATIONS_VIEW } from '@/constants/invitations'
 
 // デバッグ用：テーブル名を確認
 console.log('[DEBUG] INVITATIONS_TABLE =', INVITATIONS_TABLE)
+console.log('[DEBUG] INVITATIONS_VIEW =', INVITATIONS_VIEW)
 
 export default function CallbackClient() {
   const router = useRouter()
@@ -97,19 +98,33 @@ export default function CallbackClient() {
             console.log('[DEBUG] No matching user in context, querying Supabase directly')
             
             try {
-              // Supabaseから招待ユーザーを検索
-              // ビューを使用してcamelCaseのカラム名でアクセス
-              const { data: dbUsers, error } = await supabase
-                .from('invitations_v') // camelCaseに対応したビューを使用
-                .select('*')
-                .eq('inviteToken', inviteToken) // camelCaseのカラム名を使用
+              // APIルートを使用して招待ユーザーを検索
+              console.log('[DEBUG] Using API route to verify invite token')
+              const response = await fetch('/api/invitations/verify', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ token: inviteToken }),
+              });
               
-              if (error) {
-                console.error('[DEBUG] Supabase query error:', error)
-                setError('ユーザー取得エラー: ' + error.message)
+              const result = await response.json();
+              
+              if (!response.ok) {
+                console.error('[DEBUG] API error verifying invitation:', result.error)
+                setError('ユーザー取得エラー: ' + (result.errorMessage || 'APIエラー'))
                 setLoading(false)
                 return
               }
+              
+              if (!result.valid || !result.invitation) {
+                console.error('[DEBUG] Token verification failed via API')
+                setError('招待トークンが無効です')
+                setLoading(false)
+                return
+              }
+              
+              const dbUsers = [result.invitation];
               
               console.log('[DEBUG] Supabase query result:', dbUsers?.length || 0, 'users found')
               
