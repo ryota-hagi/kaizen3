@@ -77,135 +77,82 @@ export default function CallbackClient() {
             return
           }
           
-          // 招待ユーザーを検索（大文字小文字を区別して比較）
-          const invitedUsers = users.filter(user => 
-            user.inviteToken && 
-            user.inviteToken === inviteToken &&
-            user.status === '招待中'
+          // ユーザー照合部分
+          console.log('[DEBUG] Searching for user with invite token:', inviteToken)
+          
+          // まずコンテキストから招待ユーザーを検索
+          let matched = users.filter(u => 
+            u.inviteToken === inviteToken && 
+            u.status === '招待中'
           )
           
-          console.log('[DEBUG] Found invited users:', invitedUsers.length)
+          console.log('[DEBUG] Found users in context:', matched.length)
           
-          if (invitedUsers.length === 0) {
-            // トークンのみで検索（大文字小文字を区別して比較）
-            const usersByTokenOnly = users.filter(user => 
-              user.inviteToken && 
-              user.inviteToken === inviteToken
-            )
+          // コンテキストに見つからなければSupabaseに直接問い合わせ
+          if (matched.length === 0) {
+            console.log('[DEBUG] No matching user in context, querying Supabase directly')
             
-            console.log('[DEBUG] Found users by token only:', usersByTokenOnly.length)
-            
-            if (usersByTokenOnly.length > 0) {
-              // トークンのみで一致するユーザーが見つかった場合
-              const userByToken = usersByTokenOnly[0]
-              console.log('[DEBUG] Using user found by token only:', userByToken.email)
+            try {
+              // Supabaseから招待ユーザーを検索
+              const { data: dbUsers, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('invite_token', inviteToken)
               
-              // 会社IDを取得（ユーザーの会社IDまたは他のユーザーから）
-              let companyId = userByToken.companyId
-              
-              if (!companyId || companyId.trim() === '') {
-                // 他のユーザーから会社IDを取得
-                const otherUser = users.find(u => u.companyId && u.companyId.trim() !== '')
-                if (otherUser) {
-                  companyId = otherUser.companyId
-                  console.log('[DEBUG] Using company ID from other user:', companyId)
-                } else {
-                  console.error('[DEBUG] No company ID found')
-                  setError('会社情報が見つかりません。')
-                  setLoading(false)
-                  return
-                }
+              if (error) {
+                console.error('[DEBUG] Supabase query error:', error)
+                setError('ユーザー取得エラー: ' + error.message)
+                setLoading(false)
+                return
               }
               
-              // ユーザー情報を更新
-              const success = await updateUserAfterGoogleSignIn({
-                isInvited: true,
-                inviteToken,
-                role: userByToken.role || 'メンバー',
-                companyId
-              })
+              console.log('[DEBUG] Supabase query result:', dbUsers?.length || 0, 'users found')
+              matched = dbUsers || []
               
-              if (success) {
-                // 招待トークンをクリア
-                sessionStorage.removeItem('invite_token')
-                localStorage.removeItem('invite_token')
-                
-                // ダッシュボードにリダイレクト
-                router.push('/dashboard')
-              } else {
-                setError('ユーザー情報の更新に失敗しました')
+              // Supabaseから取得したユーザーをコンテキストに追加
+              if (matched.length > 0) {
+                console.log('[DEBUG] Adding Supabase user to context')
+                // TODO: ここでコンテキストにユーザーを追加する処理を実装
               }
+            } catch (e) {
+              console.error('[DEBUG] Error querying Supabase:', e)
+              setError('Supabaseからのユーザー取得中にエラーが発生しました')
+              setLoading(false)
               return
             }
+          }
+          
+          // それでも見つからなければローカルストレージを直接確認
+          if (matched.length === 0) {
+            console.log('[DEBUG] Checking localStorage directly')
             
-            // ユーザー管理画面のユーザーリストを直接確認
-            console.log('[DEBUG] Checking localStorage directly for invited users')
             try {
               const savedUsers = localStorage.getItem('kaizen_users')
               if (savedUsers) {
                 const parsedData = JSON.parse(savedUsers)
                 console.log('[DEBUG] Found users in localStorage:', parsedData.length)
                 
-                // 招待中のユーザーを検索（大文字小文字を区別して比較）
-                const storedInvitedUsers = parsedData.filter((item: any) => 
+                // 招待中のユーザーを検索
+                const storedUsers = parsedData.filter((item: any) => 
                   item.user && 
                   item.user.inviteToken && 
-                  item.user.inviteToken === inviteToken &&
-                  item.user.status === '招待中'
+                  item.user.inviteToken === inviteToken
                 )
                 
-                console.log('[DEBUG] Found invited users in localStorage:', storedInvitedUsers.length)
+                console.log('[DEBUG] Found matching users in localStorage:', storedUsers.length)
                 
-                if (storedInvitedUsers.length > 0) {
-                  const storedInvitedUser = storedInvitedUsers[0].user
-                  console.log('[DEBUG] Using invited user from localStorage:', storedInvitedUser.email)
-                  
-                  // 会社IDを取得
-                  let companyId = storedInvitedUser.companyId
-                  
-                  if (!companyId || companyId.trim() === '') {
-                    // 他のユーザーから会社IDを取得
-                    const otherStoredUser = parsedData.find((item: any) => 
-                      item.user && item.user.companyId && item.user.companyId.trim() !== ''
-                    )
-                    
-                    if (otherStoredUser) {
-                      companyId = otherStoredUser.user.companyId
-                      console.log('[DEBUG] Using company ID from other stored user:', companyId)
-                    } else {
-                      console.error('[DEBUG] No company ID found in localStorage')
-                      setError('会社情報が見つかりません。')
-                      setLoading(false)
-                      return
-                    }
-                  }
-                  
-                  // ユーザー情報を更新
-                  const success = await updateUserAfterGoogleSignIn({
-                    isInvited: true,
-                    inviteToken,
-                    role: storedInvitedUser.role || 'メンバー',
-                    companyId
-                  })
-                  
-                  if (success) {
-                    // 招待トークンをクリア
-                    sessionStorage.removeItem('invite_token')
-                    localStorage.removeItem('invite_token')
-                    
-                    // ダッシュボードにリダイレクト
-                    router.push('/dashboard')
-                    return
-                  } else {
-                    setError('ユーザー情報の更新に失敗しました')
-                    return
-                  }
+                if (storedUsers.length > 0) {
+                  matched = storedUsers.map((item: any) => item.user)
+                  console.log('[DEBUG] Using user from localStorage:', matched[0]?.email)
                 }
               }
             } catch (e) {
               console.error('[DEBUG] Error checking localStorage:', e)
             }
-            
+          }
+          
+          // 該当ユーザーが見つからない場合
+          if (matched.length === 0) {
             console.error('[DEBUG] No invited user found with token:', inviteToken)
             setError('招待ユーザーが見つかりません。招待メールのリンクから再度アクセスしてください。')
             setLoading(false)
@@ -213,7 +160,7 @@ export default function CallbackClient() {
           }
           
           // 最初に見つかった招待ユーザーを使用
-          const invitedUser = invitedUsers[0]
+          const invitedUser = matched[0]
           console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId || 'not set')
           
           // 会社IDを取得（URLパラメータ優先、次にユーザーの会社ID、最後に他のユーザーから）
