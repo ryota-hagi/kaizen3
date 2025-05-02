@@ -55,20 +55,32 @@ export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | '
     console.log('► before fetch', invitation);
     let response;
     try {
-      // テスト用に/api/pingを呼び出す
-      console.log('► calling /api/ping for testing');
-      const pingResponse = await fetch('/api/ping', {
+      // 絶対パスでAPIエンドポイントを指定
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      
+      // テスト用に/api/pingを呼び出す（絶対パスで）
+      const pingUrl = `${baseUrl}/api/ping`;
+      console.log('► calling ping for testing:', pingUrl);
+      const pingResponse = await fetch(pingUrl, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
       });
       const pingResult = await pingResponse.json();
       console.log('► ping result:', pingResult);
       
-      // 本来の呼び出し
-      console.log('► calling /api/invitations');
-      response = await fetch('/api/invitations', {
+      // 本来の呼び出し（絶対パスで）
+      const invitationsUrl = `${baseUrl}/api/invitations`;
+      console.log('► calling invitations API:', invitationsUrl);
+      console.log('► with data:', JSON.stringify(invitation));
+      
+      response = await fetch(invitationsUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
         },
         body: JSON.stringify(invitation),
       });
@@ -130,11 +142,17 @@ export const verifyInviteToken = async (token: string): Promise<{ valid: boolean
   try {
     console.log('[Supabase] Verifying invite token:', token);
     
+    // 絶対パスでAPIエンドポイントを指定
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const verifyUrl = `${baseUrl}/api/invitations/verify`;
+    console.log('[Supabase] Calling verify API:', verifyUrl);
+    
     // APIルートを使用してサーバーサイドで処理する
-    const response = await fetch('/api/invitations/verify', {
+    const response = await fetch(verifyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
       },
       body: JSON.stringify({ token }),
     });
@@ -169,11 +187,17 @@ export const completeInvitation = async (token: string, userData: { email: strin
   try {
     console.log('[Supabase] Completing invitation with token:', token);
     
+    // 絶対パスでAPIエンドポイントを指定
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const completeUrl = `${baseUrl}/api/invitations/complete`;
+    console.log('[Supabase] Calling complete API:', completeUrl);
+    
     // APIルートを使用してサーバーサイドで処理する
-    const response = await fetch('/api/invitations/complete', {
+    const response = await fetch(completeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
       },
       body: JSON.stringify({ token, userData }),
     });
