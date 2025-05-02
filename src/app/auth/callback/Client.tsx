@@ -98,12 +98,14 @@ export default function CallbackClient() {
             console.log('[DEBUG] No matching user in context, querying Supabase directly')
             
             try {
-              // APIルートを使用して招待ユーザーを検索
-              console.log('[DEBUG] Using API route to verify invite token')
-              const response = await fetch('/api/invitations/verify', {
+              // APIルートを使用して招待ユーザーを検索（絶対パスで）
+              const verifyUrl = window.location.origin + '/api/invitations/verify';
+              console.log('[DEBUG] Using API route to verify invite token:', verifyUrl)
+              const response = await fetch(verifyUrl, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
+                  'Cache-Control': 'no-cache',
                 },
                 body: JSON.stringify({ token: inviteToken }),
               });

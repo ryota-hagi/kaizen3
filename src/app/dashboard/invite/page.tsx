@@ -18,6 +18,7 @@ export default function InvitePage() {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('► handleSubmit called')
     setIsSubmitting(true)
     setError(null)
     setSuccess(null)
@@ -41,12 +42,31 @@ export default function InvitePage() {
       
       console.log('[DEBUG] Inviting user with company ID:', companyId)
       
+      // 直接fetchを呼び出してテスト（絶対パスで）
+      try {
+        const pingUrl = window.location.origin + '/api/ping';
+        console.log('[DEBUG] Testing direct fetch to ping:', pingUrl)
+        const pingResponse = await fetch(pingUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+          },
+        })
+        const pingResult = await pingResponse.json()
+        console.log('[DEBUG] Direct ping result:', pingResult)
+      } catch (pingError) {
+        console.error('[DEBUG] Direct ping error:', pingError)
+      }
+      
       // UserContextのinviteUser関数を使用
+      console.log('[DEBUG] Before calling inviteUser')
       const result = await inviteUser({
         email,
         role,
         companyId
       })
+      console.log('[DEBUG] After calling inviteUser, result:', result)
       
       if (result.success) {
         setSuccess(`${email}に招待メールを送信しました`)
