@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, ReactNode, useRef } from 'react'
-import { isEqual } from 'lodash'
+import { isEqual } from '@/utils/deepEqual'
 import { UserInfo } from '@/utils/api';
 import { UserContext, UserContextType, defaultUserContext } from './context';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from './utils';
