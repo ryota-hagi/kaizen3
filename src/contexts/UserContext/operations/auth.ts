@@ -1,6 +1,7 @@
 import { UserInfo, UserStatus } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import isEqual from 'lodash/isEqual';
 
 // Supabaseを使用したログイン処理
 export const loginWithGoogle = async (
@@ -93,15 +94,26 @@ export const loginWithGoogle = async (
       
       setUsers(updatedUsers);
       
-      // ユーザーリストを保存
+      // 前回保存したデータと比較して変更がある場合のみ保存
       const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
       
-      // セッションストレージにも保存
-      try {
-        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-      } catch (e) {
-        console.error('[Supabase] Failed to save users to sessionStorage:', e);
+      // ローカルストレージから現在のデータを取得
+      const currentSavedData = localStorage.getItem(USERS_STORAGE_KEY);
+      const currentParsedData = currentSavedData ? JSON.parse(currentSavedData) : [];
+      
+      // 変更を検出
+      if (!isEqual(currentParsedData, usersToSave)) {
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        
+        // セッションストレージにも保存
+        try {
+          sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        } catch (e) {
+          console.error('[Supabase] Failed to save users to sessionStorage:', e);
+        }
+        console.log('[Supabase] User data updated and saved');
+      } else {
+        console.log('[Supabase] No changes detected, skipping save');
       }
     }
     
@@ -218,15 +230,26 @@ export const updateUserAfterGoogleSignIn = async (
       
       setUsers(updatedUsers);
       
-      // ユーザーリストを保存
+      // 前回保存したデータと比較して変更がある場合のみ保存
       const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
       
-      // セッションストレージにも保存
-      try {
-        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-      } catch (e) {
-        console.error('[Supabase] Failed to save users to sessionStorage:', e);
+      // ローカルストレージから現在のデータを取得
+      const currentSavedData = localStorage.getItem(USERS_STORAGE_KEY);
+      const currentParsedData = currentSavedData ? JSON.parse(currentSavedData) : [];
+      
+      // 変更を検出
+      if (!isEqual(currentParsedData, usersToSave)) {
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        
+        // セッションストレージにも保存
+        try {
+          sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        } catch (e) {
+          console.error('[Supabase] Failed to save users to sessionStorage:', e);
+        }
+        console.log('[Supabase] User data updated and saved');
+      } else {
+        console.log('[Supabase] No changes detected, skipping save');
       }
     }
     
