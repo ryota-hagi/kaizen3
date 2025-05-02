@@ -105,6 +105,7 @@ export const fixUserData = (parsedData: any[]): any[] => {
 };
 
 // ローカルストレージからユーザー情報を読み込む関数
+// 純粋関数として実装し、副作用を最小限に抑える
 export const loadUserDataFromLocalStorage = (
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
   setUserPasswords: React.Dispatch<React.SetStateAction<Record<string, string>>>
@@ -154,10 +155,19 @@ export const loadUserDataFromLocalStorage = (
           console.log(`[fixUserData Integrated] Generating token for invited user ${user.email}: ${user.inviteToken}`);
         }
 
-        // isInvited フラグが true の場合、status を '招待中' に設定
-        if (user.isInvited === true && user.status !== '招待中') {
-          console.log(`[fixUserData Integrated] Setting status to '招待中' for ${user.email} based on isInvited flag.`);
-          user.status = '招待中';
+        // isInvited フラグが true の場合、ログイン状態によって処理を分ける
+        if (user.isInvited === true) {
+          // ログイン履歴がある場合は招待完了とみなし、フラグをリセット
+          if (user.lastLogin) {
+            console.log(`[fixUserData Integrated] User ${user.email} has logged in, resetting isInvited flag.`);
+            user.status = 'アクティブ';
+            user.isInvited = false; // 招待フラグをリセット
+          } 
+          // ログイン履歴がない場合は招待中のままにする
+          else if (user.status !== '招待中') {
+            console.log(`[fixUserData Integrated] Setting status to '招待中' for ${user.email} based on isInvited flag.`);
+            user.status = '招待中';
+          }
         }
 
         // 招待中でないユーザーでもトークンが空の場合、空文字列を設定

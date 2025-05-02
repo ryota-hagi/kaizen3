@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, ReactNode } from 'react'
+import React, { useState, useEffect, ReactNode, useRef } from 'react'
+import isEqual from 'lodash/isEqual'
 import { UserInfo } from '@/utils/api';
 import { UserContext, UserContextType, defaultUserContext } from './context';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from './utils';
@@ -27,6 +28,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({}); // 初期値は空オブジェクト
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // 初期値はfalse
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 初期化フラグ
+  const lastSavedUsers = useRef<UserInfo[]>([]); // 最後に保存したユーザーデータを保持するref
 
   // 初期化時にローカルストレージとセッションストレージからデータを読み込む（マウント時のみ実行）
   useEffect(() => {
@@ -38,6 +40,31 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     
     console.log('[Provider] useEffect: 初期化処理を実行します');
     setIsInitialized(true);
+  }, []); // 空の依存配列で初期化処理は1回だけ実行
+
+  // Supabaseのセッションが変わった時だけユーザーデータを再読み込み
+  useEffect(() => {
+    // セッショントークンが変わった時だけ実行するように依存配列を設定
+    const checkSupabaseSession = async () => {
+      if (typeof window === 'undefined') return;
+      
+      try {
+        const supabase = getSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          console.log('[Provider] No active Supabase session');
+          return;
+        }
+        
+        console.log('[Provider] Supabase session found, loading user data');
+      } catch (error) {
+        console.error('[Provider] Error checking Supabase session:', error);
+        return;
+      }
+    };
+    
+    checkSupabaseSession();
     
     if (typeof window !== 'undefined') {
       // ユーザーデータを読み込む
@@ -135,19 +162,24 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           // ユーザーリストに追加
           const updatedUsers = [...loadedUsers, savedUserInfo];
           setUsers(updatedUsers);
+          lastSavedUsers.current = updatedUsers; // 最後に保存したユーザーデータを記録
           
           // ローカルストレージとセッションストレージに保存
           const usersToSave = updatedUsers.map(u => ({
             user: u,
             password: ''
           }));
-          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-          try {
-            sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-          } catch (e) {
-            console.error('[Provider Init] Failed to save users to sessionStorage:', e);
+          
+          // 変更がある場合のみ保存
+          if (!isEqual(lastSavedUsers.current, updatedUsers)) {
+            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+            try {
+              sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+            } catch (e) {
+              console.error('[Provider Init] Failed to save users to sessionStorage:', e);
+            }
+            console.log('[Provider Init] Added current user to user list:', savedUserInfo.email);
           }
-          console.log('[Provider Init] Added current user to user list:', savedUserInfo.email);
         }
       }
       
