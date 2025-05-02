@@ -105,8 +105,22 @@ export const inviteUser = async (
     
     let supabaseResult;
     try {
-      supabaseResult = await saveInvitation(invitationData);
-      console.log('[inviteUser] saveInvitation result:', supabaseResult);
+      // 絶対パスでAPIエンドポイントを指定
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const invitationsUrl = `${baseUrl}/api/invitations`;
+      console.log('[inviteUser] Calling API directly:', invitationsUrl);
+      
+      const response = await fetch(invitationsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify(invitationData),
+      });
+      
+      supabaseResult = await response.json();
+      console.log('[inviteUser] API response:', supabaseResult);
     } catch (fetchError) {
       console.error('[inviteUser] Fetch error:', fetchError);
       return { 
