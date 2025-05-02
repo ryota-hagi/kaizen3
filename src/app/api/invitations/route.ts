@@ -60,16 +60,16 @@ export async function POST(req: Request) {
     console.log(`[API] Inserting into table: ${INVITATIONS_TABLE}`, insertData);
     const { data, error } = await supabaseAdmin
       .from(INVITATIONS_TABLE)
-      .insert([insertData])
+      .insert([insertData]) // 配列で渡す
       .select()
       .single();
     
     // 結果をログに出力（成功・失敗に関わらず）
     console.log('► invitations.insert result', { data, error });
     
-    // エラーハンドリング
+    // エラーハンドリング - エラーがあれば即座にreturn
     if (error) {
-      let errorMessage = error.message;
+      let errorMessage = error.message || 'Unknown error';
       let errorType = 'unknown';
       
       // エラーの種類を特定
