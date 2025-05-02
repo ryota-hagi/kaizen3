@@ -10,7 +10,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // 招待関連のテーブル名
 // 注: 実際のテーブル名を確認して設定
-export const INVITATIONS_TABLE = 'invitations';
+export const INVITATIONS_TABLE = 'user_invitations';
 
 // デバッグ用：テーブル名を確認
 console.log('[DEBUG] Defined INVITATIONS_TABLE =', INVITATIONS_TABLE);
@@ -35,6 +35,9 @@ export const generateInviteToken = (): string => {
 // 招待情報をSupabaseに保存する関数
 export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; data?: InvitationRecord; error?: any }> => {
   try {
+    console.log('[Supabase] Saving invitation to Supabase:', invitation);
+    console.log('[Supabase] Table name:', INVITATIONS_TABLE);
+    
     // 注: insertはビューではなく元のテーブルに対して行う必要がある
     const { data, error } = await supabase
       .from(INVITATIONS_TABLE)
@@ -47,6 +50,15 @@ export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | '
       }])
       .select()
       .single();
+    
+    // エラーの詳細をログに出力
+    if (error) {
+      console.error('[Supabase] Error details:', JSON.stringify(error, null, 2));
+      console.error('[Supabase] Error code:', error.code);
+      console.error('[Supabase] Error message:', error.message);
+      console.error('[Supabase] Error details:', error.details);
+      console.error('[Supabase] Error hint:', error.hint);
+    }
 
     if (error) {
       console.error('[Supabase] Error saving invitation:', error);
@@ -63,12 +75,35 @@ export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | '
 // 招待トークンを検証する関数
 export const verifyInviteToken = async (token: string): Promise<{ valid: boolean; invitation?: InvitationRecord; error?: any }> => {
   try {
-    const { data, error } = await supabase
-      .from('invitations_v') // ビューを使用
+    console.log('[Supabase] Verifying invite token:', token);
+    
+    // まずビューで検索を試みる
+    let result = await supabase
+      .from('user_invitations_view') // ビューを使用
       .select('*')
-      .eq('inviteToken', token) // camelCaseのカラム名を使用
+      .eq('invite_token', token) // snake_caseのカラム名を使用
       .eq('status', 'pending')
       .single();
+    
+    // ビューでエラーが発生した場合、直接テーブルで検索
+    if (result.error) {
+      console.log('[Supabase] Error with view, trying direct table:', result.error);
+      result = await supabase
+        .from(INVITATIONS_TABLE)
+        .select('*')
+        .eq('invite_token', token)
+        .eq('status', 'pending')
+        .single();
+    }
+    
+    const { data, error } = result;
+    
+    // エラーの詳細をログに出力
+    if (error) {
+      console.error('[Supabase] Error details:', JSON.stringify(error, null, 2));
+      console.error('[Supabase] Error code:', error.code);
+      console.error('[Supabase] Error message:', error.message);
+    }
 
     if (error) {
       console.error('[Supabase] Error verifying invite token:', error);
