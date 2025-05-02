@@ -155,19 +155,11 @@ export const loadUserDataFromLocalStorage = (
           console.log(`[fixUserData Integrated] Generating token for invited user ${user.email}: ${user.inviteToken}`);
         }
 
-        // isInvited フラグが true の場合、ログイン状態によって処理を分ける
+        // isInvited フラグが true の場合、常にリセットする
         if (user.isInvited === true) {
-          // ログイン履歴がある場合は招待完了とみなし、フラグをリセット
-          if (user.lastLogin) {
-            console.log(`[fixUserData Integrated] User ${user.email} has logged in, resetting isInvited flag.`);
-            user.status = 'アクティブ';
-            user.isInvited = false; // 招待フラグをリセット
-          } 
-          // ログイン履歴がない場合は招待中のままにする
-          else if (user.status !== '招待中') {
-            console.log(`[fixUserData Integrated] Setting status to '招待中' for ${user.email} based on isInvited flag.`);
-            user.status = '招待中';
-          }
+          console.log(`[fixUserData Integrated] Resetting isInvited flag for ${user.email}.`);
+          user.status = 'アクティブ';
+          user.isInvited = false; // 招待フラグを常にリセット
         }
 
         // 招待中でないユーザーでもトークンが空の場合、空文字列を設定

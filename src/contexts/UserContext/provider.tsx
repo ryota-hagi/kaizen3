@@ -45,6 +45,28 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Supabaseのセッションが変わった時だけユーザーデータを再読み込み
   useEffect(() => {
     // セッショントークンが変わった時だけ実行するように依存配列を設定
+    const supabase = getSupabaseClient();
+    
+    // セッション監視
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event: string, session: any) => {
+        console.log('[Provider] Auth state changed:', event);
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          console.log('[Provider] User signed in/out, reloading user data');
+          // ユーザーデータを再読み込み
+          loadUserDataFromLocalStorage(setUsers, setUserPasswords);
+        }
+      }
+    );
+    
+    // クリーンアップ関数
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []); // 空の依存配列で初期化時のみ実行
+  
+  // 初期データ読み込み
+  useEffect(() => {
     const checkSupabaseSession = async () => {
       if (typeof window === 'undefined') return;
       
