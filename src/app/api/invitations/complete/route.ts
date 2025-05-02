@@ -25,6 +25,11 @@ export async function POST(req: Request) {
     
     // テーブル名をログに出力
     console.log(`[API] Using table name: ${INVITATIONS_TABLE}`);
+    
+    // 直接Supabaseの/rest/v1/invitationsエンドポイントにアクセスする
+    const baseUrl = url;
+    const apiUrl = `${baseUrl}/rest/v1/${INVITATIONS_TABLE}`;
+    console.log(`[API] Direct API URL: ${apiUrl}`);
 
     // リクエストボディの取得
     const { token, userData } = await req.json();

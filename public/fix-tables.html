@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabaseテーブル修正ツール</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      margin: 10px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    pre {
+      background-color: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      overflow: auto;
+      max-height: 400px;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+    }
+    .success {
+      color: #27ae60;
+      font-weight: bold;
+    }
+    .error {
+      color: #e74c3c;
+      font-weight: bold;
+    }
+    .warning {
+      color: #f39c12;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Supabaseテーブル修正ツール</h1>
+  
+  <div class="section">
+    <h2>テーブル修正</h2>
+    <p>user_invitationsテーブルをinvitationsテーブルに変更し、データを移行します。</p>
+    <p class="warning">注意: このツールを実行すると、テーブル構造が変更されます。実行前にデータのバックアップを取ることをお勧めします。</p>
+    <button id="fixTables">テーブルを修正</button>
+    <div id="fixResult"></div>
+  </div>
+
+  <script>
+    // テーブルを修正
+    document.getElementById('fixTables').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('fixResult');
+      resultDiv.innerHTML = '<p>テーブルを修正中...</p>';
+      
+      try {
+        const response = await fetch('/api/fix-tables', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          let resultHtml = `<p class="success">テーブルの修正に成功しました</p>`;
+          
+          // アクションの結果を表示
+          if (data.actions && data.actions.length > 0) {
+            resultHtml += `<h3>実行されたアクション:</h3>`;
+            resultHtml += `<ul>`;
+            data.actions.forEach(action => {
+              resultHtml += `<li><strong>${action.step}:</strong> ${action.result}</li>`;
+              
+              // エラーがある場合は表示
+              if (action.errors && action.errors.length > 0) {
+                resultHtml += `<ul>`;
+                action.errors.forEach(error => {
+                  resultHtml += `<li class="error">${error.email}: ${error.error}</li>`;
+                });
+                resultHtml += `</ul>`;
+              }
+            });
+            resultHtml += `</ul>`;
+          }
+          
+          // エラーがある場合は表示
+          if (data.errors && data.errors.length > 0) {
+            resultHtml += `<h3>エラー:</h3>`;
+            resultHtml += `<ul>`;
+            data.errors.forEach(error => {
+              resultHtml += `<li class="error"><strong>${error.step}:</strong> ${error.error}</li>`;
+            });
+            resultHtml += `</ul>`;
+          }
+          
+          resultHtml += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+          resultDiv.innerHTML = resultHtml;
+        } else {
+          resultDiv.innerHTML = `
+            <p class="error">テーブルの修正に失敗しました</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <p class="error">エラーが発生しました</p>
+          <pre>${error.message}</pre>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>

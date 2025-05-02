@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テーブル確認と移行</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      margin: 10px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    pre {
+      background-color: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      overflow: auto;
+      max-height: 400px;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+    }
+    .success {
+      color: #27ae60;
+      font-weight: bold;
+    }
+    .error {
+      color: #e74c3c;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Supabaseテーブル確認と移行ツール</h1>
+  
+  <div class="section">
+    <h2>テーブル一覧の確認</h2>
+    <button id="checkTables">テーブル一覧を取得</button>
+    <div id="tablesResult"></div>
+  </div>
+  
+  <div class="section">
+    <h2>テーブル詳細の確認</h2>
+    <button id="checkTablesDetail">テーブル詳細を取得</button>
+    <div id="tablesDetailResult"></div>
+  </div>
+  
+  <div class="section">
+    <h2>テーブルの移行</h2>
+    <p>user_invitationsテーブルからinvitationsテーブルにデータを移行します。</p>
+    <button id="migrateTables">テーブルを移行</button>
+    <div id="migrateResult"></div>
+  </div>
+
+  <script>
+    // テーブル一覧を取得
+    document.getElementById('checkTables').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('tablesResult');
+      resultDiv.innerHTML = '<p>テーブル一覧を取得中...</p>';
+      
+      try {
+        const response = await fetch('/api/check-tables');
+        const data = await response.json();
+        
+        if (data.success) {
+          resultDiv.innerHTML = `
+            <p class="success">テーブル一覧の取得に成功しました</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        } else {
+          resultDiv.innerHTML = `
+            <p class="error">テーブル一覧の取得に失敗しました</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <p class="error">エラーが発生しました</p>
+          <pre>${error.message}</pre>
+        `;
+      }
+    });
+    
+    // テーブル詳細を取得
+    document.getElementById('checkTablesDetail').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('tablesDetailResult');
+      resultDiv.innerHTML = '<p>テーブル詳細を取得中...</p>';
+      
+      try {
+        const response = await fetch('/api/check-tables/sql');
+        const data = await response.json();
+        
+        if (data.success) {
+          resultDiv.innerHTML = `
+            <p class="success">テーブル詳細の取得に成功しました</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        } else {
+          resultDiv.innerHTML = `
+            <p class="error">テーブル詳細の取得に失敗しました</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <p class="error">エラーが発生しました</p>
+          <pre>${error.message}</pre>
+        `;
+      }
+    });
+    
+    // テーブルを移行
+    document.getElementById('migrateTables').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('migrateResult');
+      resultDiv.innerHTML = '<p>テーブルを移行中...</p>';
+      
+      try {
+        const response = await fetch('/api/migrate-tables', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          resultDiv.innerHTML = `
+            <p class="success">テーブルの移行に成功しました</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        } else {
+          resultDiv.innerHTML = `
+            <p class="error">テーブルの移行に失敗しました</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <p class="error">エラーが発生しました</p>
+          <pre>${error.message}</pre>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>

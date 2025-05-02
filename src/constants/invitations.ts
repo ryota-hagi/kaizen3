@@ -3,8 +3,8 @@
  */
 
 // テーブル名とビュー名
-export const INVITATIONS_TABLE = 'user_invitations';
-export const INVITATIONS_VIEW = 'user_invitations_view';
+export const INVITATIONS_TABLE = 'invitations';
+export const INVITATIONS_VIEW = 'invitations_v';
 
 // ステータス
 export const INVITE_STATUS_PENDING = 'pending';  // Supabase側のステータス
