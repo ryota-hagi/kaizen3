@@ -58,6 +58,9 @@ export async function POST(req: Request) {
     
     // Supabaseにデータを挿入
     console.log(`[API] Inserting into table: ${INVITATIONS_TABLE}`, insertData);
+    
+    // Supabase v2クライアントでは{ returning: 'representation' }オプションが使用できないため、
+    // 代わりに.select()を使用して同様の効果を得る
     const { data, error } = await supabaseAdmin
       .from(INVITATIONS_TABLE)
       .insert([insertData]) // 配列で渡す
