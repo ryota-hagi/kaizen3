@@ -17,6 +17,11 @@ const nextConfig = {
   },
   // 認証関連ページを静的生成から除外
   output: 'standalone',
+  // ビルドキャッシュをクリアするために、ビルドIDを動的に生成
+  generateBuildId: async () => {
+    // タイムスタンプを使用して一意のビルドIDを生成
+    return `build-${Date.now()}`;
+  },
 }
 
 module.exports = nextConfig
