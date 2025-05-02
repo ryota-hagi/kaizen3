@@ -8,9 +8,23 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 // Supabaseクライアントのインスタンスを作成
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// 招待関連のテーブル名
-// 注: 実際のテーブル名を確認して設定
-export const INVITATIONS_TABLE = 'user_invitations';
+// 招待関連の定数をインポート
+import {
+  INVITATIONS_TABLE,
+  INVITATIONS_VIEW,
+  INVITE_STATUS_PENDING,
+  INVITE_STATUS_ACCEPTED,
+  INVITE_STATUS_EXPIRED
+} from '@/constants/invitations';
+
+// 他のファイルでも使えるように再エクスポート
+export {
+  INVITATIONS_TABLE,
+  INVITATIONS_VIEW,
+  INVITE_STATUS_PENDING,
+  INVITE_STATUS_ACCEPTED,
+  INVITE_STATUS_EXPIRED
+};
 
 // デバッグ用：テーブル名を確認
 console.log('[DEBUG] Defined INVITATIONS_TABLE =', INVITATIONS_TABLE);
@@ -79,11 +93,11 @@ export const verifyInviteToken = async (token: string): Promise<{ valid: boolean
     
     // まずビューで検索を試みる
     let result = await supabase
-      .from('user_invitations_view') // ビューを使用
+      .from(INVITATIONS_VIEW) // 定数を使用
       .select('*')
       .eq('invite_token', token) // snake_caseのカラム名を使用
-      .eq('status', 'pending')
-      .single();
+      .eq('status', INVITE_STATUS_PENDING) // 定数を使用
+      .maybeSingle(); // 0件の場合はnullを返す
     
     // ビューでエラーが発生した場合、直接テーブルで検索
     if (result.error) {
@@ -92,8 +106,14 @@ export const verifyInviteToken = async (token: string): Promise<{ valid: boolean
         .from(INVITATIONS_TABLE)
         .select('*')
         .eq('invite_token', token)
-        .eq('status', 'pending')
-        .single();
+        .eq('status', INVITE_STATUS_PENDING)
+        .maybeSingle();
+    }
+    
+    // データが見つからない場合
+    if (!result.data) {
+      console.log('[Supabase] No invitation found with token:', token);
+      return { valid: false };
     }
     
     const { data, error } = result;
@@ -120,17 +140,30 @@ export const verifyInviteToken = async (token: string): Promise<{ valid: boolean
 // 招待を完了する関数
 export const completeInvitation = async (token: string, userData: { email: string }): Promise<{ success: boolean; data?: InvitationRecord; error?: any }> => {
   try {
+    // 同じメールアドレスの古い招待を削除（トークンが異なるもの）
+    await supabase
+      .from(INVITATIONS_TABLE)
+      .delete()
+      .eq('email', userData.email)
+      .neq('invite_token', token);
+    
     // 注: updateはビューではなく元のテーブルに対して行う必要がある
     const { data, error } = await supabase
       .from(INVITATIONS_TABLE)
       .update({ 
-        status: 'completed',
-        updated_at: new Date().toISOString(), // snake_caseのカラム名を使用
+        status: INVITE_STATUS_ACCEPTED,
+        updated_at: new Date().toISOString(),
         email: userData.email // 実際のユーザーのメールアドレスで更新
       })
-      .eq('invite_token', token) // snake_caseのカラム名を使用
+      .eq('invite_token', token)
       .select()
-      .single();
+      .maybeSingle();
+    
+    // データが見つからない場合
+    if (!data) {
+      console.log('[Supabase] No invitation found with token:', token);
+      return { success: false, error: { message: '招待が見つかりませんでした' } };
+    }
 
     if (error) {
       console.error('[Supabase] Error completing invitation:', error);

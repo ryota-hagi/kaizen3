@@ -97,6 +97,8 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
       if (!currentToken) {
         setError('招待トークンが見つかりません。招待メールのリンクから再度アクセスしてください。')
         setLoading(false)
+        // 無効な招待ページにリダイレクト
+        router.replace('/auth/invite/invalid')
         return
       }
       
