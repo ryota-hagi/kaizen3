@@ -1,5 +1,6 @@
 import { UserInfo, Employee } from '@/utils/api';
 import { UserWithPassword } from './context';
+import isEqual from 'lodash/isEqual';
 
 // ローカルストレージのキー
 export const USER_STORAGE_KEY = 'kaizen_user_info';
@@ -187,57 +188,16 @@ export const loadUserDataFromLocalStorage = (
       });
       
       // 修正したデータを保存（無限ループ防止のため、変更があった場合のみ保存）
-      // 注意: 単純な文字列比較ではなく、実際のデータ構造を比較する
-      let hasChanges = false;
-      
       // 保存されたデータを解析
       let originalData: any[] = [];
       try {
         originalData = JSON.parse(savedUsers);
       } catch (e) {
         console.error('元のデータの解析に失敗しました:', e);
-        hasChanges = true; // 解析に失敗した場合は変更があったとみなす
       }
       
-      // データの長さが異なる場合は変更があったとみなす
-      if (originalData.length !== parsedData.length) {
-        hasChanges = true;
-        console.log('データの長さが変更されました:', originalData.length, '->', parsedData.length);
-      } else {
-        // 各ユーザーのデータを比較
-        for (let i = 0; i < parsedData.length; i++) {
-          const original = originalData[i];
-          const modified = parsedData[i];
-          
-          // ユーザーIDが異なる場合は変更があったとみなす
-          if (!original.user || !modified.user || original.user.id !== modified.user.id) {
-            hasChanges = true;
-            console.log('ユーザーIDが変更されました');
-            break;
-          }
-          
-          // ステータスが変更された場合
-          if (original.user.status !== modified.user.status) {
-            hasChanges = true;
-            console.log(`ユーザー ${modified.user.email} のステータスが変更されました:`, original.user.status, '->', modified.user.status);
-            break;
-          }
-          
-          // トークンが変更された場合
-          if (original.user.inviteToken !== modified.user.inviteToken) {
-            hasChanges = true;
-            console.log(`ユーザー ${modified.user.email} のトークンが変更されました:`, original.user.inviteToken, '->', modified.user.inviteToken);
-            break;
-          }
-          
-          // isInvitedフラグが変更された場合
-          if (original.user.isInvited !== modified.user.isInvited) {
-            hasChanges = true;
-            console.log(`ユーザー ${modified.user.email} のisInvitedフラグが変更されました:`, original.user.isInvited, '->', modified.user.isInvited);
-            break;
-          }
-        }
-      }
+      // データの変更を検出
+      const hasChanges = !isEqual(originalData, parsedData);
       
       // 変更があった場合のみ保存
       if (hasChanges) {

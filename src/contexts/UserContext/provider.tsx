@@ -38,6 +38,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     
     console.log('[Provider] useEffect: 初期化処理を実行します');
     setIsInitialized(true);
+    
     if (typeof window !== 'undefined') {
       // ユーザーデータを読み込む
       const { users: loadedUsers } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
@@ -60,24 +61,22 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       
       // URLパラメータから招待トークンを取得（存在する場合）
       let urlToken = '';
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        urlToken = urlParams.get('token') || '';
-        if (urlToken) {
-          console.log('[Provider] URL token found:', urlToken);
+      const urlParams = new URLSearchParams(window.location.search);
+      urlToken = urlParams.get('token') || '';
+      if (urlToken) {
+        console.log('[Provider] URL token found:', urlToken);
+        
+        // トークンに一致するユーザーを検索
+        const matchingUser = loadedUsers.find(user => user.inviteToken === urlToken);
+        if (matchingUser) {
+          console.log('[Provider] Found user with matching token:', matchingUser.email);
+        } else {
+          console.log('[Provider] No user found with matching token');
           
-          // トークンに一致するユーザーを検索
-          const matchingUser = loadedUsers.find(user => user.inviteToken === urlToken);
-          if (matchingUser) {
-            console.log('[Provider] Found user with matching token:', matchingUser.email);
-          } else {
-            console.log('[Provider] No user found with matching token');
-            
-            // 全ユーザーのトークンをログに出力
-            loadedUsers.forEach((user, index) => {
-              console.log(`[Provider] User ${index} token:`, user.inviteToken);
-            });
-          }
+          // 全ユーザーのトークンをログに出力
+          loadedUsers.forEach((user, index) => {
+            console.log(`[Provider] User ${index} token:`, user.inviteToken);
+          });
         }
       }
       
@@ -168,12 +167,6 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       };
       
       checkSupabaseSession();
-      
-      // 初期化完了後に再度ユーザーデータを読み込む（招待ユーザーが確実に読み込まれるようにするため）
-      setTimeout(() => {
-        console.log('[Provider] Re-loading user data after initialization');
-        loadUserDataFromLocalStorage(setUsers, setUserPasswords);
-      }, 500);
     }
   }, []);
 
