@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
 import { getSupabaseClient } from '@/lib/supabaseClient'
+import { INVITATIONS_TABLE } from '@/utils/supabase'
 
 export default function CallbackClient() {
   const router = useRouter()
@@ -94,10 +95,11 @@ export default function CallbackClient() {
             
             try {
               // Supabaseから招待ユーザーを検索
+              // src/utils/supabase.tsで定義されているINVITATIONS_TABLEを使用
               const { data: dbUsers, error } = await supabase
-                .from('users')
+                .from(INVITATIONS_TABLE) // 'invitations'テーブルを使用
                 .select('*')
-                .eq('invite_token', inviteToken)
+                .eq('invite_token', inviteToken) // カラム名はsnake_case
               
               if (error) {
                 console.error('[DEBUG] Supabase query error:', error)
