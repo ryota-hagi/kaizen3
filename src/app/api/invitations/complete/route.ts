@@ -1,19 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { INVITATIONS_TABLE } from '@/constants/invitations';
+import { INVITATIONS_TABLE, INVITE_STATUS_ACCEPTED } from '@/constants/invitations';
 
 export async function POST(req: Request) {
-  console.log('► [API] /api/invitations route reached');
-  // ヘッダーを個別に表示
-  console.log('► [API] Content-Type:', req.headers.get('content-type'));
-  console.log('► [API] Origin:', req.headers.get('origin'));
   try {
     // サーバーサイドでサービスロールキーを使用してSupabaseクライアントを作成
     const url = process.env.SUPABASE_URL!;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    
-    console.log('► [API] SUPABASE_URL:', url ? 'set' : 'not set');
-    console.log('► [API] SUPABASE_SERVICE_ROLE_KEY:', serviceKey ? 'set' : 'not set');
     
     // 環境変数の確認
     if (!url || !serviceKey) {
@@ -30,42 +23,57 @@ export async function POST(req: Request) {
     });
 
     // リクエストボディの取得
-    const invitation = await req.json();
-    console.log('[API] Received invitation data:', invitation);
+    const { token, userData } = await req.json();
+    console.log('[API] Received complete invitation data:', { token, userData });
     
     // 必須フィールドの確認
-    if (!invitation.email || !invitation.role || !invitation.invite_token) {
-      console.error('[API] Missing required fields in invitation data');
+    if (!token || !userData || !userData.email) {
+      console.error('[API] Missing required fields in complete invitation data');
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 },
       );
     }
     
-    // 現在のタイムスタンプを追加
-    const now = new Date().toISOString();
+    // 同じメールアドレスの古い招待を削除（トークンが異なるもの）
+    try {
+      const deleteResult = await supabaseAdmin
+        .from(INVITATIONS_TABLE)
+        .delete()
+        .eq('email', userData.email)
+        .neq('invite_token', token);
+      
+      // 結果をログに出力
+      console.log('► invitations.delete result', { error: deleteResult.error });
+      
+      if (deleteResult.error) {
+        console.error('[API] Error deleting old invitations:', deleteResult.error);
+      } else {
+        console.log('[API] Deleted old invitations for email:', userData.email);
+      }
+    } catch (deleteError) {
+      console.error('[API] Exception deleting old invitations:', deleteError);
+      // 削除エラーは無視して続行
+    }
     
-    // カラム名をスネークケースに変換（camelCaseで送られてきた場合の対応）
-    const insertData = {
-      email: invitation.email,
-      role: invitation.role,
-      company_id: invitation.company_id || invitation.companyId || '',
-      invite_token: invitation.invite_token,
-      status: invitation.status || 'pending',
-      created_at: now,
-      updated_at: now
+    // 招待を完了する
+    const updateData = { 
+      status: INVITE_STATUS_ACCEPTED,
+      updated_at: new Date().toISOString(),
+      email: userData.email // 実際のユーザーのメールアドレスで更新
     };
     
-    // Supabaseにデータを挿入
-    console.log(`[API] Inserting into table: ${INVITATIONS_TABLE}`, insertData);
+    console.log(`[API] Updating invitation with token ${token}:`, updateData);
+    
     const { data, error } = await supabaseAdmin
       .from(INVITATIONS_TABLE)
-      .insert([insertData])
+      .update(updateData)
+      .eq('invite_token', token)
       .select()
-      .single();
+      .maybeSingle();
     
     // 結果をログに出力（成功・失敗に関わらず）
-    console.log('► invitations.insert result', { data, error });
+    console.log('► invitations.update result', { data, error });
     
     // エラーハンドリング
     if (error) {
@@ -76,21 +84,15 @@ export async function POST(req: Request) {
       if (error.code === '42501') {
         errorType = 'rls_policy';
         errorMessage = 'RLSポリシーによって拒否されました。一時的にRLSを無効化するか、適切なポリシーを設定してください。';
-      } else if (error.code === '22P02') {
-        errorType = 'type_mismatch';
-        errorMessage = '型の不一致があります。UUIDなどの型を確認してください。';
-      } else if (error.code === '42703') {
-        errorType = 'column_not_exist';
-        errorMessage = 'カラム名が存在しません。カラム名がスネークケース（例：company_id）になっているか確認してください。';
+      } else if (error.code === '42P01') {
+        errorType = 'relation_not_exist';
+        errorMessage = `テーブル "${INVITATIONS_TABLE}" が存在しません。`;
       } else if (error.message && error.message.includes('violates not-null constraint')) {
         errorType = 'not_null_constraint';
         errorMessage = '必須フィールドが不足しています。' + error.message;
-      } else if (error.message && error.message.includes('duplicate key')) {
-        errorType = 'duplicate_key';
-        errorMessage = '既に存在するデータです。' + error.message;
       }
       
-      console.error(`[API] Error inserting invitation (${errorType}):`, error);
+      console.error(`[API] Error completing invitation (${errorType}):`, error);
       
       return NextResponse.json(
         { 
@@ -98,18 +100,31 @@ export async function POST(req: Request) {
           error: error,
           errorType: errorType,
           errorMessage: errorMessage,
-          insertData: insertData // デバッグ用に送信データも返す
+          updateData: updateData // デバッグ用に送信データも返す
         },
         { status: 500 },
       );
     }
     
+    // データが見つからない場合
+    if (!data) {
+      console.log('[API] No invitation found with token:', token);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: '招待が見つかりませんでした',
+          token: token
+        },
+        { status: 404 },
+      );
+    }
+    
     // 成功レスポンス
-    console.log('[API] Successfully inserted invitation:', data);
+    console.log('[API] Successfully completed invitation:', data);
     return NextResponse.json({ success: true, data });
   } catch (error) {
     // 例外ハンドリング
-    console.error('[API] Exception in invitation API:', error);
+    console.error('[API] Exception in complete invitation API:', error);
     return NextResponse.json(
       { 
         success: false, 
