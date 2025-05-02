@@ -6,6 +6,9 @@ import { useUser } from '@/contexts/UserContext/context'
 import { getSupabaseClient } from '@/lib/supabaseClient'
 import { INVITATIONS_TABLE } from '@/utils/supabase'
 
+// デバッグ用：テーブル名を確認
+console.log('[DEBUG] INVITATIONS_TABLE =', INVITATIONS_TABLE)
+
 export default function CallbackClient() {
   const router = useRouter()
   const searchParams = useSearchParams()

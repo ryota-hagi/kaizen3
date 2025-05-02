@@ -9,7 +9,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // 招待関連のテーブル名
+// 注: 実際のテーブル名を確認して設定
 export const INVITATIONS_TABLE = 'invitations';
+
+// デバッグ用：テーブル名を確認
+console.log('[DEBUG] Defined INVITATIONS_TABLE =', INVITATIONS_TABLE);
 
 // 招待情報の型定義
 export interface InvitationRecord {
