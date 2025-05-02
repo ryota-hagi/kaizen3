@@ -57,20 +57,39 @@ export const inviteUser = async (
   }
 
   try {
-    // 招待トークンを生成
-    const inviteToken = generateInviteToken();
+    console.log('[inviteUser] Creating invitation in Supabase with company ID:', companyId);
     
-    // Supabaseに招待情報を保存
+    // Supabaseに招待情報を保存（トークンはサーバー側で生成）
     const supabaseResult = await saveInvitation({
       email: inviteData.email,
       role: inviteData.role,
-      company_id: companyId, // 確実に会社IDを設定
-      invite_token: inviteToken,
+      company_id: companyId,
+      invite_token: crypto.randomUUID(), // サーバー側でトークンを生成
       status: 'pending'
     });
     
     console.log('[inviteUser] Supabase result:', supabaseResult);
-    console.log('[inviteUser] Using company ID:', companyId);
+    
+    // Supabaseからの結果が失敗の場合
+    if (!supabaseResult.success) {
+      console.error('[inviteUser] Failed to save invitation to Supabase:', supabaseResult.error);
+      return {
+        success: false,
+        message: 'Supabaseへの招待情報の保存に失敗しました'
+      };
+    }
+    
+    // Supabaseから返ってきたトークンを使用
+    const inviteToken = supabaseResult.data?.invite_token || '';
+    if (!inviteToken) {
+      console.error('[inviteUser] No invite token returned from Supabase');
+      return {
+        success: false,
+        message: 'Supabaseから招待トークンが返されませんでした'
+      };
+    }
+    
+    console.log('[inviteUser] Got invite token from Supabase:', inviteToken);
     
     // ローカルストレージにも保存（フォールバック）
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
