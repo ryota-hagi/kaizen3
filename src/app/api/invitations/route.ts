@@ -8,6 +8,19 @@ export async function POST(req: Request) {
   console.log('► [API] Content-Type:', req.headers.get('content-type'));
   console.log('► [API] Origin:', req.headers.get('origin'));
   try {
+    // リクエストボディの取得
+    const invitation = await req.json();
+    console.log('[API] Received invitation data:', invitation);
+    
+    // 必須フィールドの確認
+    if (!invitation.email || !invitation.role || !invitation.invite_token) {
+      console.error('[API] Missing required fields in invitation data');
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 },
+      );
+    }
+    
     // サーバーサイドでサービスロールキーを使用してSupabaseクライアントを作成
     const url = process.env.SUPABASE_URL!;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -32,19 +45,11 @@ export async function POST(req: Request) {
     
     // テーブル名をログに出力
     console.log(`[API] Using table name: ${INVITATIONS_TABLE}`);
-
-    // リクエストボディの取得
-    const invitation = await req.json();
-    console.log('[API] Received invitation data:', invitation);
     
-    // 必須フィールドの確認
-    if (!invitation.email || !invitation.role || !invitation.invite_token) {
-      console.error('[API] Missing required fields in invitation data');
-      return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
-        { status: 400 },
-      );
-    }
+    // 直接Supabaseの/rest/v1/invitationsエンドポイントにアクセスする
+    const baseUrl = url;
+    const apiUrl = `${baseUrl}/rest/v1/${INVITATIONS_TABLE}`;
+    console.log(`[API] Direct API URL: ${apiUrl}`);
     
     // 現在のタイムスタンプを追加
     const now = new Date().toISOString();
@@ -63,57 +68,51 @@ export async function POST(req: Request) {
     // Supabaseにデータを挿入
     console.log(`[API] Inserting into table: ${INVITATIONS_TABLE}`, insertData);
     
-    // Supabase v2クライアントでは{ returning: 'representation' }オプションが使用できないため、
-    // 代わりに.select()を使用して同様の効果を得る
-    const { data, error } = await supabaseAdmin
-      .from(INVITATIONS_TABLE)
-      .insert([insertData]) // 配列で渡す
-      .select()
-      .single();
-    
-    // 結果をログに出力（成功・失敗に関わらず）
-    console.log('► invitations.insert result', { data, error });
-    
-    // エラーハンドリング - エラーがあれば即座にreturn
-    if (error) {
-      let errorMessage = error.message || 'Unknown error';
-      let errorType = 'unknown';
+    try {
+      // 直接RESTエンドポイントを使用
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(insertData)
+      });
       
-      // エラーの種類を特定
-      if (error.code === '42501') {
-        errorType = 'rls_policy';
-        errorMessage = 'RLSポリシーによって拒否されました。一時的にRLSを無効化するか、適切なポリシーを設定してください。';
-      } else if (error.code === '22P02') {
-        errorType = 'type_mismatch';
-        errorMessage = '型の不一致があります。UUIDなどの型を確認してください。';
-      } else if (error.code === '42703') {
-        errorType = 'column_not_exist';
-        errorMessage = 'カラム名が存在しません。カラム名がスネークケース（例：company_id）になっているか確認してください。';
-      } else if (error.message && error.message.includes('violates not-null constraint')) {
-        errorType = 'not_null_constraint';
-        errorMessage = '必須フィールドが不足しています。' + error.message;
-      } else if (error.message && error.message.includes('duplicate key')) {
-        errorType = 'duplicate_key';
-        errorMessage = '既に存在するデータです。' + error.message;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[API] Error response from Supabase: ${response.status}`, errorText);
+        
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: { message: `Supabase API error: ${response.status}`, details: errorText },
+            errorType: 'api_error',
+            errorMessage: `Supabase API error: ${response.status}`,
+            insertData: insertData // デバッグ用に送信データも返す
+          },
+          { status: 500 },
+        );
       }
       
-      console.error(`[API] Error inserting invitation (${errorType}):`, error);
-      
+      const data = await response.json();
+      console.log('[API] Successfully inserted invitation via direct API:', data);
+      return NextResponse.json({ success: true, data });
+    } catch (fetchError) {
+      console.error('[API] Exception in direct Supabase API call:', fetchError);
       return NextResponse.json(
         { 
           success: false, 
-          error: error,
-          errorType: errorType,
-          errorMessage: errorMessage,
+          error: fetchError,
+          errorType: 'fetch_error',
+          errorMessage: 'Error calling Supabase API directly',
           insertData: insertData // デバッグ用に送信データも返す
         },
         { status: 500 },
       );
     }
-    
-    // 成功レスポンス
-    console.log('[API] Successfully inserted invitation:', data);
-    return NextResponse.json({ success: true, data });
   } catch (error) {
     // 例外ハンドリング
     console.error('[API] Exception in invitation API:', error);
