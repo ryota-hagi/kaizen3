@@ -1,6 +1,6 @@
 import { UserInfo, Employee } from '@/utils/api';
 import { UserWithPassword } from './context';
-import isEqual from 'lodash/isEqual';
+import { isEqual } from 'lodash';
 
 // ローカルストレージのキー
 export const USER_STORAGE_KEY = 'kaizen_user_info';

@@ -1,7 +1,7 @@
 import { UserInfo, UserStatus } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { getSupabaseClient } from '@/lib/supabaseClient';
-import isEqual from 'lodash/isEqual';
+import { isEqual } from 'lodash';
 
 // Supabaseを使用したログイン処理
 export const loginWithGoogle = async (
