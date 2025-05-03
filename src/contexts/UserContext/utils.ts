@@ -30,12 +30,25 @@ export const fixUserData = (parsedData: any[]): any[] => {
       user.inviteToken = '';
     }
     
-    // URLトークンと一致するユーザーを招待中に設定
-    if (urlToken && user.inviteToken === urlToken && user.status !== '招待中') {
-      console.log(`ユーザー ${user.email} のステータスを招待中に変更（URLトークン一致）`);
-      user.status = '招待中';
-      user.isInvited = true; // isInvitedフラグも設定
-    }
+      // URLトークンと会社IDを取得
+      let urlToken = '';
+      let urlCompanyId = '';
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlToken = urlParams.get('token') || '';
+        urlCompanyId = urlParams.get('companyId') || '';
+        
+        // セッションストレージと localStorage からも取得（バックアップ）
+        if (!urlToken) {
+          urlToken = sessionStorage.getItem('invite_token') || localStorage.getItem('invite_token') || '';
+        }
+        if (!urlCompanyId) {
+          urlCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id') || '';
+        }
+        
+        console.log('[loadUserData] URL token:', urlToken);
+        console.log('[loadUserData] URL companyId:', urlCompanyId);
+      }
     
     // statusが'招待中'でinviteTokenが空の場合、新しいトークンを生成
     if (user.status === '招待中' && (!user.inviteToken || user.inviteToken === '')) {
@@ -127,9 +140,22 @@ export const loadUserDataFromLocalStorage = (
       // --- fixUserData ロジックをここに統合 ---
       console.log('[loadUserData] Applying data fixes...');
       let urlToken = '';
+      let urlCompanyId = '';
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         urlToken = urlParams.get('token') || '';
+        urlCompanyId = urlParams.get('companyId') || '';
+        
+        // セッションストレージと localStorage からも取得（バックアップ）
+        if (!urlToken) {
+          urlToken = sessionStorage.getItem('invite_token') || localStorage.getItem('invite_token') || '';
+        }
+        if (!urlCompanyId) {
+          urlCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id') || '';
+        }
+        
+        console.log('[loadUserData] URL token:', urlToken);
+        console.log('[loadUserData] URL companyId:', urlCompanyId);
       }
 
       parsedData = parsedData.map((item: {user: any; password: string}) => {
@@ -155,11 +181,22 @@ export const loadUserDataFromLocalStorage = (
           console.log(`[fixUserData Integrated] Generating token for invited user ${user.email}: ${user.inviteToken}`);
         }
 
-        // isInvited フラグが true の場合、常にリセットする
-        if (user.isInvited === true) {
-          console.log(`[fixUserData Integrated] Resetting isInvited flag for ${user.email}.`);
-          user.status = 'アクティブ';
-          user.isInvited = false; // 招待フラグを常にリセット
+        // URLトークンと一致する場合は、招待フラグを維持する
+        if (urlToken && user.inviteToken && user.inviteToken.toLowerCase() === urlToken.toLowerCase()) {
+          console.log(`[fixUserData Integrated] Keeping isInvited flag for ${user.email} due to URL token match.`);
+          user.status = '招待中';
+          user.isInvited = true;
+          
+          // URLから会社IDが取得できた場合は設定
+          if (urlCompanyId && urlCompanyId.trim() !== '') {
+            console.log(`[fixUserData Integrated] Setting company ID for ${user.email} from URL: ${urlCompanyId}`);
+            user.companyId = urlCompanyId;
+          }
+        }
+        // それ以外の場合で、isInvited フラグが true の場合は、アクティブに変更しない
+        else if (user.isInvited === true && !urlToken) {
+          // 招待フラグは維持するが、ステータスは変更しない
+          console.log(`[fixUserData Integrated] Maintaining isInvited flag for ${user.email}.`);
         }
 
         // 招待中でないユーザーでもトークンが空の場合、空文字列を設定
