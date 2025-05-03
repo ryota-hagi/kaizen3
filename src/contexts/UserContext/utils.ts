@@ -198,6 +198,7 @@ export const loadUserDataFromLocalStorage = (
           // 招待フラグは維持するが、ステータスは変更しない
           console.log(`[fixUserData Integrated] Maintaining isInvited flag for ${user.email}.`);
         }
+        // それ以外の場合は何もしない（招待フラグをリセットしない）
 
         // 招待中でないユーザーでもトークンが空の場合、空文字列を設定
         if ((!user.inviteToken || user.inviteToken === '') && user.status !== '招待中') {
