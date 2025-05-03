@@ -239,6 +239,48 @@ export default function CallbackClient() {
           console.log('[DEBUG] Using company ID:', companyId)
           
           // ユーザー情報を更新
+          console.log('[DEBUG] Updating user with invite data:', {
+            isInvited: true,
+            inviteToken,
+            role: invitedUser.role || 'メンバー',
+            companyId
+          });
+          
+          // 既存ユーザーの会社IDを確認
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (currentUser) {
+            // ローカルストレージからユーザーリストを取得
+            const usersJson = localStorage.getItem('kaizen_users');
+            const localUsers = usersJson ? JSON.parse(usersJson) : [];
+            
+            // 既存ユーザーを検索
+            const existingUserData = localUsers.find((u: any) => 
+              u.user && u.user.id === currentUser.id
+            );
+            
+            if (existingUserData && existingUserData.user.companyId) {
+              console.log('[DEBUG] Existing user company ID:', existingUserData.user.companyId);
+              console.log('[DEBUG] Invited company ID:', companyId);
+              
+              // 既存ユーザーの会社IDと招待会社IDが異なる場合、ローカルストレージを更新
+              if (existingUserData.user.companyId !== companyId) {
+                console.log('[DEBUG] Updating company ID in localStorage');
+                
+                // 既存ユーザーの会社IDを更新
+                existingUserData.user.companyId = companyId;
+                localStorage.setItem('kaizen_users', JSON.stringify(localUsers));
+                
+                // 現在のユーザーの会社IDも更新
+                const currentUserJson = localStorage.getItem('kaizen_user');
+                if (currentUserJson) {
+                  const currentUserData = JSON.parse(currentUserJson);
+                  currentUserData.companyId = companyId;
+                  localStorage.setItem('kaizen_user', JSON.stringify(currentUserData));
+                }
+              }
+            }
+          }
+          
           const success = await updateUserAfterGoogleSignIn({
             isInvited: true,
             inviteToken,

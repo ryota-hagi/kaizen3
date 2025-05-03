@@ -195,12 +195,13 @@ export const updateUserAfterGoogleSignIn = async (
       return false;
     }
     
-    // 既存ユーザーの会社IDと新しい会社IDが異なる場合（招待ユーザーの場合のみ）
+    // 既存ユーザーの会社IDと新しい会社IDが異なる場合（招待ユーザーの場合）
+    // 招待ユーザーの場合は、招待された会社IDを優先する
     if (userData.isInvited && existingUser?.companyId && userData.companyId && 
         existingUser.companyId !== userData.companyId) {
-      console.error('[updateUserAfterGoogleSignIn] Company ID mismatch:', 
-        existingUser.companyId, 'vs', userData.companyId);
-      return false;
+      console.warn('[updateUserAfterGoogleSignIn] Company ID mismatch, using invited company ID:', 
+        existingUser.companyId, '→', userData.companyId);
+      // エラーを返さず、招待された会社IDを使用する
     }
     
     // UserInfo形式に変換して更新
