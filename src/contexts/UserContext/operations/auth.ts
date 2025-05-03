@@ -183,6 +183,26 @@ export const updateUserAfterGoogleSignIn = async (
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
     const existingUser = currentUsers.find(u => u.id === user.id);
     
+    // 招待ユーザーの場合、会社IDが必須
+    if (userData.isInvited && (!userData.companyId || userData.companyId.trim() === '')) {
+      console.error('[updateUserAfterGoogleSignIn] Company ID is required for invited users');
+      return false;
+    }
+    
+    // 招待ユーザーの場合、トークンが必須
+    if (userData.isInvited && (!userData.inviteToken || userData.inviteToken.trim() === '')) {
+      console.error('[updateUserAfterGoogleSignIn] Invite token is required for invited users');
+      return false;
+    }
+    
+    // 既存ユーザーの会社IDと新しい会社IDが異なる場合（招待ユーザーの場合のみ）
+    if (userData.isInvited && existingUser?.companyId && userData.companyId && 
+        existingUser.companyId !== userData.companyId) {
+      console.error('[updateUserAfterGoogleSignIn] Company ID mismatch:', 
+        existingUser.companyId, 'vs', userData.companyId);
+      return false;
+    }
+    
     // UserInfo形式に変換して更新
     const updatedUserInfo: UserInfo = {
       id: user.id,
@@ -199,6 +219,8 @@ export const updateUserAfterGoogleSignIn = async (
     };
     
     console.log('[updateUserAfterGoogleSignIn] Updating user with company ID:', updatedUserInfo.companyId);
+    console.log('[updateUserAfterGoogleSignIn] User is invited:', updatedUserInfo.isInvited);
+    console.log('[updateUserAfterGoogleSignIn] User invite token:', updatedUserInfo.inviteToken);
     
     // ユーザー情報を保存
     setCurrentUser(updatedUserInfo);

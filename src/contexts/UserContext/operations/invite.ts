@@ -139,7 +139,7 @@ export const inviteUser = async (
     }
     
     // Supabaseから返ってきたトークンを使用
-    const inviteToken = supabaseResult.data?.invite_token || '';
+    const inviteToken = supabaseResult.data?.invite_token || invitationData.invite_token || '';
     if (!inviteToken) {
       console.error('[inviteUser] No invite token returned from Supabase');
       return {
@@ -256,7 +256,7 @@ export const inviteUser = async (
 export const verifyInviteToken = async (
   token: string,
   users: UserInfo[]
-): Promise<{ valid: boolean; user?: UserInfo }> => {
+): Promise<{ valid: boolean; user?: UserInfo; error?: string }> => {
   console.log('[verifyInviteToken] Checking token:', token);
   
   try {
@@ -418,46 +418,12 @@ export const verifyInviteToken = async (
           }
         }
         
-        // 会社IDが設定されていない場合、他のユーザーから会社IDを取得
-        if (!user.companyId || user.companyId.trim() === '') {
-          console.log('[verifyInviteToken] No company ID found for user, searching for company ID from other users');
-          
-          // 他のユーザーから会社IDを取得
-          const otherUser = mergedUsers.find(u => u.companyId && u.companyId.trim() !== '');
-          if (otherUser) {
-            user.companyId = otherUser.companyId;
-            console.log(`[verifyInviteToken] Setting company ID to ${otherUser.companyId} from other user`);
-            
-            // ローカルストレージを更新
-            if (typeof window !== 'undefined') {
-              try {
-                const savedUsers = localStorage.getItem(USERS_STORAGE_KEY);
-                if (savedUsers) {
-                  const parsedData = JSON.parse(savedUsers);
-                  const userToUpdate = parsedData.find((item: any) => 
-                    item.user && item.user.id === user.id
-                  );
-                  
-                  if (userToUpdate) {
-                    userToUpdate.user.companyId = otherUser.companyId;
-                    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
-                    console.log('[verifyInviteToken] Updated company ID in localStorage');
-                    
-                    // セッションストレージも更新
-                    try {
-                      sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
-                      console.log('[verifyInviteToken] Also updated sessionStorage');
-                    } catch (e) {
-                      console.error('[verifyInviteToken] Failed to update sessionStorage:', e);
-                    }
-                  }
-                }
-              } catch (e) {
-                console.error('[verifyInviteToken] Error updating localStorage:', e);
-              }
-            }
-          }
-        }
+    // 会社IDが設定されていない場合はエラーとする
+    // 招待ユーザーは必ず会社IDを持っている必要がある
+    if (!user.companyId || user.companyId.trim() === '') {
+      console.error('[verifyInviteToken] No company ID found for user with token:', token);
+      return { valid: false, error: '招待ユーザーの会社情報が見つかりません。' };
+    }
         
         // 招待ユーザーを返す前に、メールアドレスを一時的に「招待ユーザー」に置き換える
         // これにより、ログにメールアドレスが表示されなくなる
@@ -651,20 +617,17 @@ export const completeInvitation = async (
     
     const invitedUser = currentUsers[invitedUserIndex];
     
-    // 会社IDを確認
-    let companyId = userData.companyId || invitedUser.companyId;
+    // 会社IDを確認（招待ユーザーの会社IDを優先）
+    let companyId = invitedUser.companyId || userData.companyId;
     if (!companyId || companyId.trim() === '') {
-      console.log('[completeInvitation] No company ID found for invited user, searching for company ID from other users');
-      
-      // 他のユーザーから会社IDを取得
-      const otherUser = currentUsers.find(u => u.companyId && u.companyId.trim() !== '' && u.id !== invitedUser.id);
-      if (otherUser) {
-        companyId = otherUser.companyId;
-        console.log(`[completeInvitation] Using company ID ${companyId} from other user`);
-      } else {
-        console.error('[completeInvitation] Company ID is missing in both userData and invited user');
-        companyId = 'default-company-id'; // デフォルト値を設定
-      }
+      console.error('[completeInvitation] No company ID found for invited user');
+      return false;
+    }
+    
+    // 会社IDが一致しない場合はエラー
+    if (userData.companyId && invitedUser.companyId && userData.companyId !== invitedUser.companyId) {
+      console.error('[completeInvitation] Company ID mismatch:', userData.companyId, 'vs', invitedUser.companyId);
+      return false;
     }
     
     // トークンの照合のみを行い、メールアドレスの照合は行わない

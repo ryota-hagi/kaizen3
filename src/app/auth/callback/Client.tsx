@@ -22,23 +22,35 @@ export default function CallbackClient() {
       try {
         setLoading(true)
         
-        // Supabaseのセッションを取得
-        const supabase = getSupabaseClient()
-        const { data, error } = await supabase.auth.getSession()
-        
-        if (error) {
-          console.error('Error getting session:', error)
-          setError('認証中にエラーが発生しました')
-          setLoading(false)
-          return
-        }
-        
-        if (!data.session) {
-          console.error('No session found')
-          setError('セッションが見つかりません')
-          setLoading(false)
-          return
-        }
+      // Supabaseのセッションを取得
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('[DEBUG] Error getting session:', error)
+        setError('認証中にエラーが発生しました')
+        setLoading(false)
+        return
+      }
+      
+      if (!data.session) {
+        console.error('[DEBUG] No session found')
+        setError('セッションが見つかりません')
+        setLoading(false)
+        return
+      }
+      
+      // ユーザー情報を取得
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        console.error('[DEBUG] Error getting user:', userError)
+        setError('ユーザー情報の取得に失敗しました')
+        setLoading(false)
+        return
+      }
+      
+      console.log('[DEBUG] Authenticated user email:', user.email)
         
         // 招待ユーザーかどうかを確認
         const isInvited = searchParams?.get('invite') === 'true'
@@ -205,23 +217,23 @@ export default function CallbackClient() {
           const invitedUser = matched[0]
           console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId || 'not set')
           
-          // 会社IDを取得（URLパラメータ優先、次にユーザーの会社ID、最後に他のユーザーから）
-          let companyId = companyIdFromUrl || invitedUser.companyId
+          // 会社IDを取得（招待ユーザーの会社IDを優先、次にURLパラメータ）
+          // 招待ユーザーの会社IDが最優先（これが正しい招待先の会社ID）
+          let companyId = invitedUser.companyId || companyIdFromUrl
           
           if (!companyId || companyId.trim() === '') {
-            console.log('[DEBUG] No company ID found for invited user, searching for company ID from other users')
-            
-            // 他のユーザーから会社IDを取得
-            const otherUser = users.find(u => u.companyId && u.companyId.trim() !== '')
-            if (otherUser) {
-              companyId = otherUser.companyId
-              console.log('[DEBUG] Using company ID from other user:', companyId)
-            } else {
-              console.error('[DEBUG] No company ID found')
-              setError('招待ユーザーの会社情報が見つかりません。')
-              setLoading(false)
-              return
-            }
+            console.error('[DEBUG] No company ID found for invited user')
+            setError('招待ユーザーの会社情報が見つかりません。招待メールのリンクから再度アクセスしてください。')
+            setLoading(false)
+            return
+          }
+          
+          // 会社IDが招待ユーザーの会社IDと一致しない場合はエラー
+          if (companyIdFromUrl && invitedUser.companyId && companyIdFromUrl !== invitedUser.companyId) {
+            console.error('[DEBUG] Company ID mismatch:', companyIdFromUrl, 'vs', invitedUser.companyId)
+            setError('招待された会社情報が一致しません。招待メールのリンクから再度アクセスしてください。')
+            setLoading(false)
+            return
           }
           
           console.log('[DEBUG] Using company ID:', companyId)

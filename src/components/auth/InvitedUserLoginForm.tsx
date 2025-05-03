@@ -204,23 +204,7 @@ export const InvitedUserLoginForm: React.FC<InvitedUserLoginFormProps> = ({
         </div>
       </div>
       
-      {/* デバッグ情報（開発環境のみ） */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mt-6 p-3 bg-gray-100 rounded text-xs">
-          <p>デバッグ情報:</p>
-          <p>URL Token: {searchParams?.get('token') || 'なし'}</p>
-          <p>Prop Token: {propInviteToken || 'なし'}</p>
-          <p>Current Token: {token || 'なし'}</p>
-          <p>URL CompanyId: {searchParams?.get('companyId') || 'なし'}</p>
-          <p>Prop CompanyId: {propCompanyId || 'なし'}</p>
-          <p>Current CompanyId: {companyId || 'なし'}</p>
-          <p>Session Storage Token: {typeof window !== 'undefined' ? sessionStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
-          <p>Local Storage Token: {typeof window !== 'undefined' ? localStorage.getItem('invite_token') || 'なし' : 'なし'}</p>
-          <p>Session Storage CompanyId: {typeof window !== 'undefined' ? sessionStorage.getItem('invite_company_id') || 'なし' : 'なし'}</p>
-          <p>Local Storage CompanyId: {typeof window !== 'undefined' ? localStorage.getItem('invite_company_id') || 'なし' : 'なし'}</p>
-          <p>Is Invite: {propIsInvite ? 'true' : 'false'}</p>
-        </div>
-      )}
+      {/* デバッグ情報は完全に削除 */}
     </div>
   )
 }

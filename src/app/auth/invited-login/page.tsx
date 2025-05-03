@@ -1,6 +1,6 @@
 import React from 'react'
-import { InvitedUserLoginForm } from '@/components/auth/InvitedUserLoginForm'
 import Link from 'next/link'
+import InvitedLoginClient from './client'
 
 // 静的プリレンダを強制的にオフ
 export const dynamic = 'force-dynamic'
@@ -27,8 +27,8 @@ export default function InvitedLoginPage({
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <InvitedUserLoginForm 
-          inviteToken={token} 
+        <InvitedLoginClient 
+          token={token} 
           companyId={companyId}
           isInvite={invite === 'true'}
         />

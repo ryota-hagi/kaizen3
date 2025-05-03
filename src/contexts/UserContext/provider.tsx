@@ -108,24 +108,30 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         });
       });
       
-      // URLパラメータから招待トークンを取得（存在する場合）
-      let urlToken = '';
-      const urlParams = new URLSearchParams(window.location.search);
-      urlToken = urlParams.get('token') || '';
-      if (urlToken) {
-        console.log('[Provider] URL token found:', urlToken);
-        
-        // トークンに一致するユーザーを検索
-        const matchingUser = loadedUsers.find(user => user.inviteToken === urlToken);
-        if (matchingUser) {
-          console.log('[Provider] Found user with matching token:', matchingUser.email);
-        } else {
-          console.log('[Provider] No user found with matching token');
-          
-          // 全ユーザーのトークンをログに出力
-          loadedUsers.forEach((user, index) => {
-            console.log(`[Provider] User ${index} token:`, user.inviteToken);
-          });
+      // クライアントサイドでのみURLパラメータから招待トークンを取得
+      if (typeof window !== 'undefined') {
+        let urlToken = '';
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          urlToken = urlParams.get('token') || '';
+          if (urlToken) {
+            console.log('[Provider] URL token found:', urlToken);
+            
+            // トークンに一致するユーザーを検索
+            const matchingUser = loadedUsers.find(user => user.inviteToken === urlToken);
+            if (matchingUser) {
+              console.log('[Provider] Found user with matching token:', matchingUser.email);
+            } else {
+              console.log('[Provider] No user found with matching token');
+              
+              // 全ユーザーのトークンをログに出力
+              loadedUsers.forEach((user, index) => {
+                console.log(`[Provider] User ${index} token:`, user.inviteToken);
+              });
+            }
+          }
+        } catch (error) {
+          console.error('[Provider] Error parsing URL params:', error);
         }
       }
       
