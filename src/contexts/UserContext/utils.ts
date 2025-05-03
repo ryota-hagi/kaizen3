@@ -194,7 +194,7 @@ export const loadUserDataFromLocalStorage = (
           }
         }
         // それ以外の場合で、isInvited フラグが true の場合は、アクティブに変更しない
-        else if (user.isInvited === true && !urlToken) {
+        else if (user.isInvited === true) {
           // 招待フラグは維持するが、ステータスは変更しない
           console.log(`[fixUserData Integrated] Maintaining isInvited flag for ${user.email}.`);
         }
