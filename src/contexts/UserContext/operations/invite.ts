@@ -272,6 +272,11 @@ export const verifyInviteToken = async (
       body: JSON.stringify({ token }),
     });
     
+    if (!response.ok) {
+      console.error('[verifyInviteToken] API error:', response.status, response.statusText);
+      return { valid: false, error: `APIエラー: ${response.status} ${response.statusText}` };
+    }
+    
     const result = await response.json();
     console.log('[verifyInviteToken] API response:', result);
     
@@ -284,6 +289,10 @@ export const verifyInviteToken = async (
         console.error('[verifyInviteToken] Company ID is missing in API response');
         return { valid: false, error: '会社IDが見つかりません' };
       }
+      
+      // 会社IDをコンテキストに設定
+      setCompanyId(company_id);
+      console.log('[verifyInviteToken] Set company ID in context:', company_id);
       
       // ユーザーリストを更新
       setUsers((prev: UserInfo[]) => {
@@ -301,13 +310,11 @@ export const verifyInviteToken = async (
         if (!isEqual(prev[userIndex], next[userIndex])) {
           const usersToSave = next.map((u: UserInfo) => ({ user: u, password: '' }));
           localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          console.log('[verifyInviteToken] Updated user status to verified and saved to localStorage');
         }
         
         return next;
       });
-      
-      // 会社IDをコンテキストに設定
-      setCompanyId(company_id);
       
       return { 
         valid: true, 
@@ -349,6 +356,41 @@ export const completeInvitation = async (
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ): Promise<boolean> => {
   try {
+    // Supabaseに招待完了を通知
+    const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('[completeInvitation] No authenticated user found');
+      return false;
+    }
+    
+    // APIを呼び出して招待を完了
+    const response = await fetch('/api/invitations/complete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        token,
+        auth_uid: user.id,
+        email: user.email
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('[completeInvitation] API error:', response.status, response.statusText);
+      return false;
+    }
+    
+    const result = await response.json();
+    console.log('[completeInvitation] API response:', result);
+    
+    if (!result.ok) {
+      console.error('[completeInvitation] API returned error:', result);
+      return false;
+    }
+    
     // ユーザーリストを更新
     setUsers(prev => {
       const userIndex = prev.findIndex(u => u.inviteToken === token);
@@ -365,6 +407,7 @@ export const completeInvitation = async (
       if (!isEqual(prev[userIndex], next[userIndex])) {
         const usersToSave = next.map(u => ({ user: u, password: '' }));
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        console.log('[completeInvitation] Updated user status to completed and saved to localStorage');
       }
       
       return next;
@@ -375,4 +418,10 @@ export const completeInvitation = async (
     console.error('[completeInvitation] Error:', error);
     return false;
   }
+};
+
+// Supabaseクライアントを取得する関数（ここで定義）
+const getSupabaseClient = () => {
+  // @ts-ignore - 型エラーを無視
+  return window.supabase;
 };
