@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>招待ビューの修正</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            display: none;
+        }
+        .success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>招待ビューの修正</h1>
+    
+    <p>このツールは、invitations_viewを修正し、カラム名をsnake_caseに統一します。</p>
+    
+    <h2>実行するSQL</h2>
+    <pre><code>-- ビューを削除して再作成
+DROP VIEW IF EXISTS invitations_v CASCADE;
+
+-- 新しいビューを作成（カラム名をsnake_caseに統一）
+CREATE OR REPLACE VIEW invitations_v AS
+SELECT
+    id,
+    email,
+    role,
+    company_id,
+    invite_token,  -- snake_case
+    status,
+    created_at,
+    updated_at
+FROM invitations;
+
+-- RLSポリシーを設定
+ALTER VIEW invitations_v ENABLE ROW LEVEL SECURITY;
+
+-- 会社IDによる分離ポリシー
+CREATE POLICY "company isolation" ON invitations_v
+    USING (company_id = auth.jwt()->>'company_id');
+
+-- 管理者は全ての招待を見ることができる
+CREATE POLICY "admins can see all invitations" ON invitations_v
+    USING (auth.jwt()->>'role' = '管理者');
+
+-- RESTメタデータをリロード
+SELECT pg_sleep(1);
+SELECT rest_metadata_refresh();</code></pre>
+    
+    <button id="executeButton">SQLを実行</button>
+    
+    <div id="result" class="result">
+        <h3>実行結果</h3>
+        <div id="resultContent"></div>
+    </div>
+    
+    <script>
+        document.getElementById('executeButton').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('result');
+            const resultContent = document.getElementById('resultContent');
+            
+            resultDiv.style.display = 'block';
+            resultContent.innerHTML = '<p>SQLを実行中...</p>';
+            
+            try {
+                // Supabase URLとキーを取得（環境変数から）
+                const response = await fetch('/api/fix-tables', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        sql: `
+                            -- ビューを削除して再作成
+                            DROP VIEW IF EXISTS invitations_v CASCADE;
+
+                            -- 新しいビューを作成（カラム名をsnake_caseに統一）
+                            CREATE OR REPLACE VIEW invitations_v AS
+                            SELECT
+                                id,
+                                email,
+                                role,
+                                company_id,
+                                invite_token,  -- snake_case
+                                status,
+                                created_at,
+                                updated_at
+                            FROM invitations;
+
+                            -- RLSポリシーを設定
+                            ALTER VIEW invitations_v ENABLE ROW LEVEL SECURITY;
+
+                            -- 会社IDによる分離ポリシー
+                            DROP POLICY IF EXISTS "company isolation" ON invitations_v;
+                            CREATE POLICY "company isolation" ON invitations_v
+                                USING (company_id = auth.jwt()->>'company_id');
+
+                            -- 管理者は全ての招待を見ることができる
+                            DROP POLICY IF EXISTS "admins can see all invitations" ON invitations_v;
+                            CREATE POLICY "admins can see all invitations" ON invitations_v
+                                USING (auth.jwt()->>'role' = '管理者');
+
+                            -- RESTメタデータをリロード
+                            SELECT pg_sleep(1);
+                            SELECT rest_metadata_refresh();
+                        `
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultContent.innerHTML = `
+                        <p class="success">SQLの実行に成功しました！</p>
+                        <p>ビューが正常に更新され、RLSポリシーが設定されました。</p>
+                        <p>次のステップ:</p>
+                        <ol>
+                            <li>clear-cache.htmlを開いてキャッシュをクリアする</li>
+                            <li>招待リンクから再度ログインする</li>
+                        </ol>
+                    `;
+                } else {
+                    resultContent.innerHTML = `
+                        <p class="error">エラーが発生しました:</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultContent.innerHTML = `
+                    <p class="error">エラーが発生しました:</p>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

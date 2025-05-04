@@ -1,6 +1,7 @@
 // ----------- /api/invitations/verify -----------
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { INVITATIONS_VIEW } from '@/constants/invitations'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -22,10 +23,9 @@ export async function POST(req: Request) {
     
     // クエリ条件を構築
     let query = supabase
-      .from('invitations')
-      .update({ status: 'verified' })
-      .eq('invite_token', token)
-      .eq('status', 'pending');  // 二重クリック防止
+      .from(INVITATIONS_VIEW)
+      .select('*')
+      .eq('invite_token', token);  // snake_case を使用
     
     // 会社IDが指定されている場合は、会社IDも一致するものだけを対象にする
     if (companyId) {
@@ -33,8 +33,8 @@ export async function POST(req: Request) {
       query = query.eq('company_id', companyId);
     }
     
-    // ① token と company_id の検証
-    const { data, error } = await query.select().single();
+    // token と company_id の検証
+    const { data, error } = await query.single();
 
     if (error || !data) {
       console.error('[API] /invitations/verify: Invalid token or database error:', error);
