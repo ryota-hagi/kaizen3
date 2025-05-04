@@ -206,16 +206,30 @@ export const updateUserAfterGoogleSignIn = async (
       return false;
     }
     
-  // 招待中ユーザーでない場合は何もしない
-  // 注意: userData.isInvited が true の場合も処理を続行
+  // 招待中ユーザーでない場合でも、招待フラグがtrueなら処理を続行
   if (!userData.isInvited && userData.status !== '招待中') {
     console.log('[updateUserAfterGoogleSignIn] Not an invited user, skip');
     return true;
   }
+
+  console.log('[updateUserAfterGoogleSignIn] Processing invited user with data:', userData);
     
     // 既存のユーザー情報を取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
     
+    // 招待ユーザーの場合、会社IDが必須
+    const isInvitedUser = userData.isInvited || userData.status === '招待中';
+    if (isInvitedUser && (!userData.companyId || userData.companyId.trim() === '')) {
+      console.error('[updateUserAfterGoogleSignIn] Company ID is required for invited users');
+      return false;
+    }
+    
+    // 招待ユーザーの場合、トークンが必須
+    if (isInvitedUser && (!userData.inviteToken || userData.inviteToken.trim() === '')) {
+      console.error('[updateUserAfterGoogleSignIn] Invite token is required for invited users');
+      return false;
+    }
+
     // 変更が必要かどうかを確認
     setUsers(prev => {
       // 変更が無い場合はそのまま返す
@@ -232,13 +246,28 @@ export const updateUserAfterGoogleSignIn = async (
         return prev;
       }
       
+      console.log('[updateUserAfterGoogleSignIn] Updating user in users array:', {
+        before: {
+          companyId: before.companyId,
+          inviteToken: before.inviteToken,
+          status: before.status,
+          isInvited: before.isInvited
+        },
+        after: {
+          companyId: userData.companyId,
+          inviteToken: userData.inviteToken,
+          status: 'アクティブ',
+          isInvited: false
+        }
+      });
+      
       // 変更が必要な場合だけ上書き
       const next = [...prev];
       next[idx] = {
         ...before,
         companyId: userData.companyId || before.companyId || '',
         inviteToken: userData.inviteToken || before.inviteToken || '',
-        status: 'completed' as UserStatus, // 招待完了状態に設定
+        status: 'アクティブ' as UserStatus, // 招待完了状態に設定
         isInvited: false // 招待フラグをリセット
       };
       
@@ -257,18 +286,6 @@ export const updateUserAfterGoogleSignIn = async (
       return next;
     });
     
-    // 招待ユーザーの場合、会社IDが必須
-    const isInvitedUser = userData.isInvited || userData.status === '招待中';
-    if (isInvitedUser && (!userData.companyId || userData.companyId.trim() === '')) {
-      console.error('[updateUserAfterGoogleSignIn] Company ID is required for invited users');
-      return false;
-    }
-    
-    // 招待ユーザーの場合、トークンが必須
-    if (isInvitedUser && (!userData.inviteToken || userData.inviteToken.trim() === '')) {
-      console.error('[updateUserAfterGoogleSignIn] Invite token is required for invited users');
-      return false;
-    }
     
     // UserInfo形式に変換して更新
     const updatedUserInfo: UserInfo = {
@@ -277,7 +294,7 @@ export const updateUserAfterGoogleSignIn = async (
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
       role: userData.role || currentUsers.find(u => u.id === user.id)?.role || '管理者',
-      status: 'completed' as UserStatus, // 招待完了状態に設定
+      status: 'アクティブ' as UserStatus, // 招待完了状態に設定
       createdAt: currentUsers.find(u => u.id === user.id)?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isInvited: false, // 招待フラグをリセット
@@ -292,6 +309,25 @@ export const updateUserAfterGoogleSignIn = async (
     // ユーザー情報を保存
     setCurrentUser(updatedUserInfo);
     setIsAuthenticated(true);
+    
+    // Supabaseのユーザーメタデータを更新
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          company_id: updatedUserInfo.companyId,
+          status: 'アクティブ',
+          isInvited: false
+        }
+      });
+      
+      if (error) {
+        console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
+      } else {
+        console.log('[updateUserAfterGoogleSignIn] User metadata updated successfully');
+      }
+    } catch (error) {
+      console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
+    }
     
     // ローカルストレージとセッションストレージに保存
     if (typeof window !== 'undefined') {
