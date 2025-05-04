@@ -20,6 +20,7 @@ import {
   completeInvitation
 } from './operations/index';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { isUserInvited, needsInviteFlow } from '@/utils/userHelpers';
 
 // プロバイダーコンポーネント
 export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -100,7 +101,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.log('[Provider] Loaded users:', loadedUsers.length);
       
       // 招待中のユーザーを確認
-      const invitedUsers = loadedUsers.filter(user => user.status === '招待中' || user.isInvited === true);
+      const invitedUsers = loadedUsers.filter(isUserInvited);
       console.log('[Provider] Invited users:', invitedUsers.length);
       
       // 招待中のユーザーの詳細をログに出力
@@ -109,8 +110,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           id: user.id,
           email: user.email,
           inviteToken: user.inviteToken,
-          status: user.status,
-          isInvited: user.isInvited
+          status: user.status
         });
       });
       
@@ -269,11 +269,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!currentUser) return;
     
     // 招待フローが必要かどうかを判断
-    const needsInviteFlow = 
-      currentUser.isInvited && 
-      ['pending', 'verified'].includes(currentUser.status || '');
-    
-    if (needsInviteFlow) {
+    if (needsInviteFlow(currentUser)) {
       console.log('[Provider] Current user is invited, processing invite flow');
       
       // トークンを取得（URLパラメータ → セッションストレージ → ユーザー情報の順）
