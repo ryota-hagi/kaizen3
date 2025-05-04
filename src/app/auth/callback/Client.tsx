@@ -110,63 +110,82 @@ export default function CallbackClient() {
             console.log('[DEBUG] No matching user in context, querying Supabase directly')
             
             try {
-              // APIルートを使用して招待ユーザーを検索（絶対パスで）
-              const verifyUrl = window.location.origin + '/api/invitations/verify';
-              console.log('[DEBUG] Using API route to verify invite token:', verifyUrl)
-              const response = await fetch(verifyUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Cache-Control': 'no-cache',
-                },
-                body: JSON.stringify({ token: inviteToken }),
-              });
-              
-              const result = await response.json();
-              
-              if (!response.ok) {
-                console.error('[DEBUG] API error verifying invitation:', result.error)
-                setError('ユーザー取得エラー: ' + (result.errorMessage || 'APIエラー'))
-                setLoading(false)
-                return
-              }
-              
-              if (!result.valid || !result.invitation) {
-                console.error('[DEBUG] Token verification failed via API')
-                setError('招待トークンが無効です')
-                setLoading(false)
-                return
-              }
-              
-              const dbUsers = [result.invitation];
-              
-              console.log('[DEBUG] Supabase query result:', dbUsers?.length || 0, 'users found')
-              
-              // Supabaseから取得したユーザーを処理
-              if (dbUsers && dbUsers.length > 0) {
-                // PostgRESTの仕様により、ビューでcamelCaseにしても小文字化されるため両方チェック
-                const supRaw = dbUsers[0]
+              // 直接Supabaseに問い合わせる
+              const { data: invitationData, error: invitationError } = await supabase
+                .from('invitations')
+                .select('*')
+                .eq('invite_token', inviteToken)
+                .single();
                 
-                // camelCaseとsnake_caseの両方をチェック
-                const companyId = 
-                  supRaw.companyId      // camelCase (来ない場合あり)
-                  ?? supRaw.company_id  // snake_case
-                  ?? null
+              if (invitationError || !invitationData) {
+                console.error('[DEBUG] Error querying invitation:', invitationError);
                 
-                // 会社IDを明示的に設定
-                const processedUsers = dbUsers.map((user: any) => ({
-                  ...user,
-                  companyId: user.companyId ?? user.company_id ?? companyId
-                }))
+                // APIルートを使用して招待ユーザーを検索（絶対パスで）
+                const verifyUrl = window.location.origin + '/api/invitations/verify';
+                console.log('[DEBUG] Using API route to verify invite token:', verifyUrl)
+                const response = await fetch(verifyUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache',
+                  },
+                  body: JSON.stringify({ token: inviteToken }),
+                });
                 
-                console.log('[DEBUG] Processed users with companyId:', processedUsers[0].companyId)
-                matched = processedUsers
+                if (!response.ok) {
+                  const result = await response.json();
+                  console.error('[DEBUG] API error verifying invitation:', result.message || 'Unknown error')
+                  setError('ユーザー取得エラー: ' + (result.message || 'APIエラー'))
+                  setLoading(false)
+                  return
+                }
                 
-                // Supabaseから取得したユーザーをコンテキストに追加
-                console.log('[DEBUG] Adding Supabase user to context')
-                // TODO: ここでコンテキストにユーザーを追加する処理を実装
+                const result = await response.json();
+                
+                if (!result.valid || !result.invitation) {
+                  console.error('[DEBUG] Token verification failed via API')
+                  setError('招待トークンが無効です')
+                  setLoading(false)
+                  return
+                }
+                
+                const dbUsers = [result.invitation];
+                
+                console.log('[DEBUG] API query result:', dbUsers?.length || 0, 'users found')
+                
+                // APIから取得したユーザーを処理
+                if (dbUsers && dbUsers.length > 0) {
+                  const supRaw = dbUsers[0]
+                  
+                  // camelCaseとsnake_caseの両方をチェック
+                  const companyId = 
+                    supRaw.companyId      // camelCase (来ない場合あり)
+                    ?? supRaw.company_id  // snake_case
+                    ?? null
+                  
+                  // 会社IDを明示的に設定
+                  const processedUsers = dbUsers.map((user: any) => ({
+                    ...user,
+                    companyId: user.companyId ?? user.company_id ?? companyId
+                  }))
+                  
+                  console.log('[DEBUG] Processed users with companyId:', processedUsers[0].companyId)
+                  matched = processedUsers
+                } else {
+                  matched = []
+                }
               } else {
-                matched = []
+                // Supabaseから直接取得したデータを処理
+                console.log('[DEBUG] Supabase query result:', invitationData)
+                
+                const processedUser = {
+                  ...invitationData,
+                  companyId: invitationData.company_id,
+                  status: 'アクティブ'
+                };
+                
+                matched = [processedUser];
+                console.log('[DEBUG] Processed user from Supabase:', processedUser);
               }
             } catch (e) {
               console.error('[DEBUG] Error querying Supabase:', e)
