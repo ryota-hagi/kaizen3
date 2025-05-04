@@ -1,4 +1,4 @@
-import { UserInfo, Employee } from '@/utils/api';
+import { UserInfo, Employee, UserStatus } from '@/utils/api';
 import { UserWithPassword } from './context';
 import { isEqual } from '@/utils/deepEqual';
 
@@ -13,15 +13,30 @@ export const fixUserData = (
 ): UserInfo[] => {
   return users.map(u => {
     // ① すでに verified / completed / アクティブ なら何もしない
-    if (['verified', 'completed', 'アクティブ'].includes(u.status || '')) return u
+    if (['verified', 'completed', 'アクティブ'].includes(u.status || '')) {
+      // アクティブユーザーの場合は、isInvited フラグを確実に false にする
+      if (u.isInvited) {
+        console.log(`[fixUserData Integrated] Resetting isInvited flag for ${u.email}.`);
+        return { ...u, isInvited: false };
+      }
+      return u;
+    }
 
     // ② token が一致して初めて「招待中」にする
     if (urlToken && u.inviteToken === urlToken) {
-      return { ...u, status: '招待中', isInvited: true }
+      console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on URL token match.`);
+      return { ...u, status: '招待中' as UserStatus, isInvited: true };
     }
-    return u
-  })
-}
+    
+    // ③ isInvited フラグが true なのに status が設定されていない場合は招待中にする
+    if (u.isInvited && (!u.status || u.status === '' as any)) {
+      console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on isInvited flag.`);
+      return { ...u, status: '招待中' as UserStatus };
+    }
+    
+    return u;
+  });
+};
 
 // ローカルストレージからユーザー情報を読み込む関数
 // 純粋関数として実装し、副作用を最小限に抑える
@@ -59,9 +74,6 @@ export const loadUserDataFromLocalStorage = (
         if (!urlCompanyId) {
           urlCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id') || '';
         }
-        
-        console.log('[loadUserData] URL token:', urlToken);
-        console.log('[loadUserData] URL companyId:', urlCompanyId);
       }
 
       const rawUsers = parsedData.map(item => item.user).filter(user => user != null) as UserInfo[];
@@ -74,6 +86,7 @@ export const loadUserDataFromLocalStorage = (
           password: ''
         }));
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        console.log('ユーザーデータを修正して保存しました');
       } else {
         console.log('ユーザーデータに変更なし、保存をスキップします');
       }
