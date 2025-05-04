@@ -35,9 +35,15 @@ export async function POST(req: Request) {
 
     console.log('[API] /invitations/verify: Token verified successfully:', data);
 
-    // ② 会社情報だけ返却
+    // ② 会社情報だけ返却 - isInvited フラグは含めない
     const { company_id, email, role } = data
-    return NextResponse.json({ ok: true, company_id, email, role })
+    return NextResponse.json({ 
+      ok: true, 
+      company_id, 
+      email, 
+      role,
+      status: 'アクティブ'  // 統一: 完了時は「アクティブ」に
+    })
   } catch (error) {
     console.error('[API] /invitations/verify: Unexpected error:', error);
     return NextResponse.json({ ok: false, message: 'server error' }, { status: 500 });

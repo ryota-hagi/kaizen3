@@ -33,10 +33,11 @@ export const isUserCompleted = (user?: UserInfo | null): boolean => {
 
 /**
  * ユーザーが招待フローを必要とするかどうかを判定するヘルパー関数
+ * シンプルに「招待中」のみを対象とする
  * 
  * @param user ユーザー情報
  * @returns 招待フローが必要な場合は true、それ以外は false
  */
 export const needsInviteFlow = (user?: UserInfo | null): boolean => {
-  return user?.status === '招待中' || user?.status === 'verified';
+  return user?.status === '招待中';
 };

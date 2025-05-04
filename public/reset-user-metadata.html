@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ユーザーメタデータリセット</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 10px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      border-left: 4px solid #4CAF50;
+    }
+    .error {
+      border-left: 4px solid #f44336;
+    }
+  </style>
+</head>
+<body>
+  <h1>ユーザーメタデータリセット</h1>
+  <p>このツールは、招待フローの無限ループを解消するために、ユーザーのメタデータを修正します。</p>
+  
+  <div>
+    <button id="resetMetadata">メタデータをリセット</button>
+    <button id="checkMetadata">現在のメタデータを確認</button>
+    <button id="clearLocalStorage">ローカルストレージをクリア</button>
+  </div>
+  
+  <div id="result" class="result" style="display: none;"></div>
+  
+  <script>
+    // Supabaseクライアントの初期化
+    const supabaseUrl = 'https://rlxlpjrqfgcfmgbhqpnj.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJseGxwanJxZmdjZm1nYmhxcG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTk0MzA0NzcsImV4cCI6MjAxNTAwNjQ3N30.Nh83ebqzv3RZkOmvlMN0SQnCuOp1ZKbKiJOvCGYJpSA';
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+    
+    // 結果表示用の関数
+    function showResult(message, isError = false) {
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = message;
+      resultDiv.style.display = 'block';
+      
+      if (isError) {
+        resultDiv.classList.add('error');
+      } else {
+        resultDiv.classList.remove('error');
+      }
+    }
+    
+    // メタデータリセットボタンのイベントリスナー
+    document.getElementById('resetMetadata').addEventListener('click', async () => {
+      try {
+        // 現在のセッションを取得
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session) {
+          showResult('エラー: セッションが見つかりません。ログインしてください。', true);
+          return;
+        }
+        
+        // ユーザーメタデータを更新
+        const { error: updateError } = await supabase.auth.updateUser({
+          data: {
+            isInvited: false,
+            status: 'アクティブ'
+          }
+        });
+        
+        if (updateError) {
+          showResult(`エラー: メタデータの更新に失敗しました。<br>${updateError.message}`, true);
+          return;
+        }
+        
+        showResult(`
+          <h3>メタデータを正常に更新しました</h3>
+          <p>以下の値に設定されました：</p>
+          <pre>
+{
+  "isInvited": false,
+  "status": "アクティブ"
+}
+          </pre>
+          <p>これにより招待フローの無限ループが解消されるはずです。</p>
+        `);
+      } catch (error) {
+        showResult(`エラー: ${error.message}`, true);
+      }
+    });
+    
+    // 現在のメタデータ確認ボタンのイベントリスナー
+    document.getElementById('checkMetadata').addEventListener('click', async () => {
+      try {
+        // 現在のユーザー情報を取得
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError || !user) {
+          showResult('エラー: ユーザー情報が取得できません。ログインしてください。', true);
+          return;
+        }
+        
+        // メタデータを表示
+        showResult(`
+          <h3>現在のユーザーメタデータ</h3>
+          <pre>${JSON.stringify(user.user_metadata, null, 2)}</pre>
+        `);
+      } catch (error) {
+        showResult(`エラー: ${error.message}`, true);
+      }
+    });
+    
+    // ローカルストレージクリアボタンのイベントリスナー
+    document.getElementById('clearLocalStorage').addEventListener('click', () => {
+      try {
+        // 招待関連のデータをクリア
+        localStorage.removeItem('invite_token');
+        sessionStorage.removeItem('invite_token');
+        localStorage.removeItem('invite_company_id');
+        sessionStorage.removeItem('invite_company_id');
+        
+        // ユーザーデータを取得して修正
+        const userDataKey = 'kaizen_user_info';
+        const usersKey = 'kaizen_users';
+        
+        // 現在のユーザー情報を取得
+        const userData = localStorage.getItem(userDataKey);
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            // isInvited を false に、status を「アクティブ」に設定
+            user.isInvited = false;
+            user.status = 'アクティブ';
+            // 更新したデータを保存
+            localStorage.setItem(userDataKey, JSON.stringify(user));
+            sessionStorage.setItem(userDataKey, JSON.stringify(user));
+          } catch (e) {
+            console.error('ユーザーデータの解析に失敗:', e);
+          }
+        }
+        
+        // ユーザーリストを取得して修正
+        const usersData = localStorage.getItem(usersKey);
+        if (usersData) {
+          try {
+            const users = JSON.parse(usersData);
+            // 各ユーザーの isInvited と status を更新
+            const updatedUsers = users.map(item => {
+              if (item.user) {
+                return {
+                  ...item,
+                  user: {
+                    ...item.user,
+                    isInvited: false,
+                    status: item.user.status === '招待中' ? '招待中' : 'アクティブ'
+                  }
+                };
+              }
+              return item;
+            });
+            // 更新したデータを保存
+            localStorage.setItem(usersKey, JSON.stringify(updatedUsers));
+            sessionStorage.setItem(usersKey, JSON.stringify(updatedUsers));
+          } catch (e) {
+            console.error('ユーザーリストの解析に失敗:', e);
+          }
+        }
+        
+        showResult(`
+          <h3>ローカルストレージをクリアしました</h3>
+          <p>以下のデータが削除または修正されました：</p>
+          <ul>
+            <li>invite_token (localStorage & sessionStorage)</li>
+            <li>invite_company_id (localStorage & sessionStorage)</li>
+            <li>ユーザーデータの isInvited フラグを false に設定</li>
+            <li>ユーザーデータの status を「アクティブ」に設定（招待中のユーザーを除く）</li>
+          </ul>
+        `);
+      } catch (error) {
+        showResult(`エラー: ${error.message}`, true);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -65,11 +65,12 @@ export async function POST(req: Request) {
     }
 
     // ③ Auth のメタデータへ company_id と status を書き込む
+    // 重要: isInvited を false に設定し、status を「アクティブ」に統一
     const { error: authError } = await supabase.auth.admin.updateUserById(auth_uid, {
       user_metadata: { 
         company_id: invite.company_id,
-        status: 'completed',
-        isInvited: false
+        status: 'アクティブ',  // 統一: 完了時は「アクティブ」に
+        isInvited: false       // 明示的に false に設定
       }
     })
 
@@ -79,7 +80,12 @@ export async function POST(req: Request) {
     }
 
     console.log('[API] /invitations/complete: Process completed successfully for user:', email);
-    return NextResponse.json({ ok: true })
+    
+    // isInvited フラグを含めずに返却
+    return NextResponse.json({ 
+      ok: true,
+      status: 'アクティブ'  // 統一: 完了時は「アクティブ」に
+    })
   } catch (error) {
     console.error('[API] /invitations/complete: Unexpected error:', error);
     return NextResponse.json({ ok: false, message: 'server error' }, { status: 500 });
