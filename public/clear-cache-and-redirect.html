@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>キャッシュクリアと招待リンクへのリダイレクト</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      margin: 10px 0;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .button:hover {
+      background-color: #45a049;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #f9f9f9;
+    }
+    .success {
+      color: #4CAF50;
+    }
+    .error {
+      color: #f44336;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <h1>キャッシュクリアと招待リンクへのリダイレクト</h1>
+  <p>このページでは、ブラウザのローカルストレージとセッションストレージをクリアし、Supabaseからログアウトした後、招待リンクにリダイレクトします。</p>
+  
+  <div>
+    <label for="inviteUrl">招待リンク:</label>
+    <input type="text" id="inviteUrl" placeholder="https://kaizen3.vercel.app/auth/login?token=...&companyId=...">
+  </div>
+  
+  <button id="clearButton" class="button">キャッシュをクリアして招待リンクに移動</button>
+  
+  <div id="result" class="result" style="display: none;">
+    <h3>結果:</h3>
+    <div id="resultContent"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    document.getElementById('clearButton').addEventListener('click', async function() {
+      const resultDiv = document.getElementById('result');
+      const resultContent = document.getElementById('resultContent');
+      const inviteUrl = document.getElementById('inviteUrl').value.trim();
+      
+      if (!inviteUrl) {
+        resultContent.innerHTML = '<p class="error">招待リンクを入力してください。</p>';
+        resultDiv.style.display = 'block';
+        return;
+      }
+      
+      resultDiv.style.display = 'block';
+      resultContent.innerHTML = '<p>キャッシュクリア中...</p>';
+      
+      try {
+        // ローカルストレージをクリア
+        const localStorageItems = Object.keys(localStorage);
+        resultContent.innerHTML += `<p>ローカルストレージのアイテム: ${localStorageItems.length}件</p>`;
+        resultContent.innerHTML += `<pre>${JSON.stringify(localStorageItems, null, 2)}</pre>`;
+        
+        // セッションストレージをクリア
+        const sessionStorageItems = Object.keys(sessionStorage);
+        resultContent.innerHTML += `<p>セッションストレージのアイテム: ${sessionStorageItems.length}件</p>`;
+        resultContent.innerHTML += `<pre>${JSON.stringify(sessionStorageItems, null, 2)}</pre>`;
+        
+        // Supabaseクライアントを初期化
+        const supabaseUrl = 'https://yjqcxcjvxnwfcbxnqvnj.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqcWN4Y2p2eG53ZmNieG5xdm5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTk0MjI0MTYsImV4cCI6MjAxNDk5ODQxNn0.Ks0H-Mf9eQQmvXLrQ0i_nC_zU9q-TiQP9FQOwYXpJrE';
+        
+        // Supabaseクライアントを作成
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+        
+        // ログアウト
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) {
+          throw new Error(`Supabaseログアウトエラー: ${error.message}`);
+        }
+        
+        resultContent.innerHTML += `<p>Supabaseからログアウトしました</p>`;
+        
+        // ストレージを完全にクリア
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // URLからトークンと会社IDを抽出
+        let token = '';
+        let companyId = '';
+        try {
+          const url = new URL(inviteUrl);
+          token = url.searchParams.get('token') || '';
+          companyId = url.searchParams.get('companyId') || '';
+          
+          if (token) {
+            resultContent.innerHTML += `<p>招待トークン: ${token}</p>`;
+          }
+          if (companyId) {
+            resultContent.innerHTML += `<p>会社ID: ${companyId}</p>`;
+          }
+        } catch (e) {
+          console.error('URL解析エラー:', e);
+        }
+        
+        resultContent.innerHTML += `<p class="success">すべてのキャッシュをクリアしました！</p>`;
+        resultContent.innerHTML += `<p>3秒後に招待リンクにリダイレクトします...</p>`;
+        
+        // 3秒後にリダイレクト
+        setTimeout(() => {
+          window.location.href = inviteUrl;
+        }, 3000);
+      } catch (error) {
+        resultContent.innerHTML += `<p class="error">エラーが発生しました: ${error.message}</p>`;
+      }
+    });
+  </script>
+</body>
+</html>
