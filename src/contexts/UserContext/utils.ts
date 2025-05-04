@@ -12,9 +12,9 @@ export const fixUserData = (
   urlToken: string | null
 ): UserInfo[] => {
   return users.map(u => {
-    // ① すでに verified / completed / アクティブ なら何もしない
+    // ① すでに verified / completed / アクティブ なら isInvited を必ず false にする
     if (['verified', 'completed', 'アクティブ'].includes(u.status || '')) {
-      // アクティブユーザーの場合は、isInvited フラグを確実に false にする
+      // isInvited フラグを確実に false にする
       if (u.isInvited) {
         console.log(`[fixUserData Integrated] Resetting isInvited flag for ${u.email}.`);
         return { ...u, isInvited: false };
@@ -22,15 +22,15 @@ export const fixUserData = (
       return u;
     }
 
-    // ② token が一致して初めて「招待中」にする
+    // ② token が一致する場合は「招待中」にするが、isInvited は設定しない
     if (urlToken && u.inviteToken === urlToken) {
       console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on URL token match.`);
-      return { ...u, status: '招待中' as UserStatus, isInvited: true };
+      return { ...u, status: '招待中' as UserStatus };
     }
     
-    // ③ isInvited フラグが true なのに status が設定されていない場合は招待中にする
-    if (u.isInvited && (!u.status || u.status === '' as any)) {
-      console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on isInvited flag.`);
+    // ③ status が設定されていない場合は招待中にする
+    if (!u.status || u.status === '' as any) {
+      console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on missing status.`);
       return { ...u, status: '招待中' as UserStatus };
     }
     
@@ -95,7 +95,7 @@ export const loadUserDataFromLocalStorage = (
       loadedUsers = fixed;
       
       // 招待中のユーザーを確認（isInvitedフラグも考慮）
-      const invitedUsersAfterProcessing = loadedUsers.filter(user => user.status === '招待中' || user.isInvited === true);
+      const invitedUsersAfterProcessing = loadedUsers.filter(user => user.status === '招待中');
       console.log('処理後の招待中ユーザー:', invitedUsersAfterProcessing.length, '件');
       
       // 招待中のユーザーが見つからない場合、元のデータを再確認
@@ -104,7 +104,7 @@ export const loadUserDataFromLocalStorage = (
         
         // 元のデータから招待中のユーザーを検索
         const originalInvitedUsers = parsedData.filter((item: any) => 
-          item.user && (item.user.status === '招待中' || item.user.isInvited === true)
+          item.user && item.user.status === '招待中'
         );
         
         console.log('元のデータの招待中ユーザー:', originalInvitedUsers.length, '件');
@@ -133,7 +133,7 @@ export const loadUserDataFromLocalStorage = (
       console.log('[loadUserData] Loaded from localStorage:', loadedUsers.length, 'users');
       
       // 読み込んだユーザーデータを確認（招待中のユーザーのみ）
-      const invitedUsers = loadedUsers.filter(user => user.status === '招待中' || user.isInvited === true);
+      const invitedUsers = loadedUsers.filter(user => user.status === '招待中');
       console.log('読み込んだ招待中ユーザー:', invitedUsers.length, '件');
     } catch (error) {
       console.error('[loadUserData] Failed to parse users from localStorage:', error);
