@@ -23,7 +23,64 @@ export async function POST(req: Request) {
       db: { schema: 'public' }
     });
     
-    // 結果を格納するオブジェクト
+    // リクエストボディを取得
+    const body = await req.json();
+    
+    // SQLクエリが指定されている場合は、それを実行
+    if (body.sql) {
+      console.log('[API] Executing custom SQL:', body.sql);
+      
+      try {
+        // 直接REST APIを使用してSQLを実行
+        const apiUrl = `${url}/rest/v1/rpc/exec_sql`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            query: body.sql
+          })
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[API] SQL execution error:', errorText);
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: `SQL execution error: ${response.status}`,
+              message: errorText
+            },
+            { status: response.status },
+          );
+        }
+        
+        const result = await response.json();
+        console.log('[API] SQL execution successful');
+        
+        return NextResponse.json({
+          success: true,
+          message: 'SQL executed successfully',
+          result
+        });
+      } catch (error: any) {
+        console.error('[API] Exception executing SQL:', error);
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'SQL execution error',
+            message: error.message
+          },
+          { status: 500 },
+        );
+      }
+    }
+    
+    // 通常のテーブル修正処理
     const result: any = {
       success: true,
       actions: [],
