@@ -260,7 +260,7 @@ export const verifyInviteToken = async (
   users: UserInfo[],
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
   setCompanyId: React.Dispatch<React.SetStateAction<string>>
-): Promise<{ valid: boolean; user?: UserInfo; error?: string }> => {
+): Promise<{ valid: boolean; user?: UserInfo; error?: string; company_id?: string }> => {
   console.log('[verifyInviteToken] Checking token:', token);
   
   try {
@@ -359,6 +359,7 @@ export const verifyInviteToken = async (
     
     return { 
       valid: true, 
+      company_id: company_id, // 会社IDを戻り値に含める
       user: {
         id: Date.now().toString(),
         username: result.invitation.email.split('@')[0],
@@ -385,22 +386,23 @@ export const verifyInviteToken = async (
         console.log('[verifyInviteToken] Found company ID in URL after error:', companyId);
         setCompanyId(companyId);
         
-        return { 
-          valid: true, 
-          user: {
-            id: Date.now().toString(),
-            username: 'invited-user',
-            email: 'invited-user@example.com',
-            fullName: 'Invited User',
-            role: '一般ユーザー',
-            companyId: companyId,
-            createdAt: new Date().toISOString(),
-            lastLogin: null,
-            status: 'verified' as const,
-            inviteToken: token,
-            isInvited: true
-          }
-        };
+      return { 
+        valid: true, 
+        company_id: companyId, // 会社IDを戻り値に含める
+        user: {
+          id: Date.now().toString(),
+          username: 'invited-user',
+          email: 'invited-user@example.com',
+          fullName: 'Invited User',
+          role: '一般ユーザー',
+          companyId: companyId,
+          createdAt: new Date().toISOString(),
+          lastLogin: null,
+          status: 'verified' as const,
+          inviteToken: token,
+          isInvited: true
+        }
+      };
       }
     } catch (e) {
       console.error('[verifyInviteToken] Error handling fallback:', e);

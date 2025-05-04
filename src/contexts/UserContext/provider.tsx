@@ -305,10 +305,56 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       
       if (token) {
         console.log('[Provider] Processing invite token:', token);
+        
+        // 既に処理済みかどうかをチェック（追加）
+        const processedToken = sessionStorage.getItem('processed_invite_token');
+        if (processedToken === token) {
+          console.log('[Provider] Token already processed, skipping verification');
+          return;
+        }
+        
         verifyInviteToken(token, users, setUsers, setCompanyId)
           .then(result => {
-            if (result.valid) {
-              console.log('[Provider] Invite token verified successfully');
+              if (result.valid) {
+                console.log('[Provider] Invite token verified successfully');
+                // 処理済みとしてマーク（追加）
+                sessionStorage.setItem('processed_invite_token', token);
+                
+                // 会社IDを明示的に保存（追加）
+                const company_id = result.company_id;
+                if (company_id) {
+                  console.log('[Provider] Setting company ID from verification:', company_id);
+                  setCompanyId(company_id);
+                  sessionStorage.setItem('company_id', company_id);
+                  localStorage.setItem('company_id', company_id);
+                  
+                  // 現在のユーザーの会社IDも更新
+                  if (currentUser) {
+                    const updatedUser = {
+                      ...currentUser,
+                      companyId: company_id
+                    };
+                    setCurrentUser(updatedUser);
+                    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+                    sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+                  }
+                  
+                  // ユーザーリストをフィルタリング - 会社IDが一致するユーザーのみを保持
+                  const filteredUsers = users.filter(u => u.companyId === company_id);
+                  if (filteredUsers.length !== users.length) {
+                    console.log('[Provider] ✂️ Filtering users by company ID:', company_id);
+                    setUsers(filteredUsers);
+                    
+                    // ローカルストレージとセッションストレージに保存
+                    const usersToSave = filteredUsers.map(u => ({ user: u, password: '' }));
+                    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+                    try {
+                      sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+                    } catch (e) {
+                      console.error('[Provider] Failed to save filtered users to sessionStorage:', e);
+                    }
+                  }
+                }
             } else {
               console.error('[Provider] Failed to verify invite token:', result.error);
             }
