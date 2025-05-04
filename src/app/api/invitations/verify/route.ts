@@ -11,6 +11,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const token = body.token || body.invite_token;
+    const companyId = body.companyId || body.company_id;
 
     if (!token) {
       console.error('[API] /invitations/verify: No token provided in request body');
@@ -18,15 +19,22 @@ export async function POST(req: Request) {
     }
 
     console.log('[API] /invitations/verify: Verifying token:', token);
-
-    // ① token 検証
-    const { data, error } = await supabase
+    
+    // クエリ条件を構築
+    let query = supabase
       .from('invitations')
       .update({ status: 'verified' })
       .eq('invite_token', token)
-      .eq('status', 'pending')            // 二重クリック防止
-      .select()
-      .single()
+      .eq('status', 'pending');  // 二重クリック防止
+    
+    // 会社IDが指定されている場合は、会社IDも一致するものだけを対象にする
+    if (companyId) {
+      console.log('[API] /invitations/verify: Also checking company ID:', companyId);
+      query = query.eq('company_id', companyId);
+    }
+    
+    // ① token と company_id の検証
+    const { data, error } = await query.select().single();
 
     if (error || !data) {
       console.error('[API] /invitations/verify: Invalid token or database error:', error);

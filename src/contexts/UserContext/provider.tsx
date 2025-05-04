@@ -100,6 +100,30 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       const { users: loadedUsers } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
       console.log('[Provider] Loaded users:', loadedUsers.length);
       
+      // URLからcompanyIdを取得
+      let inviteCompanyId = '';
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        inviteCompanyId = urlParams.get('companyId') || sessionStorage.getItem('invite_company_id') || '';
+      }
+      
+      // 会社IDが一致するユーザーのみをフィルタリング
+      if (inviteCompanyId) {
+        const filtered = loadedUsers.filter(u => u.companyId === inviteCompanyId);
+        // companyIdが違うレコードは保存させない
+        if (filtered.length !== loadedUsers.length) {
+          console.log('[Provider] ✂️ Purge other-company users');
+          const usersToSave = filtered.map(u => ({ user: u, password: '' }));
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          try {
+            sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          } catch (e) {
+            console.error('[Provider] Failed to save filtered users to sessionStorage:', e);
+          }
+          setUsers(filtered);
+        }
+      }
+      
       // 招待中のユーザーを確認
       const invitedUsers = loadedUsers.filter(isUserInvited);
       console.log('[Provider] Invited users:', invitedUsers.length);

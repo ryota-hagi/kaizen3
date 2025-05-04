@@ -308,13 +308,18 @@ export const verifyInviteToken = async (
     const verifyUrl = `${baseUrl}/api/invitations/verify`;
     console.log('[verifyInviteToken] Calling API:', verifyUrl);
     
+    // URLからcompanyIdを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCompanyId = urlParams.get('companyId') || sessionStorage.getItem('invite_company_id') || '';
+    
     const response = await fetch(verifyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ 
-        invite_token: token // パラメータ名を修正
+        invite_token: token, // パラメータ名を修正
+        company_id: urlCompanyId // 会社IDも送信
       }),
     });
     

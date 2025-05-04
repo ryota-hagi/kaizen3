@@ -261,11 +261,11 @@ export const updateUserAfterGoogleSignIn = async (
         }
       });
       
-      // 変更が必要な場合だけ上書き
+      // 必ず companyId を上書き
       const next = [...prev];
       next[idx] = {
         ...before,
-        companyId: userData.companyId || before.companyId || '',
+        companyId: userData.companyId || '', // 無条件で置き換えるが、undefinedの場合は空文字を使用
         inviteToken: userData.inviteToken || before.inviteToken || '',
         status: 'アクティブ' as UserStatus, // 招待完了状態に設定
         isInvited: false // 招待フラグをリセット
