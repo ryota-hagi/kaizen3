@@ -33,6 +33,17 @@ export const loginWithGoogle = async (
       return false;
     }
     
+    // URLSearchParams から token 取得
+    const token = new URL(window.location.href).searchParams.get('token');
+    
+    if (token) {
+      await fetch('/api/invitations/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, auth_uid: user.id })
+      });
+    }
+    
     // ローカルストレージからユーザーリストを取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
     
@@ -51,7 +62,7 @@ export const loginWithGoogle = async (
       lastLogin: new Date().toISOString(),
       isInvited: existingUser?.isInvited || false,
       inviteToken: existingUser?.inviteToken || '',
-      companyId: existingUser?.companyId || '' // 既存ユーザーの会社IDを使用、新規ユーザーは空文字
+      companyId: user.user_metadata?.company_id || existingUser?.companyId || '' // メタデータから会社IDを取得
     };
     
     // ユーザー情報を保存
@@ -80,7 +91,8 @@ export const loginWithGoogle = async (
           lastLogin: new Date().toISOString(),
           fullName: userInfo.fullName,
           email: userInfo.email,
-          status: 'アクティブ' as UserStatus // ステータスを更新
+          status: 'アクティブ' as UserStatus, // ステータスを更新
+          companyId: userInfo.companyId // 会社IDを更新
         };
         updatedUsers = [...currentUsers];
         updatedUsers[existingUserIndex] = updatedUser;
@@ -181,7 +193,46 @@ export const updateUserAfterGoogleSignIn = async (
     
     // 既存のユーザー情報を取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
-    const existingUser = currentUsers.find(u => u.id === user.id);
+    
+    // 変更が必要かどうかを確認
+    setUsers(prev => {
+      // 変更が無い場合はそのまま返す
+      const idx = prev.findIndex(u => u.email === user.email);
+      if (idx === -1) return prev;
+      const before = prev[idx];
+      
+      // すでにアクティブかつ companyId, token が一致 → 何もせず return
+      if (
+        before.status === 'アクティブ' &&
+        before.companyId === userData.companyId
+      ) {
+        return prev;
+      }
+      
+      // 変更が必要な場合だけ上書き
+      const next = [...prev];
+      next[idx] = {
+        ...before,
+        companyId: userData.companyId || before.companyId || '',
+        inviteToken: userData.inviteToken || before.inviteToken || '',
+        status: 'アクティブ' as UserStatus,
+        isInvited: false
+      };
+      
+      // ローカルストレージに保存
+      const usersToSave = next.map(u => ({ user: u, password: '' }));
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      
+      // セッションストレージにも保存
+      try {
+        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      } catch (e) {
+        console.error('[Supabase] Failed to save users to sessionStorage:', e);
+      }
+      
+      console.log('[updateUserAfterGoogleSignIn] User data updated and saved');
+      return next;
+    });
     
     // 招待ユーザーの場合、会社IDが必須
     if (userData.isInvited && (!userData.companyId || userData.companyId.trim() === '')) {
@@ -195,28 +246,19 @@ export const updateUserAfterGoogleSignIn = async (
       return false;
     }
     
-    // 既存ユーザーの会社IDと新しい会社IDが異なる場合（招待ユーザーの場合）
-    // 招待ユーザーの場合は、招待された会社IDを優先する
-    if (userData.isInvited && existingUser?.companyId && userData.companyId && 
-        existingUser.companyId !== userData.companyId) {
-      console.warn('[updateUserAfterGoogleSignIn] Company ID mismatch, using invited company ID:', 
-        existingUser.companyId, '→', userData.companyId);
-      // エラーを返さず、招待された会社IDを使用する
-    }
-    
     // UserInfo形式に変換して更新
     const updatedUserInfo: UserInfo = {
       id: user.id,
       username: user.email?.split('@')[0] || '',
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
-      role: userData.role || existingUser?.role || '管理者', // 新規ユーザーは管理者として設定
+      role: userData.role || currentUsers.find(u => u.id === user.id)?.role || '管理者',
       status: 'アクティブ' as UserStatus,
-      createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
+      createdAt: currentUsers.find(u => u.id === user.id)?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
-      isInvited: userData.isInvited || existingUser?.isInvited || false,
-      inviteToken: userData.inviteToken || existingUser?.inviteToken || '',
-      companyId: userData.companyId || existingUser?.companyId || ''
+      isInvited: false, // 招待フラグをリセット
+      inviteToken: userData.inviteToken || currentUsers.find(u => u.id === user.id)?.inviteToken || '',
+      companyId: userData.companyId || user.user_metadata?.company_id || currentUsers.find(u => u.id === user.id)?.companyId || ''
     };
     
     console.log('[updateUserAfterGoogleSignIn] Updating user with company ID:', updatedUserInfo.companyId);
@@ -236,43 +278,6 @@ export const updateUserAfterGoogleSignIn = async (
         sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUserInfo));
       } catch (e) {
         console.error('[Supabase] Failed to save to sessionStorage:', e);
-      }
-      
-      // ユーザーリストを更新
-      const existingUserIndex = currentUsers.findIndex(u => u.id === updatedUserInfo.id);
-      
-      let updatedUsers;
-      if (existingUserIndex >= 0) {
-        // 既存ユーザーを更新
-        updatedUsers = [...currentUsers];
-        updatedUsers[existingUserIndex] = updatedUserInfo;
-      } else {
-        // 新規ユーザーを追加
-        updatedUsers = [...currentUsers, updatedUserInfo];
-      }
-      
-      setUsers(updatedUsers);
-      
-      // 前回保存したデータと比較して変更がある場合のみ保存
-      const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
-      
-      // ローカルストレージから現在のデータを取得
-      const currentSavedData = localStorage.getItem(USERS_STORAGE_KEY);
-      const currentParsedData = currentSavedData ? JSON.parse(currentSavedData) : [];
-      
-      // 変更を検出
-      if (!isEqual(currentParsedData, usersToSave)) {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        
-        // セッションストレージにも保存
-        try {
-          sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        } catch (e) {
-          console.error('[Supabase] Failed to save users to sessionStorage:', e);
-        }
-        console.log('[Supabase] User data updated and saved');
-      } else {
-        console.log('[Supabase] No changes detected, skipping save');
       }
     }
     

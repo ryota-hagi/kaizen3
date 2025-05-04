@@ -7,115 +7,21 @@ export const USER_STORAGE_KEY = 'kaizen_user_info';
 export const USERS_STORAGE_KEY = 'kaizen_users';
 
 // 既存のユーザーデータを修正するユーティリティ関数
-export const fixUserData = (parsedData: any[]): any[] => {
-  console.log('修正前のユーザーデータ:', parsedData.length, '件');
-  
-  // URLパラメータから招待トークンを取得（存在する場合）
-  let urlToken = '';
-  if (typeof window !== 'undefined') {
-    const urlParams = new URLSearchParams(window.location.search);
-    urlToken = urlParams.get('token') || '';
-  }
-  
-  // 各ユーザーのinviteTokenプロパティを確認し、必要に応じて修正
-  const fixedData = parsedData.map((item: {user: any; password: string}) => {
-    if (!item.user) return item;
-    
-    // ユーザーデータを直接修正
-    const user = { ...item.user };
-    
-    // inviteTokenプロパティが存在しない場合は追加
-    if (user.inviteToken === undefined || user.inviteToken === null) {
-      console.log(`ユーザー ${user.email} にinviteTokenプロパティを追加`);
-      user.inviteToken = '';
+export const fixUserData = (
+  users: UserInfo[],
+  urlToken: string | null
+): UserInfo[] => {
+  return users.map(u => {
+    // ❶ すでにアクティブなら何もしない
+    if (u.status === 'アクティブ') return u
+
+    // ❷ token が一致した最初の 1 回だけ書き換え
+    if (urlToken && u.inviteToken === urlToken) {
+      return { ...u, status: '招待中', isInvited: true }
     }
-    
-      // URLトークンと会社IDを取得
-      let urlToken = '';
-      let urlCompanyId = '';
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        urlToken = urlParams.get('token') || '';
-        urlCompanyId = urlParams.get('companyId') || '';
-        
-        // セッションストレージと localStorage からも取得（バックアップ）
-        if (!urlToken) {
-          urlToken = sessionStorage.getItem('invite_token') || localStorage.getItem('invite_token') || '';
-        }
-        if (!urlCompanyId) {
-          urlCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id') || '';
-        }
-        
-        console.log('[loadUserData] URL token:', urlToken);
-        console.log('[loadUserData] URL companyId:', urlCompanyId);
-      }
-    
-    // statusが'招待中'でinviteTokenが空の場合、新しいトークンを生成
-    if (user.status === '招待中' && (!user.inviteToken || user.inviteToken === '')) {
-      user.inviteToken = Math.random().toString(36).substring(2, 10);
-      user.isInvited = true; // isInvitedフラグも設定
-      console.log(`ユーザー ${user.email} のトークンを生成: ${user.inviteToken}`);
-    }
-    
-    // isInvitedがtrueの場合、statusを'招待中'に設定
-    if (user.isInvited === true && user.status !== '招待中') {
-      user.status = '招待中';
-      console.log(`ユーザー ${user.email} のステータスを招待中に変更（isInvitedフラグに基づく）`);
-    }
-    
-    // 招待中でないユーザーでもトークンが空の場合、空文字列を設定
-    if ((!user.inviteToken || user.inviteToken === '') && user.status !== '招待中') {
-      user.inviteToken = '';
-      console.log(`ユーザー ${user.email} のトークンを空に設定`);
-    }
-    
-    return {
-      user: user,
-      password: item.password || ''
-    };
-  });
-  
-  // 修正後のデータを確認（招待中のユーザーのみ）
-  const invitedUsers = fixedData.filter((item: {user: any}) => 
-    item.user && (item.user.status === '招待中' || item.user.isInvited === true)
-  );
-  console.log('修正後の招待中ユーザー:', invitedUsers.length, '件');
-  
-  // 全ユーザー数と招待中ユーザー数の差分を確認
-  console.log('全ユーザー数:', fixedData.length, '件');
-  console.log('招待中ユーザー数:', invitedUsers.length, '件');
-  console.log('差分:', fixedData.length - invitedUsers.length, '件');
-  
-  // 招待中のユーザーの詳細を表示
-  invitedUsers.forEach((item: {user: any}, index: number) => {
-    console.log(`招待中ユーザー${index}:`, {
-      id: item.user.id,
-      email: item.user.email,
-      inviteToken: item.user.inviteToken || '',
-      status: item.user.status,
-      isInvited: item.user.isInvited,
-      companyId: item.user.companyId || 'not set'
-    });
-  });
-  
-  // ユーザー管理一覧に表示されているユーザーと照合リストの整合性を確保
-  // 招待中のユーザーには必ずトークンを設定
-  fixedData.forEach((item: {user: any}) => {
-    if (item.user && (item.user.status === '招待中' || item.user.isInvited === true)) {
-      // 招待中のユーザーには必ずトークンを設定
-      if (!item.user.inviteToken || item.user.inviteToken === '') {
-        item.user.inviteToken = Math.random().toString(36).substring(2, 10);
-        console.log(`招待中ユーザーのトークンを生成: ${item.user.inviteToken}`);
-      }
-      // 招待中のユーザーには必ずisInvitedフラグを設定
-      item.user.isInvited = true;
-      // 招待中のユーザーには必ずstatusを設定
-      item.user.status = '招待中';
-    }
-  });
-  
-  return fixedData;
-};
+    return u
+  })
+}
 
 // ローカルストレージからユーザー情報を読み込む関数
 // 純粋関数として実装し、副作用を最小限に抑える
@@ -158,150 +64,24 @@ export const loadUserDataFromLocalStorage = (
         console.log('[loadUserData] URL companyId:', urlCompanyId);
       }
 
-      parsedData = parsedData.map((item: {user: any; password: string}) => {
-        if (!item.user) return item;
-        const user = { ...item.user };
+      const rawUsers = parsedData.map(item => item.user).filter(user => user != null) as UserInfo[];
+      const fixed = fixUserData(rawUsers, urlToken);
 
-        // inviteTokenプロパティが存在しない場合は追加
-        if (user.inviteToken === undefined || user.inviteToken === null) {
-          user.inviteToken = '';
-        }
-
-        // URLトークンと一致するユーザーを招待中に設定
-        if (urlToken && user.inviteToken && user.inviteToken.toLowerCase() === urlToken.toLowerCase() && user.status !== '招待中') {
-          console.log(`[fixUserData Integrated] Setting status to '招待中' for ${user.email} based on URL token match.`);
-          user.status = '招待中';
-          user.isInvited = true;
-        }
-
-        // statusが'招待中'でinviteTokenが空の場合、新しいトークンを生成
-        if (user.status === '招待中' && (!user.inviteToken || user.inviteToken === '')) {
-          user.inviteToken = Math.random().toString(36).substring(2, 10);
-          user.isInvited = true; // isInvitedフラグも設定
-          console.log(`[fixUserData Integrated] Generating token for invited user ${user.email}: ${user.inviteToken}`);
-        }
-
-        // URLトークンと一致する場合は、招待フラグを維持する
-        if (urlToken && user.inviteToken && user.inviteToken.toLowerCase() === urlToken.toLowerCase()) {
-          console.log(`[fixUserData Integrated] Keeping isInvited flag for ${user.email} due to URL token match.`);
-          user.status = '招待中';
-          user.isInvited = true;
-          
-          // URLから会社IDが取得できた場合は設定
-          if (urlCompanyId && urlCompanyId.trim() !== '') {
-            console.log(`[fixUserData Integrated] Setting company ID for ${user.email} from URL: ${urlCompanyId}`);
-            user.companyId = urlCompanyId;
-          }
-        }
-        // それ以外の場合で、isInvited フラグが true の場合は、アクティブに変更しない
-        else if (user.isInvited === true) {
-          // 招待フラグは維持するが、ステータスは変更しない
-          console.log(`[fixUserData Integrated] Maintaining isInvited flag for ${user.email}.`);
-        }
-        // それ以外の場合は何もしない（招待フラグをリセットしない）
-
-        // 招待中でないユーザーでもトークンが空の場合、空文字列を設定
-        if ((!user.inviteToken || user.inviteToken === '') && user.status !== '招待中') {
-          user.inviteToken = '';
-        }
-
-        return { user: user, password: item.password || '' };
-      });
-      console.log('[loadUserData] Data fixes applied.');
-      // --- fixUserData ロジック統合 ここまで ---
-
-      // 招待中のユーザーを確認し、ステータスとトークンを正しく設定
-      parsedData.forEach(item => {
-        if (!item.user) return;
-        
-        // ステータスが招待中またはisInvitedがtrueの場合、トークンが必ず設定されていることを確認
-        if (item.user.status === '招待中' || item.user.isInvited === true) {
-          if (!item.user.inviteToken || item.user.inviteToken === '') {
-            item.user.inviteToken = Math.random().toString(36).substring(2, 10);
-            console.log(`招待中ユーザーのトークンを生成: ${item.user.inviteToken}`);
-          }
-          // 招待中のユーザーには必ずisInvitedフラグを設定
-          item.user.isInvited = true;
-          // 招待中のユーザーには必ずstatusを設定
-          item.user.status = '招待中';
-        }
-      });
-      
-      // 修正したデータを保存（無限ループ防止のため、変更があった場合のみ保存）
-      // 保存されたデータを解析
-      let originalData: any[] = [];
-      try {
-        originalData = JSON.parse(savedUsers);
-      } catch (e) {
-        console.error('元のデータの解析に失敗しました:', e);
-      }
-      
-      // データの変更を検出
-      const hasChanges = !isEqual(originalData, parsedData);
-      
-      // 変更があった場合のみ保存
-      if (hasChanges) {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsedData));
-        console.log('ユーザーデータを修正して保存しました');
+      // ✅ 変更が無い場合 save をスキップ
+      if (!isEqual(fixed, rawUsers)) {
+        const usersToSave = fixed.map(u => ({
+          user: u,
+          password: ''
+        }));
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
       } else {
         console.log('ユーザーデータに変更なし、保存をスキップします');
       }
+      console.log('[loadUserData] Data fixes applied.');
 
-      loadedUsers = parsedData.map(item => {
-        const user = item.user;
-        if (!user) return null;
-        
-        // ユーザー管理一覧と検索で使用するステータスを一致させる
-        // ユーザー管理一覧に表示されている「招待中」ステータスを優先する
-        if (user.status === '招待中' || user.isInvited === true) {
-          user.status = '招待中';
-          
-          // 招待中のユーザーには必ずトークンを設定
-          if (!user.inviteToken || user.inviteToken === '') {
-            user.inviteToken = Math.random().toString(36).substring(2, 10);
-            console.log(`ユーザー ${user.email} のトークンを生成: ${user.inviteToken}`);
-          }
-          
-          // isInvitedフラグを必ず設定
-          user.isInvited = true;
-          console.log(`ユーザー ${user.email} のisInvitedフラグを設定`);
-        } else if (!user.status) {
-          // ステータスが設定されていない場合はデフォルト値を設定
-          user.status = user.lastLogin ? 'ログアウト中' : 'アクティブ';
-        }
-        
-        // inviteTokenプロパティが確実に存在することを確認
-        if (user.inviteToken === undefined || user.inviteToken === null) {
-          user.inviteToken = '';
-        }
-        
-    // 会社IDが設定されていない場合、または「株式会社サンプル」の場合は他のユーザーから取得
-    if (user.companyId === undefined || user.companyId === null || user.companyId === '' || user.companyId === '株式会社サンプル') {
-      // 他のユーザーから会社IDを取得
-      const otherUser = parsedData.find((item: any) => 
-        item.user && item.user.companyId && item.user.companyId.trim() !== '' && item.user.companyId !== '株式会社サンプル'
-      );
+      loadedUsers = fixed;
       
-      if (otherUser && otherUser.user) {
-        user.companyId = otherUser.user.companyId;
-        console.log(`ユーザー ${user.email} の会社IDを他のユーザーから設定: ${user.companyId}`);
-      } else {
-        // URLから会社IDを取得
-        const urlCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id');
-        if (urlCompanyId && urlCompanyId.trim() !== '' && urlCompanyId !== '株式会社サンプル') {
-          user.companyId = urlCompanyId;
-          console.log(`ユーザー ${user.email} の会社IDをURLから設定: ${user.companyId}`);
-        } else {
-          user.companyId = '';
-          console.log(`ユーザー ${user.email} の会社IDを設定できませんでした`);
-        }
-      }
-    }
-        
-        return user;
-      }).filter(user => user != null) as UserInfo[]; // nullを除外
-      
-      // 招待中のユーザーを再確認（isInvitedフラグも考慮）
+      // 招待中のユーザーを確認（isInvitedフラグも考慮）
       const invitedUsersAfterProcessing = loadedUsers.filter(user => user.status === '招待中' || user.isInvited === true);
       console.log('処理後の招待中ユーザー:', invitedUsersAfterProcessing.length, '件');
       
@@ -315,80 +95,6 @@ export const loadUserDataFromLocalStorage = (
         );
         
         console.log('元のデータの招待中ユーザー:', originalInvitedUsers.length, '件');
-        
-        if (originalInvitedUsers.length > 0) {
-          console.log('元のデータに招待中ユーザーが見つかりました。データを修正します。');
-          
-          // 招待中ユーザーを追加
-          originalInvitedUsers.forEach((item: any) => {
-            const invitedUser = item.user;
-            
-            // 既に同じIDのユーザーが存在するか確認
-            const existingUserIndex = loadedUsers.findIndex(u => u.id === invitedUser.id);
-            
-            if (existingUserIndex >= 0) {
-              // 既存のユーザーを更新
-              console.log(`既存のユーザーを招待中に更新: ${invitedUser.email}`);
-              loadedUsers[existingUserIndex].status = '招待中';
-              loadedUsers[existingUserIndex].isInvited = true;
-              loadedUsers[existingUserIndex].inviteToken = invitedUser.inviteToken || Math.random().toString(36).substring(2, 10);
-              
-              // 会社IDを設定（存在する場合のみ）
-              if (invitedUser.companyId) {
-                loadedUsers[existingUserIndex].companyId = invitedUser.companyId;
-              }
-            } else {
-              // 新しいユーザーとして追加
-              console.log(`招待中ユーザーを追加: ${invitedUser.email}`);
-              invitedUser.status = '招待中';
-              invitedUser.isInvited = true;
-              if (!invitedUser.inviteToken || invitedUser.inviteToken === '') {
-                invitedUser.inviteToken = Math.random().toString(36).substring(2, 10);
-              }
-              
-              // 会社IDが設定されていない場合は空文字列を設定
-              if (invitedUser.companyId === undefined || invitedUser.companyId === null) {
-                invitedUser.companyId = '';
-              }
-              
-              loadedUsers.push(invitedUser);
-            }
-          });
-          
-          // 状態を更新
-          setUsers(loadedUsers);
-          
-          // パスワードマップを更新
-          originalInvitedUsers.forEach((item: any) => {
-            if (item.user && item.user.id) {
-              loadedPasswords[item.user.id] = item.password || '';
-            }
-          });
-          setUserPasswords(loadedPasswords);
-          
-          // 再度招待中のユーザーを確認
-          const fixedInvitedUsers = loadedUsers.filter(user => user.status === '招待中' || user.isInvited === true);
-          console.log('修正後の招待中ユーザー:', fixedInvitedUsers.length, '件');
-          
-          fixedInvitedUsers.forEach((user, index) => {
-            console.log(`修正後の招待中ユーザー${index}:`, {
-              id: user.id,
-              email: user.email,
-              inviteToken: user.inviteToken,
-              status: user.status,
-              isInvited: user.isInvited,
-              companyId: user.companyId || 'not set'
-            });
-          });
-          
-          // 修正したデータを保存
-          const usersToSave = loadedUsers.map(u => ({
-            user: u,
-            password: loadedPasswords[u.id] || ''
-          }));
-          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-          console.log('修正したデータをローカルストレージに保存しました');
-        }
       } else {
         invitedUsersAfterProcessing.forEach((user, index) => {
           console.log(`処理後の招待中ユーザー${index}:`, {
@@ -416,16 +122,6 @@ export const loadUserDataFromLocalStorage = (
       // 読み込んだユーザーデータを確認（招待中のユーザーのみ）
       const invitedUsers = loadedUsers.filter(user => user.status === '招待中' || user.isInvited === true);
       console.log('読み込んだ招待中ユーザー:', invitedUsers.length, '件');
-      
-      invitedUsers.forEach((user, index) => {
-        console.log(`招待中ユーザー${index}:`, {
-          email: user.email,
-          inviteToken: user.inviteToken || '',
-          status: user.status,
-          isInvited: user.isInvited,
-          companyId: user.companyId || 'not set'
-        });
-      });
     } catch (error) {
       console.error('[loadUserData] Failed to parse users from localStorage:', error);
     }
