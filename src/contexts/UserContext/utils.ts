@@ -275,19 +275,26 @@ export const loadUserDataFromLocalStorage = (
           user.inviteToken = '';
         }
         
-    // 会社IDが設定されていない場合は他のユーザーから取得
-    if (user.companyId === undefined || user.companyId === null || user.companyId === '') {
+    // 会社IDが設定されていない場合、または「株式会社サンプル」の場合は他のユーザーから取得
+    if (user.companyId === undefined || user.companyId === null || user.companyId === '' || user.companyId === '株式会社サンプル') {
       // 他のユーザーから会社IDを取得
       const otherUser = parsedData.find((item: any) => 
-        item.user && item.user.companyId && item.user.companyId.trim() !== ''
+        item.user && item.user.companyId && item.user.companyId.trim() !== '' && item.user.companyId !== '株式会社サンプル'
       );
       
       if (otherUser && otherUser.user) {
         user.companyId = otherUser.user.companyId;
         console.log(`ユーザー ${user.email} の会社IDを他のユーザーから設定: ${user.companyId}`);
       } else {
-        user.companyId = '';
-        console.log(`ユーザー ${user.email} の会社IDを設定できませんでした`);
+        // URLから会社IDを取得
+        const urlCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id');
+        if (urlCompanyId && urlCompanyId.trim() !== '' && urlCompanyId !== '株式会社サンプル') {
+          user.companyId = urlCompanyId;
+          console.log(`ユーザー ${user.email} の会社IDをURLから設定: ${user.companyId}`);
+        } else {
+          user.companyId = '';
+          console.log(`ユーザー ${user.email} の会社IDを設定できませんでした`);
+        }
       }
     }
         
