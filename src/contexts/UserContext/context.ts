@@ -6,8 +6,8 @@ export interface UserContextType {
   currentUser: UserInfo | null;
   users: UserInfo[];
   isAuthenticated: boolean;
-  companyId: string | null;  // 追加: 会社ID
-  setCompanyId: (id: string | null) => void;  // 追加: 会社ID設定関数
+  companyId: string;  // 型を string に変更
+  setCompanyId: React.Dispatch<React.SetStateAction<string>>;  // 型を React.Dispatch<React.SetStateAction<string>> に変更
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>; // ユーザーリストを更新する関数を追加
   loginWithGoogle: () => Promise<boolean>;
   logout: () => void;
@@ -18,7 +18,7 @@ export interface UserContextType {
   deleteUser: (userId: string) => Promise<{success: boolean, message?: string}>;
   deleteCompanyAccount: () => Promise<{success: boolean, message?: string}>; // 会社アカウント削除関数
   inviteUser: (inviteData: {email: string; role: string; companyId: string}) => Promise<{success: boolean, message?: string, inviteToken?: string}>; // ユーザー招待関数
-  verifyInviteToken: (token: string) => Promise<{valid: boolean; user?: UserInfo}>; // 招待トークン検証関数（非同期に変更）
+  verifyInviteToken: (token: string) => Promise<{valid: boolean; user?: UserInfo; error?: string}>; // 招待トークン検証関数（非同期に変更）
   completeInvitation: (token: string, userData: {fullName: string; companyId?: string}) => Promise<boolean>; // 招待完了関数
   getEmployees: () => Employee[]; // 従業員一覧を取得する関数
 }
@@ -34,7 +34,7 @@ export const defaultUserContext: UserContextType = {
   currentUser: null,
   users: [],
   isAuthenticated: false,
-  companyId: null,  // 追加
+  companyId: '',  // 空文字列に変更
   setCompanyId: () => {},  // 追加
   setUsers: () => {}, // デフォルト値を追加
   loginWithGoogle: async () => false,

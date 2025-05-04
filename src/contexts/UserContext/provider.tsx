@@ -28,7 +28,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({}); // 初期値は空オブジェクト
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // 初期値はfalse
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 初期化フラグ
-  const [companyId, setCompanyId] = useState<string | null>(null); // 追加: 会社ID
+  const [companyId, setCompanyId] = useState<string>(''); // 追加: 会社ID
   const lastSavedUsers = useRef<UserInfo[]>([]); // 最後に保存したユーザーデータを保持するref
 
   // 初期化時にローカルストレージとセッションストレージからデータを読み込む（マウント時のみ実行）
@@ -83,7 +83,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         console.log('[Provider] Supabase session found, loading user data');
         
         // 会社IDをメタデータから取得
-        const cid = session.user?.user_metadata?.company_id ?? null;
+        const cid = session.user?.user_metadata?.company_id ?? '';
         setCompanyId(cid);
         console.log('[Provider] Company ID from metadata:', cid);
       } catch (error) {
@@ -239,7 +239,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
             await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
             
             // 会社IDをメタデータから取得
-            const cid = session.user?.user_metadata?.company_id ?? null;
+            const cid = session.user?.user_metadata?.company_id ?? '';
             setCompanyId(cid);
             console.log('[Provider] Company ID from metadata:', cid);
           }
@@ -313,7 +313,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       setUsers,
       setUserPasswords
     ),
-    verifyInviteToken: (token) => verifyInviteToken(token, users), // 非同期関数として呼び出し
+    verifyInviteToken: (token) => verifyInviteToken(token, users, setUsers, setCompanyId), // 引数を追加
     completeInvitation: (token, userData) => completeInvitation(
       token,
       userData,

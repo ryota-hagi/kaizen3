@@ -12,10 +12,10 @@ export const fixUserData = (
   urlToken: string | null
 ): UserInfo[] => {
   return users.map(u => {
-    // ❶ すでにアクティブなら何もしない
-    if (u.status === 'アクティブ') return u
+    // ① すでに verified / completed / アクティブ なら何もしない
+    if (['verified', 'completed', 'アクティブ'].includes(u.status || '')) return u
 
-    // ❷ token が一致した最初の 1 回だけ書き換え
+    // ② token が一致して初めて「招待中」にする
     if (urlToken && u.inviteToken === urlToken) {
       return { ...u, status: '招待中', isInvited: true }
     }

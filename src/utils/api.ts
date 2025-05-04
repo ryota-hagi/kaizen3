@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // ユーザーステータスの型定義
-export type UserStatus = '招待中' | 'ログアウト中' | 'アクティブ';
+export type UserStatus = '招待中' | 'verified' | 'completed' | 'ログアウト中' | 'アクティブ';
 
 // ユーザー情報の型定義
 export interface UserInfo {
@@ -17,7 +17,7 @@ export interface UserInfo {
   createdAt: string;
   lastLogin?: string | null;
   isInvited?: boolean; // 招待ステータス（後方互換性のため残す）
-  status?: UserStatus; // ユーザーステータス（'招待中' | 'ログアウト中' | 'アクティブ'）
+  status?: UserStatus; // ユーザーステータス（'招待中' | 'verified' | 'completed' | 'ログアウト中' | 'アクティブ'）
   employeeId?: string; // 紐づけられた従業員ID
   inviteToken: string; // 招待トークン（Google認証用）- 必須プロパティに変更
 }
