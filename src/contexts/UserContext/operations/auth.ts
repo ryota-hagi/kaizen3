@@ -206,11 +206,12 @@ export const updateUserAfterGoogleSignIn = async (
       return false;
     }
     
-    // 招待ユーザーでない場合は何もしない
-    if (!userData.isInvited) {
-      console.log('[updateUserAfterGoogleSignIn] User is not invited, skipping');
-      return true;
-    }
+  // 招待中ユーザーでない場合は何もしない
+  // 注意: userData.isInvited が true の場合も処理を続行
+  if (!userData.isInvited && userData.status !== '招待中') {
+    console.log('[updateUserAfterGoogleSignIn] Not an invited user, skip');
+    return true;
+  }
     
     // 既存のユーザー情報を取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
@@ -257,13 +258,14 @@ export const updateUserAfterGoogleSignIn = async (
     });
     
     // 招待ユーザーの場合、会社IDが必須
-    if (userData.isInvited && (!userData.companyId || userData.companyId.trim() === '')) {
+    const isInvitedUser = userData.isInvited || userData.status === '招待中';
+    if (isInvitedUser && (!userData.companyId || userData.companyId.trim() === '')) {
       console.error('[updateUserAfterGoogleSignIn] Company ID is required for invited users');
       return false;
     }
     
     // 招待ユーザーの場合、トークンが必須
-    if (userData.isInvited && (!userData.inviteToken || userData.inviteToken.trim() === '')) {
+    if (isInvitedUser && (!userData.inviteToken || userData.inviteToken.trim() === '')) {
       console.error('[updateUserAfterGoogleSignIn] Invite token is required for invited users');
       return false;
     }

@@ -12,26 +12,27 @@ export const fixUserData = (
   urlToken: string | null
 ): UserInfo[] => {
   return users.map(u => {
-    // ① すでに verified / completed / アクティブ なら isInvited を必ず false にする
+    // ① 既に「非招待」のステータスなら **絶対に** 触らない
     if (['verified', 'completed', 'アクティブ'].includes(u.status || '')) {
-      // isInvited フラグを確実に false にする
-      if (u.isInvited) {
-        console.log(`[fixUserData Integrated] Resetting isInvited flag for ${u.email}.`);
-        return { ...u, isInvited: false };
-      }
-      return u;
+      return { ...u, isInvited: false };
     }
 
-    // ② token が一致する場合は「招待中」にするが、isInvited は設定しない
-    if (urlToken && u.inviteToken === urlToken) {
+    // ② まだステータスが無い・もしくは招待中以外で、かつ token が一致する場合のみ
+    if (urlToken && u.inviteToken === urlToken && u.status !== '招待中') {
       console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on URL token match.`);
-      return { ...u, status: '招待中' as UserStatus };
+      return { ...u, status: '招待中' as UserStatus, isInvited: true };
     }
     
     // ③ status が設定されていない場合は招待中にする
     if (!u.status || u.status === '' as any) {
       console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on missing status.`);
       return { ...u, status: '招待中' as UserStatus };
+    }
+    
+    // ④ isInvited が true だが status が 招待中 でない場合、isInvited を false にリセット
+    if (u.isInvited && u.status !== '招待中') {
+      console.log(`[fixUserData Integrated] Resetting isInvited flag for ${u.email}.`);
+      return { ...u, isInvited: false };
     }
     
     return u;
