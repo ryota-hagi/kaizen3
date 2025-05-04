@@ -30,7 +30,12 @@ export async function POST(req: Request) {
 
     if (error || !data) {
       console.error('[API] /invitations/verify: Invalid token or database error:', error);
-      return NextResponse.json({ ok: false, message: 'invalid token' }, { status: 404 })
+      return NextResponse.json({ 
+        ok: false, 
+        message: 'invalid token',
+        valid: false,
+        invitation: null
+      }, { status: 404 })
     }
 
     console.log('[API] /invitations/verify: Token verified successfully:', data);
@@ -42,10 +47,21 @@ export async function POST(req: Request) {
       company_id, 
       email, 
       role,
-      status: 'アクティブ'  // 統一: 完了時は「アクティブ」に
+      status: 'アクティブ',  // 統一: 完了時は「アクティブ」に
+      valid: true,
+      invitation: {
+        ...data,
+        companyId: company_id,
+        status: 'アクティブ'
+      }
     })
   } catch (error) {
     console.error('[API] /invitations/verify: Unexpected error:', error);
-    return NextResponse.json({ ok: false, message: 'server error' }, { status: 500 });
+    return NextResponse.json({ 
+      ok: false, 
+      message: 'server error',
+      valid: false,
+      invitation: null
+    }, { status: 500 });
   }
 }
