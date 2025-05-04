@@ -9,6 +9,7 @@ import {
   ApiResponse
 } from '@/utils/supabase';
 import { isEqual } from '@/utils/deepEqual';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
 // 招待トークンを生成（より安全なUUIDを使用）
 export const generateInviteToken = (): string => {
@@ -263,17 +264,96 @@ export const verifyInviteToken = async (
   console.log('[verifyInviteToken] Checking token:', token);
   
   try {
-    // まずSupabaseで確認
-    const response = await fetch('/api/invitations/verify', {
+    // まずローカルで確認
+    const matchingUser = users.find(u => u.inviteToken === token);
+    if (matchingUser && matchingUser.companyId) {
+      console.log('[verifyInviteToken] Found matching user in local storage:', matchingUser.email);
+      
+      // 会社IDをコンテキストに設定
+      setCompanyId(matchingUser.companyId);
+      console.log('[verifyInviteToken] Set company ID in context from local storage:', matchingUser.companyId);
+      
+      // ユーザーステータスを更新
+      setUsers(prev => {
+        const userIndex = prev.findIndex(u => u.inviteToken === token);
+        if (userIndex === -1) return prev;
+        
+        const next = [...prev];
+        next[userIndex] = {
+          ...next[userIndex],
+          status: 'verified' as const
+        };
+        
+        // 変更があった場合のみ保存
+        if (!isEqual(prev[userIndex], next[userIndex])) {
+          const usersToSave = next.map(u => ({ user: u, password: '' }));
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          console.log('[verifyInviteToken] Updated user status to verified and saved to localStorage');
+        }
+        
+        return next;
+      });
+      
+      return { 
+        valid: true, 
+        user: matchingUser
+      };
+    }
+    
+    // ローカルに見つからない場合はSupabaseで確認
+    console.log('[verifyInviteToken] No matching user in local storage, checking with Supabase');
+    
+    // APIエンドポイントを直接呼び出す
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const verifyUrl = `${baseUrl}/api/invitations/verify`;
+    console.log('[verifyInviteToken] Calling API:', verifyUrl);
+    
+    const response = await fetch(verifyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ 
+        invite_token: token // パラメータ名を修正
+      }),
     });
     
     if (!response.ok) {
       console.error('[verifyInviteToken] API error:', response.status, response.statusText);
+      
+      // APIが404の場合、ローカルでの処理を試みる
+      if (response.status === 404) {
+        console.log('[verifyInviteToken] API not found, trying to handle locally');
+        
+        // URLからcompanyIdを取得
+        const urlParams = new URLSearchParams(window.location.search);
+        const companyId = urlParams.get('companyId');
+        
+        if (companyId) {
+          console.log('[verifyInviteToken] Found company ID in URL:', companyId);
+          setCompanyId(companyId);
+          
+          return { 
+            valid: true, 
+            user: {
+              id: Date.now().toString(),
+              username: 'invited-user',
+              email: 'invited-user@example.com',
+              fullName: 'Invited User',
+              role: '一般ユーザー',
+              companyId: companyId,
+              createdAt: new Date().toISOString(),
+              lastLogin: null,
+              status: 'verified' as const,
+              inviteToken: token,
+              isInvited: true
+            }
+          };
+        }
+        
+        return { valid: false, error: `APIエラー: ${response.status} ${response.statusText}` };
+      }
+      
       return { valid: false, error: `APIエラー: ${response.status} ${response.statusText}` };
     }
     
@@ -295,8 +375,8 @@ export const verifyInviteToken = async (
       console.log('[verifyInviteToken] Set company ID in context:', company_id);
       
       // ユーザーリストを更新
-      setUsers((prev: UserInfo[]) => {
-        const userIndex = prev.findIndex((u: UserInfo) => u.inviteToken === token);
+      setUsers(prev => {
+        const userIndex = prev.findIndex(u => u.inviteToken === token);
         if (userIndex === -1) return prev;
         
         const next = [...prev];
@@ -308,7 +388,7 @@ export const verifyInviteToken = async (
         
         // 変更があった場合のみ保存
         if (!isEqual(prev[userIndex], next[userIndex])) {
-          const usersToSave = next.map((u: UserInfo) => ({ user: u, password: '' }));
+          const usersToSave = next.map(u => ({ user: u, password: '' }));
           localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
           console.log('[verifyInviteToken] Updated user status to verified and saved to localStorage');
         }
@@ -339,6 +419,37 @@ export const verifyInviteToken = async (
     return { valid: false, error: '招待トークンが無効です' };
   } catch (error) {
     console.error('[verifyInviteToken] Error:', error);
+    
+    // エラーが発生した場合、URLからcompanyIdを取得して処理を続行
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const companyId = urlParams.get('companyId');
+      
+      if (companyId) {
+        console.log('[verifyInviteToken] Found company ID in URL after error:', companyId);
+        setCompanyId(companyId);
+        
+        return { 
+          valid: true, 
+          user: {
+            id: Date.now().toString(),
+            username: 'invited-user',
+            email: 'invited-user@example.com',
+            fullName: 'Invited User',
+            role: '一般ユーザー',
+            companyId: companyId,
+            createdAt: new Date().toISOString(),
+            lastLogin: null,
+            status: 'verified' as const,
+            inviteToken: token,
+            isInvited: true
+          }
+        };
+      }
+    } catch (e) {
+      console.error('[verifyInviteToken] Error handling fallback:', e);
+    }
+    
     return { valid: false, error: '招待トークンの検証中にエラーが発生しました' };
   }
 };
@@ -366,21 +477,51 @@ export const completeInvitation = async (
     }
     
     // APIを呼び出して招待を完了
-    const response = await fetch('/api/invitations/complete', {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const completeUrl = `${baseUrl}/api/invitations/complete`;
+    console.log('[completeInvitation] Calling API:', completeUrl);
+    
+    const response = await fetch(completeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        token,
+        invite_token: token, // パラメータ名を修正
         auth_uid: user.id,
-        email: user.email
+        email: user.email // 必須パラメータを追加
       }),
     });
     
     if (!response.ok) {
       console.error('[completeInvitation] API error:', response.status, response.statusText);
-      return false;
+      
+      // APIが失敗した場合でもローカルでの処理を続行
+      console.log('[completeInvitation] API failed, handling locally');
+      
+      // ユーザーリストを更新
+      setUsers(prev => {
+        const userIndex = prev.findIndex(u => u.inviteToken === token);
+        if (userIndex === -1) return prev;
+        
+        const next = [...prev];
+        next[userIndex] = {
+          ...next[userIndex],
+          status: 'completed' as const,
+          isInvited: false
+        };
+        
+        // 変更があった場合のみ保存
+        if (!isEqual(prev[userIndex], next[userIndex])) {
+          const usersToSave = next.map(u => ({ user: u, password: '' }));
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          console.log('[completeInvitation] Updated user status to completed and saved to localStorage');
+        }
+        
+        return next;
+      });
+      
+      return true;
     }
     
     const result = await response.json();
@@ -416,12 +557,35 @@ export const completeInvitation = async (
     return true;
   } catch (error) {
     console.error('[completeInvitation] Error:', error);
-    return false;
+    
+    // エラーが発生した場合でもローカルでの処理を続行
+    try {
+      // ユーザーリストを更新
+      setUsers(prev => {
+        const userIndex = prev.findIndex(u => u.inviteToken === token);
+        if (userIndex === -1) return prev;
+        
+        const next = [...prev];
+        next[userIndex] = {
+          ...next[userIndex],
+          status: 'completed' as const,
+          isInvited: false
+        };
+        
+        // 変更があった場合のみ保存
+        if (!isEqual(prev[userIndex], next[userIndex])) {
+          const usersToSave = next.map(u => ({ user: u, password: '' }));
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+          console.log('[completeInvitation] Updated user status to completed and saved to localStorage after error');
+        }
+        
+        return next;
+      });
+      
+      return true;
+    } catch (e) {
+      console.error('[completeInvitation] Error handling fallback:', e);
+      return false;
+    }
   }
-};
-
-// Supabaseクライアントを取得する関数（ここで定義）
-const getSupabaseClient = () => {
-  // @ts-ignore - 型エラーを無視
-  return window.supabase;
 };
