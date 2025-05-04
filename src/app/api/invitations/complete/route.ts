@@ -8,37 +8,80 @@ const supabase = createClient(
 )
 
 export async function POST(req: Request) {
-  const { token, auth_uid } = await req.json()
+  try {
+    const body = await req.json();
+    const token = body.token || body.invite_token;
+    const auth_uid = body.auth_uid;
+    const email = body.email;
 
-  // ① invitations 行を completed に
-  const { data: invite } = await supabase
-    .from('invitations')
-    .update({ status: 'completed' })
-    .eq('invite_token', token)
-    .eq('status', 'verified')
-    .select()
-    .single()
+    if (!token) {
+      console.error('[API] /invitations/complete: No token provided in request body');
+      return NextResponse.json({ ok: false, message: 'invite_token is required' }, { status: 400 });
+    }
 
-  if (!invite) {
-    return NextResponse.json({ ok: false, message: 'token invalid' }, { status: 400 })
-  }
+    if (!auth_uid) {
+      console.error('[API] /invitations/complete: No auth_uid provided in request body');
+      return NextResponse.json({ ok: false, message: 'auth_uid is required' }, { status: 400 });
+    }
 
-  // ② app_users に登録
-  await supabase
-    .from('app_users')
-    .insert([
-      {
-        auth_uid,
-        email: invite.email,
+    if (!email) {
+      console.error('[API] /invitations/complete: No email provided in request body');
+      return NextResponse.json({ ok: false, message: 'email is required' }, { status: 400 });
+    }
+
+    console.log('[API] /invitations/complete: Processing token:', token, 'for user:', email);
+
+    // ① invitations 行を completed に
+    const { data: invite, error: inviteError } = await supabase
+      .from('invitations')
+      .update({ status: 'completed' })
+      .eq('invite_token', token)
+      .eq('status', 'verified')
+      .select()
+      .single()
+
+    if (inviteError || !invite) {
+      console.error('[API] /invitations/complete: Invalid token or database error:', inviteError);
+      return NextResponse.json({ ok: false, message: 'token invalid' }, { status: 400 })
+    }
+
+    console.log('[API] /invitations/complete: Invitation completed successfully:', invite);
+
+    // ② app_users に登録
+    const { error: userError } = await supabase
+      .from('app_users')
+      .insert([
+        {
+          auth_uid,
+          email: invite.email,
+          company_id: invite.company_id,
+          role: invite.role
+        }
+      ])
+
+    if (userError) {
+      console.error('[API] /invitations/complete: Error inserting user:', userError);
+      // エラーがあっても処理を続行
+    }
+
+    // ③ Auth のメタデータへ company_id と status を書き込む
+    const { error: authError } = await supabase.auth.admin.updateUserById(auth_uid, {
+      user_metadata: { 
         company_id: invite.company_id,
-        role: invite.role
+        status: 'completed',
+        isInvited: false
       }
-    ])
+    })
 
-  // ③ Auth のメタデータへ company_id を書き込む
-  await supabase.auth.admin.updateUserById(auth_uid, {
-    user_metadata: { company_id: invite.company_id }
-  })
+    if (authError) {
+      console.error('[API] /invitations/complete: Error updating user metadata:', authError);
+      // エラーがあっても処理を続行
+    }
 
-  return NextResponse.json({ ok: true })
+    console.log('[API] /invitations/complete: Process completed successfully for user:', email);
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('[API] /invitations/complete: Unexpected error:', error);
+    return NextResponse.json({ ok: false, message: 'server error' }, { status: 500 });
+  }
 }
