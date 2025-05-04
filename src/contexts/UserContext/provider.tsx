@@ -28,6 +28,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({}); // 初期値は空オブジェクト
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // 初期値はfalse
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 初期化フラグ
+  const [companyId, setCompanyId] = useState<string | null>(null); // 追加: 会社ID
   const lastSavedUsers = useRef<UserInfo[]>([]); // 最後に保存したユーザーデータを保持するref
 
   // 初期化時にローカルストレージとセッションストレージからデータを読み込む（マウント時のみ実行）
@@ -80,6 +81,11 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
         
         console.log('[Provider] Supabase session found, loading user data');
+        
+        // 会社IDをメタデータから取得
+        const cid = session.user?.user_metadata?.company_id ?? null;
+        setCompanyId(cid);
+        console.log('[Provider] Company ID from metadata:', cid);
       } catch (error) {
         console.error('[Provider] Error checking Supabase session:', error);
         return;
@@ -177,6 +183,12 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           }
           setCurrentUser(savedUserInfo);
           setIsAuthenticated(true);
+          
+          // 会社IDを設定
+          if (savedUserInfo.companyId) {
+            setCompanyId(savedUserInfo.companyId);
+          }
+          
           console.log('[Provider Init] Restored current user:', savedUserInfo.email);
         } else {
           // ユーザーリストに存在しない場合でも、クリアせずに使用する
@@ -186,6 +198,11 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           }
           setCurrentUser(savedUserInfo);
           setIsAuthenticated(true);
+          
+          // 会社IDを設定
+          if (savedUserInfo.companyId) {
+            setCompanyId(savedUserInfo.companyId);
+          }
           
           // ユーザーリストに追加
           const updatedUsers = [...loadedUsers, savedUserInfo];
@@ -220,6 +237,11 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           if (session) {
             console.log('[Provider] Supabase session found, updating user info');
             await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
+            
+            // 会社IDをメタデータから取得
+            const cid = session.user?.user_metadata?.company_id ?? null;
+            setCompanyId(cid);
+            console.log('[Provider] Company ID from metadata:', cid);
           }
         } catch (error) {
           console.error('[Provider] Error checking Supabase session:', error);
@@ -235,6 +257,8 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     currentUser,
     users,
     isAuthenticated,
+    companyId,       // 追加
+    setCompanyId,    // 追加
     setUsers, // setUsers関数を追加
     loginWithGoogle: () => loginWithGoogle(
       setCurrentUser, 

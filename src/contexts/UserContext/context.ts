@@ -6,6 +6,8 @@ export interface UserContextType {
   currentUser: UserInfo | null;
   users: UserInfo[];
   isAuthenticated: boolean;
+  companyId: string | null;  // 追加: 会社ID
+  setCompanyId: (id: string | null) => void;  // 追加: 会社ID設定関数
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>; // ユーザーリストを更新する関数を追加
   loginWithGoogle: () => Promise<boolean>;
   logout: () => void;
@@ -32,6 +34,8 @@ export const defaultUserContext: UserContextType = {
   currentUser: null,
   users: [],
   isAuthenticated: false,
+  companyId: null,  // 追加
+  setCompanyId: () => {},  // 追加
   setUsers: () => {}, // デフォルト値を追加
   loginWithGoogle: async () => false,
   logout: () => {},
