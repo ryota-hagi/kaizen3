@@ -15,12 +15,25 @@ const nextConfig = {
   images: {
     domains: ['lh3.googleusercontent.com'],
   },
-  // 認証関連ページを静的生成から除外
-  output: 'standalone',
+  // 静的ファイルを正しく配信するための設定
+  // output: 'standalone', // 一時的にコメントアウト
   // ビルドキャッシュをクリアするために、ビルドIDを動的に生成
   generateBuildId: async () => {
     // タイムスタンプを使用して一意のビルドIDを生成
     return `build-${Date.now()}`;
+  },
+  // 静的ファイルの配信設定
+  async rewrites() {
+    return [
+      {
+        source: '/fix-invitations-view.html',
+        destination: '/fix-invitations-view.html',
+      },
+      {
+        source: '/clear-cache.html',
+        destination: '/clear-cache.html',
+      },
+    ];
   },
 }
 
