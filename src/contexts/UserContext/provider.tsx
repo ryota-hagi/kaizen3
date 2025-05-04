@@ -123,6 +123,9 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           if (urlToken) {
             console.log('[Provider] URL token found:', urlToken);
             
+            // トークンをセッションストレージに保存（一時的に）
+            sessionStorage.setItem('invite_token', urlToken);
+            
             // トークンに一致するユーザーを検索
             const matchingUser = loadedUsers.find(user => user.inviteToken === urlToken);
             if (matchingUser) {
@@ -135,6 +138,14 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
                 console.log(`[Provider] User ${index} token:`, user.inviteToken);
               });
             }
+          }
+          
+          // 会社IDも取得して保存
+          const urlCompanyId = urlParams.get('companyId') || '';
+          if (urlCompanyId) {
+            console.log('[Provider] URL company ID found:', urlCompanyId);
+            sessionStorage.setItem('invite_company_id', urlCompanyId);
+            setCompanyId(urlCompanyId);
           }
         } catch (error) {
           console.error('[Provider] Error parsing URL params:', error);
@@ -251,6 +262,45 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       checkSupabaseSession();
     }
   }, []);
+
+  // 招待ユーザーの処理
+  useEffect(() => {
+    // 現在のユーザーがいない場合は何もしない
+    if (!currentUser) return;
+    
+    // 招待フローが必要かどうかを判断
+    const needsInviteFlow = 
+      currentUser.isInvited && 
+      ['pending', 'verified'].includes(currentUser.status || '');
+    
+    if (needsInviteFlow) {
+      console.log('[Provider] Current user is invited, processing invite flow');
+      
+      // トークンを取得（URLパラメータ → セッションストレージ → ユーザー情報の順）
+      let token = '';
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        token = urlParams.get('token') || sessionStorage.getItem('invite_token') || currentUser.inviteToken || '';
+      }
+      
+      if (token) {
+        console.log('[Provider] Processing invite token:', token);
+        verifyInviteToken(token, users, setUsers, setCompanyId)
+          .then(result => {
+            if (result.valid) {
+              console.log('[Provider] Invite token verified successfully');
+            } else {
+              console.error('[Provider] Failed to verify invite token:', result.error);
+            }
+          })
+          .catch(error => {
+            console.error('[Provider] Error verifying invite token:', error);
+          });
+      } else {
+        console.warn('[Provider] No invite token found for invited user');
+      }
+    }
+  }, [currentUser, users]);
 
   // コンテキスト値
   const value: UserContextType = {

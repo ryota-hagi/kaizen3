@@ -40,8 +40,16 @@ export const loginWithGoogle = async (
       await fetch('/api/invitations/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, auth_uid: user.id })
+        body: JSON.stringify({ 
+          invite_token: token, 
+          auth_uid: user.id,
+          email: user.email
+        })
       });
+      
+      // 招待完了後、セッションストレージからトークンを削除
+      sessionStorage.removeItem('invite_token');
+      localStorage.removeItem('invite_token');
     }
     
     // ローカルストレージからユーザーリストを取得
@@ -60,7 +68,7 @@ export const loginWithGoogle = async (
       status: 'アクティブ' as UserStatus,
       createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
-      isInvited: existingUser?.isInvited || false,
+      isInvited: false, // 招待フラグをリセット
       inviteToken: existingUser?.inviteToken || '',
       companyId: user.user_metadata?.company_id || existingUser?.companyId || '' // メタデータから会社IDを取得
     };
@@ -92,7 +100,8 @@ export const loginWithGoogle = async (
           fullName: userInfo.fullName,
           email: userInfo.email,
           status: 'アクティブ' as UserStatus, // ステータスを更新
-          companyId: userInfo.companyId // 会社IDを更新
+          companyId: userInfo.companyId, // 会社IDを更新
+          isInvited: false // 招待フラグをリセット
         };
         updatedUsers = [...currentUsers];
         updatedUsers[existingUserIndex] = updatedUser;
@@ -157,6 +166,12 @@ export const logout = async (
     if (typeof window !== 'undefined') {
       localStorage.removeItem(USER_STORAGE_KEY);
       sessionStorage.removeItem(USER_STORAGE_KEY);
+      
+      // 招待関連の情報も削除
+      sessionStorage.removeItem('invite_token');
+      localStorage.removeItem('invite_token');
+      sessionStorage.removeItem('invite_company_id');
+      localStorage.removeItem('invite_company_id');
     }
     
     console.log('[Logout] User logged out successfully');
@@ -191,6 +206,12 @@ export const updateUserAfterGoogleSignIn = async (
       return false;
     }
     
+    // 招待ユーザーでない場合は何もしない
+    if (!userData.isInvited) {
+      console.log('[updateUserAfterGoogleSignIn] User is not invited, skipping');
+      return true;
+    }
+    
     // 既存のユーザー情報を取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
     
@@ -204,7 +225,8 @@ export const updateUserAfterGoogleSignIn = async (
       // すでにアクティブかつ companyId, token が一致 → 何もせず return
       if (
         before.status === 'アクティブ' &&
-        before.companyId === userData.companyId
+        before.companyId === userData.companyId &&
+        !before.isInvited
       ) {
         return prev;
       }
@@ -215,8 +237,8 @@ export const updateUserAfterGoogleSignIn = async (
         ...before,
         companyId: userData.companyId || before.companyId || '',
         inviteToken: userData.inviteToken || before.inviteToken || '',
-        status: 'アクティブ' as UserStatus,
-        isInvited: false
+        status: 'completed' as UserStatus, // 招待完了状態に設定
+        isInvited: false // 招待フラグをリセット
       };
       
       // ローカルストレージに保存
@@ -253,7 +275,7 @@ export const updateUserAfterGoogleSignIn = async (
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
       role: userData.role || currentUsers.find(u => u.id === user.id)?.role || '管理者',
-      status: 'アクティブ' as UserStatus,
+      status: 'completed' as UserStatus, // 招待完了状態に設定
       createdAt: currentUsers.find(u => u.id === user.id)?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isInvited: false, // 招待フラグをリセット
@@ -279,6 +301,10 @@ export const updateUserAfterGoogleSignIn = async (
       } catch (e) {
         console.error('[Supabase] Failed to save to sessionStorage:', e);
       }
+      
+      // 招待トークンをセッションストレージから削除
+      sessionStorage.removeItem('invite_token');
+      localStorage.removeItem('invite_token');
     }
     
     return true;
