@@ -255,12 +255,19 @@ export const inviteUser = async (
 };
 
 // 招待ユーザーの確認
+export interface VerifyInviteTokenResult {
+  valid: boolean;
+  user?: UserInfo;
+  error?: string;
+  company_id?: string;
+}
+
 export const verifyInviteToken = async (
   token: string,
   users: UserInfo[],
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
   setCompanyId: React.Dispatch<React.SetStateAction<string>>
-): Promise<{ valid: boolean; user?: UserInfo; error?: string; company_id?: string }> => {
+): Promise<VerifyInviteTokenResult> => {
   console.log('[verifyInviteToken] Checking token:', token);
   
   try {
