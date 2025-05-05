@@ -7,32 +7,12 @@ export const USER_STORAGE_KEY = 'kaizen_user_info';
 export const USERS_STORAGE_KEY = 'kaizen_users';
 
 // 既存のユーザーデータを修正するユーティリティ関数 (責務分離版)
-export const fixUserData = (
-  users: UserInfo[],
-  urlToken: string | null
-): UserInfo[] => {
-  console.log('[fixUserData] Starting fix for users:', users.length, 'with urlToken:', urlToken);
-  return users.map(u => {
-    // URLトークンがない、またはユーザーにトークンがない、またはトークンが一致しない場合は触らない
-    if (!urlToken || !u.inviteToken || u.inviteToken !== urlToken) {
-      // console.log(`[fixUserData] Skipping user ${u.email}: No match or no token.`);
-      // isInvitedフラグのリセットは行わない
-      return u;
-    }
-
-    // トークンが一致する場合：
-    // 既に '招待中' または 'アクティブ' など完了状態なら触らない
-    if (u.status === '招待中' || u.status === 'アクティブ' || u.status === 'completed' || u.status === 'verified') {
-       // console.log(`[fixUserData] Skipping user ${u.email}: Status is already ${u.status}.`);
-       // isInvitedフラグのリセットは行わない
-       return u;
-    }
-
-    // トークンが一致し、ステータスが未設定または上記以外の場合のみ '招待中' に設定
-    console.log(`[fixUserData] Setting status to '招待中' for ${u.email} (token matched, status was ${u.status}).`);
-    return { ...u, status: '招待中' as UserStatus }; // isInvitedは変更しない
-  });
-};
+/**
+ * 以前は URL トークンと照合してユーザーデータを補正していたが、
+ * 招待完了後に再び「招待中」へ戻ってしまう副作用を起こすためロジックを無効化。
+ * そのまま配列を返すだけとする。
+ */
+export const fixUserData = (users: UserInfo[]): UserInfo[] => users;
 
 // ローカルストレージからユーザー情報を読み込む関数
 // 純粋関数として実装し、副作用を最小限に抑える
@@ -73,7 +53,7 @@ export const loadUserDataFromLocalStorage = (
       }
 
       const rawUsers = parsedData.map(item => item.user).filter(user => user != null) as UserInfo[];
-      const fixed = fixUserData(rawUsers, urlToken);
+      const fixed = fixUserData(rawUsers);
 
       // ✅ 変更が無い場合 save をスキップ
       if (!isEqual(fixed, rawUsers)) {
