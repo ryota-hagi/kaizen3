@@ -69,33 +69,6 @@ export const loadUserDataFromLocalStorage = (
       console.log('[loadUserData] Data fixes applied.');
 
       loadedUsers = fixed;
-      
-      // 招待中のユーザーを確認（isInvitedフラグも考慮）
-      const invitedUsersAfterProcessing = loadedUsers.filter(user => user.status === '招待中');
-      console.log('処理後の招待中ユーザー:', invitedUsersAfterProcessing.length, '件');
-      
-      // 招待中のユーザーが見つからない場合、元のデータを再確認
-      if (invitedUsersAfterProcessing.length === 0 && parsedData.length > 0) {
-        console.log('招待中のユーザーが見つかりません。元のデータを再確認します。');
-        
-        // 元のデータから招待中のユーザーを検索
-        const originalInvitedUsers = parsedData.filter((item: any) => 
-          item.user && item.user.status === '招待中'
-        );
-        
-        console.log('元のデータの招待中ユーザー:', originalInvitedUsers.length, '件');
-      } else {
-        invitedUsersAfterProcessing.forEach((user, index) => {
-          console.log(`処理後の招待中ユーザー${index}:`, {
-            id: user.id,
-            email: user.email,
-            inviteToken: user.inviteToken,
-            status: user.status,
-            isInvited: user.isInvited,
-            companyId: user.companyId || 'not set'
-          });
-        });
-      }
 
       loadedPasswords = parsedData.reduce((acc, item) => {
         if (item.user && item.user.id) {
