@@ -185,6 +185,28 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   }, [isInitialized]); // isInitialized を依存配列に追加
 
+  // ★★★ 追加: currentUser と companyInfo の不整合チェック ★★★
+  useEffect(() => {
+    if (currentUser && currentUser.companyId && typeof window !== 'undefined') {
+      try {
+        const storedCompanyInfoStr = localStorage.getItem('kaizen_company_info'); // 実際のキーを使用
+        if (storedCompanyInfoStr) {
+          const storedCompanyInfo = JSON.parse(storedCompanyInfoStr);
+          if (storedCompanyInfo && storedCompanyInfo.id !== currentUser.companyId) {
+            console.warn('[Provider] Company info mismatch detected! Clearing stored company info and refetching.');
+            localStorage.removeItem('kaizen_company_info'); // 不正な情報を削除
+
+            // 正しい会社情報をフェッチして保存するロジック (必要に応じて実装)
+            // この例では削除のみ
+            // fetchCompany(currentUser.companyId).then(...)
+          }
+        }
+      } catch (error) {
+        console.error('[Provider] Error checking company info consistency:', error);
+      }
+    }
+  }, [currentUser]); // currentUser が変更されたときにチェック
+
   // Supabaseの認証状態変更を監視
   useEffect(() => {
     const supabase = getSupabaseClient();

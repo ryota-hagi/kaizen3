@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
-import { UserInfo, UserStatus } from '@/utils/api';
+import { UserInfo, UserStatus, CompanyInfo } from '@/utils/api'; // CompanyInfo に修正
 import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from '@/contexts/UserContext/utils';
+// import { COMPANY_STORAGE_KEY } from '@/contexts/CompanyContext'; // 実際のキーに合わせてインポートまたは定義
+const COMPANY_STORAGE_KEY = 'kaizen_company_info'; // 仮定義
 
 // コールバックページの状態
 type Status = 'processing' | 'completing' | 'redirecting' | 'error';
@@ -93,6 +95,24 @@ export default function AcceptInviteCallbackPage() {
            console.log('[AcceptInviteCallback] User metadata updated successfully.');
         }
 
+        // ★★★ 追加: 正しい会社情報を取得して保存 ★★★
+        console.log('[AcceptInviteCallback] Fetching correct company info for companyId:', verificationData.companyId);
+        const { data: companyData, error: companyError } = await supabase
+          .from('companies') // 'companies' テーブル名を指定
+          .select('*')
+          .eq('id', verificationData.companyId)
+          .single<CompanyInfo>(); // CompanyInfo に修正
+
+        if (companyError || !companyData) {
+          // エラーでも処理は続行するが、警告を出す
+          console.warn('[AcceptInviteCallback] Failed to fetch company info:', companyError);
+          localStorage.removeItem(COMPANY_STORAGE_KEY); // 古い情報が残らないように削除
+        } else {
+          console.log('[AcceptInviteCallback] Company info fetched successfully:', companyData);
+          localStorage.setItem(COMPANY_STORAGE_KEY, JSON.stringify(companyData)); // 正しい会社情報を保存
+          console.log('[AcceptInviteCallback] Correct company info saved to localStorage.');
+        }
+        // ★★★ ここまで追加 ★★★
 
         // 6. 既存のUserContext関連ストレージをクリア
         console.log('[AcceptInviteCallback] Clearing existing user storage...');
