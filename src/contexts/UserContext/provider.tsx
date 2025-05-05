@@ -251,6 +251,68 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
   }, [currentUser]); // currentUser を依存配列に追加してメタデータ更新に対応
 
+  // ★★★ ユーザー提案: Auth監視を初回のみ実行する修正 ★★★
+  const alreadyInitialised = useRef(false); // 初期化フラグ
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    console.log('[Provider] Setting up onAuthStateChange listener'); // リスナー設定ログ
+    const { data: authSubscription } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Provider] onAuthStateChange event:', event); // イベントログ
+      if (alreadyInitialised.current && (event === 'INITIAL_SESSION')) {
+         console.log('[Provider] Already initialized and event is INITIAL_SESSION, skipping.');
+         return; // INITIAL_SESSION は初回以降無視
+      }
+
+      // SIGNED_IN または 初回のINITIAL_SESSION のみ処理
+      if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && !alreadyInitialised.current)) {
+         if (alreadyInitialised.current) {
+             console.log('[Provider] Already initialized but received SIGNED_IN, processing...');
+             // SIGNED_INの場合は再処理が必要な場合があるためフラグをリセットしない
+         } else {
+             console.log('[Provider] Initializing based on event:', event);
+             alreadyInitialised.current = true; // ここでフラグを立てる
+         }
+
+        console.log('[Provider] Loading user data due to auth event:', event);
+        // loadUserData は loginWithGoogle 内で呼ばれるため、ここでは不要かもしれない
+        // await loadUserDataFromLocalStorage(setUsers, setUserPasswords);
+
+        // loginWithGoogle内でユーザー情報取得・設定・保存を行う
+        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
+
+        // updateUserAfterGoogleSignIn は loginWithGoogle の後、
+        // または招待フロー完了後に呼び出すべき。ここでは直接呼ばない方が良いかもしれない。
+        // await updateUserAfterGoogleSignIn(...);
+      } else if (event === 'SIGNED_OUT') {
+        console.log('[Provider] User SIGNED_OUT, clearing state.');
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setCompanyId('');
+        alreadyInitialised.current = false; // ログアウトしたら初期化フラグをリセット
+      } else if (event === 'USER_UPDATED') {
+          console.log('[Provider] User data UPDATED in Supabase.');
+          if (session?.user && currentUser && session.user.id === currentUser.id) {
+              const metaCompanyId = session.user.user_metadata?.company_id ?? '';
+              if (metaCompanyId !== currentUser.companyId) {
+                  console.log('[Provider] Updating companyId based on USER_UPDATED event.');
+                  const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
+                  setCurrentUser(updatedCurrentUser);
+                  setCompanyId(metaCompanyId);
+                   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
+                   try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
+              }
+          }
+      }
+    });
+
+    return () => {
+      console.log('[Provider] Unsubscribing from onAuthStateChange'); // クリーンアップログ
+      authSubscription.subscription.unsubscribe();
+    };
+  // }, []); // ★★★ 空の依存配列に変更 ★★★ currentUserを除外
+  }, [currentUser]); // currentUserの変更でも再実行が必要なロジックがあるため、一旦残す
+
 
   // ★★★ 招待関連の useEffect は削除 ★★★
 

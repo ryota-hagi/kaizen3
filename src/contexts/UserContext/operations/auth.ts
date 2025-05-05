@@ -205,17 +205,43 @@ export const updateUserAfterGoogleSignIn = async (
       console.error('[Supabase] User error:', userError);
       return false;
     }
-    
-  // 招待中ユーザーでない場合でも、招待フラグがtrueなら処理を続行
-  if (!userData.isInvited && userData.status !== '招待中') {
-    console.log('[updateUserAfterGoogleSignIn] Not an invited user, skip');
-    return true;
-  }
 
-  console.log('[updateUserAfterGoogleSignIn] Processing invited user with data:', userData);
+    // ★★★ ガード節を try ブロック内に移動 ★★★
+    // const { users: currentUsersCheck } = loadUserDataFromLocalStorage(() => {}, () => ({})); // これは try の外では不要
+    // const existingUserCheck = currentUsersCheck.find(u => u.email === user.email); // user は try の中で定義
+
+    // if (existingUserCheck && existingUserCheck.companyId === userData.companyId && !existingUserCheck.isInvited && existingUserCheck.status === 'アクティブ') {
+    //     console.log('[updateUserAfterGoogleSignIn] User already has correct companyId and is active. Skipping update.');
+    //     setCurrentUser(existingUserCheck);
+    //     setIsAuthenticated(true);
+    //     return true;
+    // }
+    // ★★★ ここまで移動 ★★★
+
+    // 招待中ユーザーでない場合でも、招待フラグがtrueなら処理を続行
+    // → このロジックはガード節でカバーされるか、あるいは招待フロー専用ページで処理されるため、コメントアウトまたは削除検討
+    // if (!userData.isInvited && userData.status !== '招待中') {
+    //   console.log('[updateUserAfterGoogleSignIn] Not an invited user, skip');
+    //   return true;
+    // }
+
+    // console.log('[updateUserAfterGoogleSignIn] Processing invited user or user needing update with data:', userData); // ★★★ 重複削除 ★★★
     
     // 既存のユーザー情報を取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+
+    // ★★★ ガード節をここに挿入 (user 変数定義後) ★★★
+    const existingUserCheck = currentUsers.find(u => u.email === user.email);
+    if (existingUserCheck && existingUserCheck.companyId === userData.companyId && !existingUserCheck.isInvited && existingUserCheck.status === 'アクティブ') {
+        console.log('[updateUserAfterGoogleSignIn] User already has correct companyId and is active. Skipping update.');
+        // 既存の正しいユーザー情報を設定して終了
+        setCurrentUser(existingUserCheck);
+        setIsAuthenticated(true);
+        return true; // try ブロック内なので return true でOK
+    }
+    // ★★★ ここまで挿入 ★★★
+
+    console.log('[updateUserAfterGoogleSignIn] Processing invited user or user needing update with data:', userData); // ログの位置を修正
     
     // 招待ユーザーの場合、会社IDが必須
     const isInvitedUser = userData.isInvited || userData.status === '招待中';

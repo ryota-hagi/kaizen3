@@ -6,36 +6,39 @@ import { isEqual } from '@/utils/deepEqual';
 export const USER_STORAGE_KEY = 'kaizen_user_info';
 export const USERS_STORAGE_KEY = 'kaizen_users';
 
-// 既存のユーザーデータを修正するユーティリティ関数
+// 既存のユーザーデータを修正するユーティリティ関数 (責務分離版)
 export const fixUserData = (
   users: UserInfo[],
   urlToken: string | null
 ): UserInfo[] => {
+  console.log('[fixUserData] Starting fix for users:', users.length, 'with urlToken:', urlToken);
   return users.map(u => {
-    // ① 既に「非招待」のステータスなら **絶対に** 触らない
-    if (['verified', 'completed', 'アクティブ'].includes(u.status || '')) {
-      return { ...u, isInvited: false };
+    // URLトークンがない、またはユーザーにトークンがない、またはトークンが一致しない場合は触らない
+    if (!urlToken || !u.inviteToken || u.inviteToken !== urlToken) {
+      // console.log(`[fixUserData] Skipping user ${u.email}: No match or no token.`);
+      // isInvitedフラグが残っている場合のみリセット
+      if (u.isInvited === true) {
+          console.log(`[fixUserData] Resetting isInvited for ${u.email} (no matching token).`);
+          return { ...u, isInvited: false };
+      }
+      return u;
     }
 
-    // ② まだステータスが無い・もしくは招待中以外で、かつ token が一致する場合のみ
-    if (urlToken && u.inviteToken === urlToken && u.status !== '招待中') {
-      console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on URL token match.`);
-      return { ...u, status: '招待中' as UserStatus, isInvited: true };
+    // トークンが一致する場合：
+    // 既に '招待中' または 'アクティブ' など完了状態なら触らない
+    if (u.status === '招待中' || u.status === 'アクティブ' || u.status === 'completed' || u.status === 'verified') {
+       // console.log(`[fixUserData] Skipping user ${u.email}: Status is already ${u.status}.`);
+       // isInvitedフラグがtrueでステータスが招待中以外ならリセット
+       if (u.isInvited === true && u.status !== '招待中') {
+           console.log(`[fixUserData] Resetting isInvited for ${u.email} (status is ${u.status}).`);
+           return { ...u, isInvited: false };
+       }
+       return u;
     }
-    
-    // ③ status が設定されていない場合は招待中にする
-    if (!u.status || u.status === '' as any) {
-      console.log(`[fixUserData Integrated] Setting status to '招待中' for ${u.email} based on missing status.`);
-      return { ...u, status: '招待中' as UserStatus };
-    }
-    
-    // ④ isInvited が true だが status が 招待中 でない場合、isInvited を false にリセット
-    if (u.isInvited && u.status !== '招待中') {
-      console.log(`[fixUserData Integrated] Resetting isInvited flag for ${u.email}.`);
-      return { ...u, isInvited: false };
-    }
-    
-    return u;
+
+    // トークンが一致し、ステータスが未設定または上記以外の場合のみ '招待中' に設定
+    console.log(`[fixUserData] Setting status to '招待中' for ${u.email} (token matched, status was ${u.status}).`);
+    return { ...u, status: '招待中' as UserStatus, isInvited: true }; // isInvitedもtrueにする
   });
 };
 
