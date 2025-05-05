@@ -22,35 +22,35 @@ export default function CallbackClient() {
       try {
         setLoading(true)
         
-      // Supabaseのセッションを取得
-      const supabase = getSupabaseClient()
-      const { data, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('[DEBUG] Error getting session:', error)
-        setError('認証中にエラーが発生しました')
-        setLoading(false)
-        return
-      }
-      
-      if (!data.session) {
-        console.error('[DEBUG] No session found')
-        setError('セッションが見つかりません')
-        setLoading(false)
-        return
-      }
-      
-      // ユーザー情報を取得
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
-        console.error('[DEBUG] Error getting user:', userError)
-        setError('ユーザー情報の取得に失敗しました')
-        setLoading(false)
-        return
-      }
-      
-      console.log('[DEBUG] Authenticated user email:', user.email)
+        // Supabaseのセッションを取得
+        const supabase = getSupabaseClient()
+        const { data, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('[DEBUG] Error getting session:', error)
+          setError('認証中にエラーが発生しました')
+          setLoading(false)
+          return
+        }
+        
+        if (!data.session) {
+          console.error('[DEBUG] No session found')
+          setError('セッションが見つかりません')
+          setLoading(false)
+          return
+        }
+        
+        // ユーザー情報を取得
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError || !user) {
+          console.error('[DEBUG] Error getting user:', userError)
+          setError('ユーザー情報の取得に失敗しました')
+          setLoading(false)
+          return
+        }
+        
+        console.log('[DEBUG] Authenticated user email:', user.email)
         
         // 招待ユーザーかどうかを確認
         const isInvited = searchParams?.get('invite') === 'true'
@@ -76,12 +76,6 @@ export default function CallbackClient() {
         console.log('[DEBUG] Session companyId:', sessionCompanyId)
         console.log('[DEBUG] Local companyId:', localCompanyId)
         console.log('[DEBUG] Using companyId:', companyIdFromUrl)
-        console.log('[DEBUG] Total users in context:', users.length)
-        
-        // 全ユーザーのトークンをログに出力
-        users.forEach((user, index) => {
-          console.log(`[DEBUG] User ${index} token:`, user.inviteToken, 'isInvited:', user.isInvited, 'status:', user.status, 'companyId:', user.companyId || 'not set')
-        })
         
         if (isInvited) {
           // 招待ユーザーの場合
@@ -94,228 +88,91 @@ export default function CallbackClient() {
             return
           }
           
-          // ユーザー照合部分
-          console.log('[DEBUG] Searching for user with invite token:', inviteToken)
-          
-          // まずコンテキストから招待ユーザーを検索
-          let matched = users.filter(u => 
-            u.inviteToken === inviteToken && 
-            u.status === '招待中'
-          )
-          
-          console.log('[DEBUG] Found users in context:', matched.length)
-          
-          // コンテキストに見つからなければSupabaseに直接問い合わせ
-          if (matched.length === 0) {
-            console.log('[DEBUG] No matching user in context, querying Supabase directly')
+          // 招待トークンを検証
+          try {
+            const verifyUrl = window.location.origin + '/api/invitations/verify'
+            console.log('[DEBUG] Verifying invite token:', verifyUrl)
+            const response = await fetch(verifyUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
+              },
+              body: JSON.stringify({ 
+                token: inviteToken,
+                company_id: companyIdFromUrl
+              }),
+            })
             
-            try {
-              // 直接Supabaseに問い合わせる
-              const { data: invitationData, error: invitationError } = await supabase
-                .from('invitations')
-                .select('*')
-                .eq('invite_token', inviteToken)
-                .single();
-                
-              if (invitationError || !invitationData) {
-                console.error('[DEBUG] Error querying invitation:', invitationError);
-                
-                // APIルートを使用して招待ユーザーを検索（絶対パスで）
-                const verifyUrl = window.location.origin + '/api/invitations/verify';
-                console.log('[DEBUG] Using API route to verify invite token:', verifyUrl)
-                const response = await fetch(verifyUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Cache-Control': 'no-cache',
-                  },
-                  body: JSON.stringify({ token: inviteToken }),
-                });
-                
-                if (!response.ok) {
-                  const result = await response.json();
-                  console.error('[DEBUG] API error verifying invitation:', result.message || 'Unknown error')
-                  setError('ユーザー取得エラー: ' + (result.message || 'APIエラー'))
-                  setLoading(false)
-                  return
-                }
-                
-                const result = await response.json();
-                
-                if (!result.valid || !result.invitation) {
-                  console.error('[DEBUG] Token verification failed via API')
-                  setError('招待トークンが無効です')
-                  setLoading(false)
-                  return
-                }
-                
-                const dbUsers = [result.invitation];
-                
-                console.log('[DEBUG] API query result:', dbUsers?.length || 0, 'users found')
-                
-                // APIから取得したユーザーを処理
-                if (dbUsers && dbUsers.length > 0) {
-                  const supRaw = dbUsers[0]
-                  
-                  // camelCaseとsnake_caseの両方をチェック
-                  const companyId = 
-                    supRaw.companyId      // camelCase (来ない場合あり)
-                    ?? supRaw.company_id  // snake_case
-                    ?? null
-                  
-                  // 会社IDを明示的に設定
-                  const processedUsers = dbUsers.map((user: any) => ({
-                    ...user,
-                    companyId: user.companyId ?? user.company_id ?? companyId
-                  }))
-                  
-                  console.log('[DEBUG] Processed users with companyId:', processedUsers[0].companyId)
-                  matched = processedUsers
-                } else {
-                  matched = []
-                }
-              } else {
-                // Supabaseから直接取得したデータを処理
-                console.log('[DEBUG] Supabase query result:', invitationData)
-                
-                const processedUser = {
-                  ...invitationData,
-                  companyId: invitationData.company_id,
-                  status: 'アクティブ'
-                };
-                
-                matched = [processedUser];
-                console.log('[DEBUG] Processed user from Supabase:', processedUser);
-              }
-            } catch (e) {
-              console.error('[DEBUG] Error querying Supabase:', e)
-              setError('Supabaseからのユーザー取得中にエラーが発生しました')
+            if (!response.ok) {
+              const result = await response.json()
+              console.error('[DEBUG] API error verifying invitation:', result.message || 'Unknown error')
+              setError('招待トークンの検証に失敗しました: ' + (result.message || 'APIエラー'))
               setLoading(false)
               return
             }
-          }
-          
-          // それでも見つからなければローカルストレージを直接確認
-          if (matched.length === 0) {
-            console.log('[DEBUG] Checking localStorage directly')
             
-            try {
-              const savedUsers = localStorage.getItem('kaizen_users')
-              if (savedUsers) {
-                const parsedData = JSON.parse(savedUsers)
-                console.log('[DEBUG] Found users in localStorage:', parsedData.length)
-                
-                // 招待中のユーザーを検索
-                const storedUsers = parsedData.filter((item: any) => 
-                  item.user && 
-                  item.user.inviteToken && 
-                  item.user.inviteToken === inviteToken
-                )
-                
-                console.log('[DEBUG] Found matching users in localStorage:', storedUsers.length)
-                
-                if (storedUsers.length > 0) {
-                  matched = storedUsers.map((item: any) => item.user)
-                  console.log('[DEBUG] Using user from localStorage:', matched[0]?.email)
-                }
-              }
-            } catch (e) {
-              console.error('[DEBUG] Error checking localStorage:', e)
+            const result = await response.json()
+            
+            if (!result.valid || !result.invitation) {
+              console.error('[DEBUG] Token verification failed via API')
+              setError('招待トークンが無効です')
+              setLoading(false)
+              return
             }
-          }
-          
-          // 該当ユーザーが見つからない場合
-          if (matched.length === 0) {
-            console.error('[DEBUG] No invited user found with token:', inviteToken)
-            setError('招待ユーザーが見つかりません。招待メールのリンクから再度アクセスしてください。')
-            setLoading(false)
-            return
-          }
-          
-          // 最初に見つかった招待ユーザーを使用
-          const invitedUser = matched[0]
-          console.log('[DEBUG] Using invited user:', invitedUser.email, 'with company ID:', invitedUser.companyId || 'not set')
-          
-          // 会社IDを取得（招待ユーザーの会社IDを優先、次にURLパラメータ）
-          // 招待ユーザーの会社IDが最優先（これが正しい招待先の会社ID）
-          let companyId = invitedUser.companyId || companyIdFromUrl
-          
-          if (!companyId || companyId.trim() === '') {
-            console.error('[DEBUG] No company ID found for invited user')
-            setError('招待ユーザーの会社情報が見つかりません。招待メールのリンクから再度アクセスしてください。')
-            setLoading(false)
-            return
-          }
-          
-          // 会社IDが招待ユーザーの会社IDと一致しない場合はエラー
-          if (companyIdFromUrl && invitedUser.companyId && companyIdFromUrl !== invitedUser.companyId) {
-            console.error('[DEBUG] Company ID mismatch:', companyIdFromUrl, 'vs', invitedUser.companyId)
-            setError('招待された会社情報が一致しません。招待メールのリンクから再度アクセスしてください。')
-            setLoading(false)
-            return
-          }
-          
-          console.log('[DEBUG] Using company ID:', companyId)
-          
-          // ユーザー情報を更新
-          console.log('[DEBUG] Updating user with invite data:', {
-            isInvited: true,
-            inviteToken,
-            role: invitedUser.role || 'メンバー',
-            companyId
-          });
-          
-          // 既存ユーザーの会社IDを確認
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          if (currentUser) {
-            // ローカルストレージからユーザーリストを取得
-            const usersJson = localStorage.getItem('kaizen_users');
-            const localUsers = usersJson ? JSON.parse(usersJson) : [];
             
-            // 既存ユーザーを検索
-            const existingUserData = localUsers.find((u: any) => 
-              u.user && u.user.id === currentUser.id
-            );
+            console.log('[DEBUG] Invitation verified:', result.invitation)
             
-            if (existingUserData && existingUserData.user.companyId) {
-              console.log('[DEBUG] Existing user company ID:', existingUserData.user.companyId);
-              console.log('[DEBUG] Invited company ID:', companyId);
+            // 会社IDを取得
+            const companyId = result.invitation.company_id || companyIdFromUrl
+            
+            if (!companyId) {
+              console.error('[DEBUG] No company ID found')
+              setError('会社IDが見つかりません')
+              setLoading(false)
+              return
+            }
+            
+            console.log('[DEBUG] Using company ID from invitation:', companyId)
+            
+            // Supabaseのユーザーメタデータを更新
+            const { error: updateError } = await supabase.auth.updateUser({
+              data: {
+                company_id: companyId,
+                role: result.invitation.role || '一般ユーザー',
+                status: 'アクティブ',
+                isInvited: false
+              }
+            })
+            
+            if (updateError) {
+              console.error('[DEBUG] Error updating user metadata:', updateError)
+            } else {
+              console.log('[DEBUG] User metadata updated with company ID:', companyId)
+            }
+            
+            // ユーザー情報を更新
+            const success = await updateUserAfterGoogleSignIn({
+              isInvited: true,
+              inviteToken,
+              role: result.invitation.role || '一般ユーザー',
+              companyId
+            })
+            
+            if (success) {
+              // 招待トークンをクリア
+              sessionStorage.removeItem('invite_token')
+              localStorage.removeItem('invite_token')
               
-              // 既存ユーザーの会社IDと招待会社IDが異なる場合、ローカルストレージを更新
-              if (existingUserData.user.companyId !== companyId) {
-                console.log('[DEBUG] Updating company ID in localStorage');
-                
-                // 既存ユーザーの会社IDを更新
-                existingUserData.user.companyId = companyId;
-                localStorage.setItem('kaizen_users', JSON.stringify(localUsers));
-                
-                // 現在のユーザーの会社IDも更新
-                const currentUserJson = localStorage.getItem('kaizen_user');
-                if (currentUserJson) {
-                  const currentUserData = JSON.parse(currentUserJson);
-                  currentUserData.companyId = companyId;
-                  localStorage.setItem('kaizen_user', JSON.stringify(currentUserData));
-                }
-              }
+              // ダッシュボードにリダイレクト
+              router.push('/dashboard')
+            } else {
+              setError('ユーザー情報の更新に失敗しました')
             }
-          }
-          
-          const success = await updateUserAfterGoogleSignIn({
-            isInvited: true,
-            inviteToken,
-            role: invitedUser.role || 'メンバー',
-            companyId
-          })
-          
-          if (success) {
-            // 招待トークンをクリア
-            sessionStorage.removeItem('invite_token')
-            localStorage.removeItem('invite_token')
-            
-            // ダッシュボードにリダイレクト
-            router.push('/dashboard')
-          } else {
-            setError('ユーザー情報の更新に失敗しました')
+          } catch (error) {
+            console.error('[DEBUG] Error verifying invitation:', error)
+            setError('招待トークンの検証中にエラーが発生しました')
+            setLoading(false)
           }
         } else {
           // 通常のログイン
@@ -331,18 +188,14 @@ export default function CallbackClient() {
               return
             }
             
-            // ローカルストレージからユーザーリストを取得
-            const usersJson = localStorage.getItem('kaizen_users')
-            const localUsers = usersJson ? JSON.parse(usersJson) : []
+            // Supabaseのユーザーメタデータから会社IDを取得
+            const companyIdFromMetadata = user.user_metadata?.company_id
             
-            // ユーザーが既存かどうかを確認（ユーザーIDで検索）
-            const existingUser = localUsers.find((u: any) => u.user && u.user.id === user.id)
-            
-            if (existingUser && existingUser.user.companyId) {
-              // 既存ユーザーで会社IDがある場合はダッシュボードへ
+            if (companyIdFromMetadata) {
+              // 会社IDがある場合はダッシュボードへ
               router.push('/dashboard')
             } else {
-              // 新規ユーザーまたは会社IDがない場合は会社登録ページへ
+              // 会社IDがない場合は会社登録ページへ
               router.push('/auth/register/company')
             }
           } else {

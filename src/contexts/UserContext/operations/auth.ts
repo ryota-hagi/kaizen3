@@ -38,19 +38,50 @@ export const loginWithGoogle = async (
     const token = new URL(window.location.href).searchParams.get('token');
     
     if (token) {
-      await fetch('/api/invitations/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          invite_token: token, 
-          auth_uid: user.id,
-          email: user.email
-        })
-      });
+      // 招待トークンがある場合、招待を完了する
+      console.log('[Supabase] Completing invitation with token:', token);
       
-      // 招待完了後、セッションストレージからトークンを削除
-      sessionStorage.removeItem('invite_token');
-      localStorage.removeItem('invite_token');
+      try {
+        const response = await fetch('/api/invitations/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            invite_token: token, 
+            auth_uid: user.id,
+            email: user.email
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('[Supabase] Invitation completed:', result);
+          
+          // 招待完了後、セッションストレージからトークンを削除
+          sessionStorage.removeItem('invite_token');
+          localStorage.removeItem('invite_token');
+          
+          // 会社IDを取得
+          const companyId = result.data?.company_id || '';
+          
+          if (companyId) {
+            // Supabaseのユーザーメタデータを更新
+            await supabase.auth.updateUser({
+              data: {
+                company_id: companyId,
+                role: result.data?.role || '一般ユーザー',
+                status: 'アクティブ',
+                isInvited: false
+              }
+            });
+            
+            console.log('[Supabase] User metadata updated with company ID:', companyId);
+          }
+        } else {
+          console.error('[Supabase] Failed to complete invitation:', await response.text());
+        }
+      } catch (error) {
+        console.error('[Supabase] Error completing invitation:', error);
+      }
     }
     
     // ローカルストレージからユーザーリストを取得
@@ -59,19 +90,22 @@ export const loginWithGoogle = async (
     // ユーザーIDで既存ユーザーを検索
     const existingUser = currentUsers.find(u => u.id === user.id);
     
+    // Supabaseのユーザーメタデータから会社IDを取得（優先）
+    const companyIdFromMetadata = user.user_metadata?.company_id;
+    
     // UserInfo形式に変換
     const userInfo: UserInfo = {
       id: user.id,
       username: user.email?.split('@')[0] || '',
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
-      role: existingUser?.role || '管理者', // 新規ユーザーは管理者として設定
+      role: user.user_metadata?.role || existingUser?.role || '管理者', // メタデータから役割を取得
       status: 'アクティブ' as UserStatus,
       createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isInvited: false, // 招待フラグをリセット
       inviteToken: existingUser?.inviteToken || '',
-      companyId: user.user_metadata?.company_id || existingUser?.companyId || '' // メタデータから会社IDを取得
+      companyId: companyIdFromMetadata || existingUser?.companyId || '' // メタデータから会社IDを優先取得
     };
     
     // ユーザー情報を保存
@@ -140,7 +174,9 @@ export const loginWithGoogle = async (
     }
     
     // 会社情報を取得してキャッシュ
-    await fetchAndCacheCompanyInfo(userInfo.companyId);
+    if (userInfo.companyId) {
+      await fetchAndCacheCompanyInfo(userInfo.companyId);
+    }
 
     return true;
   } catch (error) {
@@ -210,46 +246,6 @@ export const updateUserAfterGoogleSignIn = async (
       return false;
     }
 
-    // ★★★ ガード節を try ブロック内に移動 ★★★
-    // const { users: currentUsersCheck } = loadUserDataFromLocalStorage(() => {}, () => ({})); // これは try の外では不要
-    // const existingUserCheck = currentUsersCheck.find(u => u.email === user.email); // user は try の中で定義
-
-    // if (existingUserCheck && existingUserCheck.companyId === userData.companyId && !existingUserCheck.isInvited && existingUserCheck.status === 'アクティブ') {
-    //     console.log('[updateUserAfterGoogleSignIn] User already has correct companyId and is active. Skipping update.');
-    //     setCurrentUser(existingUserCheck);
-    //     setIsAuthenticated(true);
-    //     return true;
-    // }
-    // ★★★ ここまで移動 ★★★
-
-    // 招待中ユーザーでない場合でも、招待フラグがtrueなら処理を続行
-    // → このロジックはガード節でカバーされるか、あるいは招待フロー専用ページで処理されるため、コメントアウトまたは削除検討
-    // if (!userData.isInvited && userData.status !== '招待中') {
-    //   console.log('[updateUserAfterGoogleSignIn] Not an invited user, skip');
-    //   return true;
-    // }
-
-    // console.log('[updateUserAfterGoogleSignIn] Processing invited user or user needing update with data:', userData); // ★★★ 重複削除 ★★★
-    
-    // 既存のユーザー情報を取得
-    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
-
-    // ★★★ ガード節をここに挿入 (user 変数定義後) ★★★
-    const existingUserCheck = currentUsers.find(u => u.email === user.email);
-    if (existingUserCheck && 
-        existingUserCheck.companyId === userData.companyId && 
-        existingUserCheck.inviteToken === userData.inviteToken && 
-        existingUserCheck.isInvited) {
-        console.log('[updateUserAfterGoogleSignIn] User already has correct companyId and token. Skipping update.');
-        // 既存の正しいユーザー情報を設定して終了
-        setCurrentUser(existingUserCheck);
-        setIsAuthenticated(true);
-        return true; // try ブロック内なので return true でOK
-    }
-    // ★★★ ここまで挿入 ★★★
-
-    console.log('[updateUserAfterGoogleSignIn] Processing invited user or user needing update with data:', userData); // ログの位置を修正
-    
     // 招待ユーザーの場合、会社IDが必須
     const isInvitedUser = userData.isInvited || userData.status === '招待中';
     if (isInvitedUser && (!userData.companyId || userData.companyId.trim() === '')) {
@@ -263,62 +259,30 @@ export const updateUserAfterGoogleSignIn = async (
       return false;
     }
 
-    // 変更が必要かどうかを確認
-    setUsers(prev => {
-      // 変更が無い場合はそのまま返す
-      const idx = prev.findIndex(u => u.email === user.email);
-      if (idx === -1) return prev;
-      const before = prev[idx];
-      
-      // すでにアクティブかつ companyId, token が一致 → 何もせず return
-      if (
-        before.status === 'アクティブ' &&
-        before.companyId === userData.companyId &&
-        !before.isInvited
-      ) {
-        return prev;
-      }
-      
-      console.log('[updateUserAfterGoogleSignIn] Updating user in users array:', {
-        before: {
-          companyId: before.companyId,
-          inviteToken: before.inviteToken,
-          status: before.status,
-          isInvited: before.isInvited
-        },
-        after: {
-          companyId: userData.companyId,
-          inviteToken: userData.inviteToken,
+    console.log('[updateUserAfterGoogleSignIn] Processing user with data:', userData);
+    
+    // 既存のユーザー情報を取得
+    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+    
+    // Supabaseのユーザーメタデータを更新
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          company_id: userData.companyId,
+          role: userData.role || '一般ユーザー',
           status: 'アクティブ',
           isInvited: false
         }
       });
       
-      // 必ず companyId を上書き
-      const next = [...prev];
-      next[idx] = {
-        ...before,
-        companyId: userData.companyId || '', // 無条件で置き換えるが、undefinedの場合は空文字を使用
-        inviteToken: userData.inviteToken || before.inviteToken || '',
-        status: 'アクティブ' as UserStatus, // 招待完了状態に設定
-        isInvited: false // 招待フラグをリセット
-      };
-      
-      // ローカルストレージに保存
-      const usersToSave = next.map(u => ({ user: u, password: '' }));
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-      
-      // セッションストレージにも保存
-      try {
-        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-      } catch (e) {
-        console.error('[Supabase] Failed to save users to sessionStorage:', e);
+      if (error) {
+        console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
+      } else {
+        console.log('[updateUserAfterGoogleSignIn] User metadata updated successfully with company ID:', userData.companyId);
       }
-      
-      console.log('[updateUserAfterGoogleSignIn] User data updated and saved');
-      return next;
-    });
-    
+    } catch (error) {
+      console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
+    }
     
     // UserInfo形式に変換して更新
     const updatedUserInfo: UserInfo = {
@@ -326,7 +290,7 @@ export const updateUserAfterGoogleSignIn = async (
       username: user.email?.split('@')[0] || '',
       email: user.email || '',
       fullName: user.user_metadata?.full_name || '',
-      role: userData.role || currentUsers.find(u => u.id === user.id)?.role || '管理者',
+      role: userData.role || currentUsers.find(u => u.id === user.id)?.role || '一般ユーザー',
       status: 'アクティブ' as UserStatus, // 招待完了状態に設定
       createdAt: currentUsers.find(u => u.id === user.id)?.createdAt || user.created_at || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
@@ -336,31 +300,10 @@ export const updateUserAfterGoogleSignIn = async (
     };
     
     console.log('[updateUserAfterGoogleSignIn] Updating user with company ID:', updatedUserInfo.companyId);
-    console.log('[updateUserAfterGoogleSignIn] User is invited:', updatedUserInfo.isInvited);
-    console.log('[updateUserAfterGoogleSignIn] User invite token:', updatedUserInfo.inviteToken);
     
     // ユーザー情報を保存
     setCurrentUser(updatedUserInfo);
     setIsAuthenticated(true);
-    
-    // Supabaseのユーザーメタデータを更新
-    try {
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          company_id: updatedUserInfo.companyId,
-          status: 'アクティブ',
-          isInvited: false
-        }
-      });
-      
-      if (error) {
-        console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
-      } else {
-        console.log('[updateUserAfterGoogleSignIn] User metadata updated successfully');
-      }
-    } catch (error) {
-      console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
-    }
     
     // ローカルストレージとセッションストレージに保存
     if (typeof window !== 'undefined') {
@@ -377,6 +320,46 @@ export const updateUserAfterGoogleSignIn = async (
       sessionStorage.removeItem('invite_token');
       localStorage.removeItem('invite_token');
     }
+    
+    // ユーザーリストを更新
+    setUsers(prev => {
+      const idx = prev.findIndex(u => u.id === user.id);
+      if (idx === -1) {
+        // 新規ユーザーを追加
+        const newUsers = [...prev, updatedUserInfo];
+        
+        // ローカルストレージに保存
+        const usersToSave = newUsers.map(u => ({ user: u, password: '' }));
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        
+        // セッションストレージにも保存
+        try {
+          sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+        } catch (e) {
+          console.error('[Supabase] Failed to save users to sessionStorage:', e);
+        }
+        
+        return newUsers;
+      }
+      
+      // 既存ユーザーを更新
+      const next = [...prev];
+      next[idx] = updatedUserInfo;
+      
+      // ローカルストレージに保存
+      const usersToSave = next.map(u => ({ user: u, password: '' }));
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      
+      // セッションストレージにも保存
+      try {
+        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      } catch (e) {
+        console.error('[Supabase] Failed to save users to sessionStorage:', e);
+      }
+      
+      console.log('[updateUserAfterGoogleSignIn] User data updated and saved');
+      return next;
+    });
     
     return true;
   } catch (error) {
