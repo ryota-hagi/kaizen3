@@ -2,6 +2,7 @@ import { UserInfo, UserStatus } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { isEqual } from '@/utils/deepEqual';
+import { fetchAndCacheCompanyInfo } from '@/utils/companyInfo';
 
 // Supabaseを使用したログイン処理
 export const loginWithGoogle = async (
@@ -138,6 +139,9 @@ export const loginWithGoogle = async (
       }
     }
     
+    // 会社情報を取得してキャッシュ
+    await fetchAndCacheCompanyInfo(userInfo.companyId);
+
     return true;
   } catch (error) {
     console.error('[Supabase] Login error:', error);
@@ -232,8 +236,11 @@ export const updateUserAfterGoogleSignIn = async (
 
     // ★★★ ガード節をここに挿入 (user 変数定義後) ★★★
     const existingUserCheck = currentUsers.find(u => u.email === user.email);
-    if (existingUserCheck && existingUserCheck.companyId === userData.companyId && !existingUserCheck.isInvited && existingUserCheck.status === 'アクティブ') {
-        console.log('[updateUserAfterGoogleSignIn] User already has correct companyId and is active. Skipping update.');
+    if (existingUserCheck && 
+        existingUserCheck.companyId === userData.companyId && 
+        existingUserCheck.inviteToken === userData.inviteToken && 
+        existingUserCheck.isInvited) {
+        console.log('[updateUserAfterGoogleSignIn] User already has correct companyId and token. Skipping update.');
         // 既存の正しいユーザー情報を設定して終了
         setCurrentUser(existingUserCheck);
         setIsAuthenticated(true);

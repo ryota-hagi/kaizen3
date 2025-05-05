@@ -16,11 +16,7 @@ export const fixUserData = (
     // URLトークンがない、またはユーザーにトークンがない、またはトークンが一致しない場合は触らない
     if (!urlToken || !u.inviteToken || u.inviteToken !== urlToken) {
       // console.log(`[fixUserData] Skipping user ${u.email}: No match or no token.`);
-      // isInvitedフラグが残っている場合のみリセット
-      if (u.isInvited === true) {
-          console.log(`[fixUserData] Resetting isInvited for ${u.email} (no matching token).`);
-          return { ...u, isInvited: false };
-      }
+      // isInvitedフラグのリセットは行わない
       return u;
     }
 
@@ -28,17 +24,13 @@ export const fixUserData = (
     // 既に '招待中' または 'アクティブ' など完了状態なら触らない
     if (u.status === '招待中' || u.status === 'アクティブ' || u.status === 'completed' || u.status === 'verified') {
        // console.log(`[fixUserData] Skipping user ${u.email}: Status is already ${u.status}.`);
-       // isInvitedフラグがtrueでステータスが招待中以外ならリセット
-       if (u.isInvited === true && u.status !== '招待中') {
-           console.log(`[fixUserData] Resetting isInvited for ${u.email} (status is ${u.status}).`);
-           return { ...u, isInvited: false };
-       }
+       // isInvitedフラグのリセットは行わない
        return u;
     }
 
     // トークンが一致し、ステータスが未設定または上記以外の場合のみ '招待中' に設定
     console.log(`[fixUserData] Setting status to '招待中' for ${u.email} (token matched, status was ${u.status}).`);
-    return { ...u, status: '招待中' as UserStatus, isInvited: true }; // isInvitedもtrueにする
+    return { ...u, status: '招待中' as UserStatus }; // isInvitedは変更しない
   });
 };
 

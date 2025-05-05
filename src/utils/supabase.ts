@@ -138,14 +138,23 @@ export const saveInvitation = async (invitation: Omit<InvitationRecord, 'id' | '
 };
 
 // 招待トークンを検証する関数
-export const verifyInviteToken = async (token: string): Promise<{ valid: boolean; invitation?: InvitationRecord; error?: any; errorType?: string; errorMessage?: string }> => {
+export const verifyInviteToken = async (token: string, companyId?: string): Promise<{ valid: boolean; invitation?: InvitationRecord; error?: any; errorType?: string; errorMessage?: string }> => {
   try {
     console.log('[Supabase] Verifying invite token:', token);
+    if (companyId) {
+      console.log('[Supabase] With company ID:', companyId);
+    }
     
     // 絶対パスでAPIエンドポイントを指定
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
     const verifyUrl = `${baseUrl}/api/invitations/verify`;
     console.log('[Supabase] Calling verify API:', verifyUrl);
+    
+    // URLからcompanyIdを取得（指定されていない場合）
+    if (!companyId && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      companyId = urlParams.get('companyId') || sessionStorage.getItem('invite_company_id') || '';
+    }
     
     // APIルートを使用してサーバーサイドで処理する
     const response = await fetch(verifyUrl, {
@@ -154,7 +163,10 @@ export const verifyInviteToken = async (token: string): Promise<{ valid: boolean
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',
       },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ 
+        token,
+        company_id: companyId // 会社IDも送信
+      }),
     });
     
     const result = await response.json();
