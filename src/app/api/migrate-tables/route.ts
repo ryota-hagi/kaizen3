@@ -27,30 +27,13 @@ export async function POST(req: Request) {
     console.log(`[API] Using table name: ${INVITATIONS_TABLE}`);
     
     // user_invitationsテーブルが存在するか確認
-    const { data: userInvitationsExists, error: userInvitationsError } = await supabaseAdmin.rpc(
-      'exec_sql',
-      {
-        query: `
-          SELECT EXISTS (
-            SELECT 1 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'user_invitations'
-          ) as exists
-        `
-      }
-    );
+    const { data: userInvitationsData, error: userInvitationsError } = await supabaseAdmin
+      .from('user_invitations')
+      .select('*', { count: 'exact', head: true });
     
-    if (userInvitationsError) {
-      console.error('[API] Error checking if user_invitations exists:', userInvitationsError);
-      return NextResponse.json(
-        { success: false, error: userInvitationsError },
-        { status: 500 },
-      );
-    }
+    const userInvitationsExists = !userInvitationsError;
     
-    // user_invitationsテーブルが存在しない場合
-    if (!userInvitationsExists || !userInvitationsExists[0] || !userInvitationsExists[0].exists) {
+    if (!userInvitationsExists) {
       console.log('[API] user_invitations table does not exist, no migration needed');
       return NextResponse.json({ 
         success: true, 
@@ -59,93 +42,61 @@ export async function POST(req: Request) {
     }
     
     // invitationsテーブルが存在するか確認
-    const { data: invitationsExists, error: invitationsError } = await supabaseAdmin.rpc(
-      'exec_sql',
-      {
-        query: `
-          SELECT EXISTS (
-            SELECT 1 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'invitations'
-          ) as exists
-        `
-      }
-    );
+    const { data: invitationsData, error: invitationsError } = await supabaseAdmin
+      .from('invitations')
+      .select('*', { count: 'exact', head: true });
     
-    if (invitationsError) {
-      console.error('[API] Error checking if invitations exists:', invitationsError);
-      return NextResponse.json(
-        { success: false, error: invitationsError },
-        { status: 500 },
-      );
-    }
+    const invitationsExists = !invitationsError;
     
     // invitationsテーブルが存在しない場合、作成する
-    if (!invitationsExists || !invitationsExists[0] || !invitationsExists[0].exists) {
+    if (!invitationsExists) {
       console.log('[API] invitations table does not exist, creating it');
       
-      const { error: createTableError } = await supabaseAdmin.rpc(
-        'exec_sql',
-        {
-          query: `
-            CREATE TABLE invitations (
-              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-              email TEXT NOT NULL,
-              role TEXT NOT NULL,
-              company_id TEXT,
-              invite_token TEXT NOT NULL UNIQUE,
-              status TEXT NOT NULL DEFAULT 'pending',
-              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-            
-            -- 検索を高速化するためのインデックスを追加
-            CREATE INDEX IF NOT EXISTS idx_invite_token ON invitations(invite_token);
-            
-            -- 同じメールアドレスの古い招待を削除するための関数
-            CREATE OR REPLACE FUNCTION clean_old_invitations()
-            RETURNS TRIGGER AS $$
-            BEGIN
-              -- 同じメールアドレスの古い招待を削除（トークンが異なるもの）
-              DELETE FROM invitations
-              WHERE email = NEW.email
-                AND invite_token <> NEW.invite_token
-                AND status = 'pending';
-              
-              RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
-            
-            -- トリガーの作成
-            CREATE TRIGGER clean_old_invitations_trigger
-            AFTER INSERT ON invitations
-            FOR EACH ROW
-            EXECUTE FUNCTION clean_old_invitations();
-          `
-        }
-      );
+      // 直接REST APIを使用してテーブルを作成
+      const baseUrl = url;
+      const apiUrl = `${baseUrl}/rest/v1/`;
       
-      if (createTableError) {
-        console.error('[API] Error creating invitations table:', createTableError);
+      try {
+        // テーブル作成のSQLを実行
+        const createTableQuery = `
+          CREATE TABLE IF NOT EXISTS invitations (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            email TEXT NOT NULL,
+            role TEXT NOT NULL,
+            company_id TEXT,
+            invite_token TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+          
+          -- 検索を高速化するためのインデックスを追加
+          CREATE INDEX IF NOT EXISTS idx_invite_token ON invitations(invite_token);
+        `;
+        
+        // Supabaseの管理コンソールでSQLを実行するか、
+        // 別の方法でテーブルを作成する必要があります
+        console.log('[API] Please create the invitations table manually using the Supabase dashboard');
+        console.log('[API] SQL to create table:', createTableQuery);
+        
+        return NextResponse.json({ 
+          success: false, 
+          message: 'invitations table does not exist. Please create it manually using the Supabase dashboard.',
+          sql: createTableQuery
+        });
+      } catch (error) {
+        console.error('[API] Error creating invitations table:', error);
         return NextResponse.json(
-          { success: false, error: createTableError },
+          { success: false, error: 'Failed to create invitations table' },
           { status: 500 },
         );
       }
-      
-      console.log('[API] Successfully created invitations table');
     }
     
     // user_invitationsテーブルからデータを取得
-    const { data: userInvitations, error: getUserInvitationsError } = await supabaseAdmin.rpc(
-      'exec_sql',
-      {
-        query: `
-          SELECT * FROM user_invitations
-        `
-      }
-    );
+    const { data: userInvitations, error: getUserInvitationsError } = await supabaseAdmin
+      .from('user_invitations')
+      .select('*');
     
     if (getUserInvitationsError) {
       console.error('[API] Error getting data from user_invitations:', getUserInvitationsError);
@@ -171,32 +122,18 @@ export async function POST(req: Request) {
     
     for (const invitation of userInvitations) {
       // invitationsテーブルに挿入
-      const { error: insertError } = await supabaseAdmin.rpc(
-        'exec_sql',
-        {
-          query: `
-            INSERT INTO invitations (
-              email, 
-              role, 
-              company_id, 
-              invite_token, 
-              status, 
-              created_at, 
-              updated_at
-            )
-            VALUES (
-              '${invitation.email}',
-              '${invitation.role}',
-              '${invitation.company_id || ''}',
-              '${invitation.invite_token}',
-              '${invitation.status}',
-              '${invitation.created_at}',
-              '${invitation.updated_at}'
-            )
-            ON CONFLICT (invite_token) DO NOTHING
-          `
-        }
-      );
+      const { error: insertError } = await supabaseAdmin
+        .from('invitations')
+        .insert({
+          email: invitation.email,
+          role: invitation.role,
+          company_id: invitation.company_id || '',
+          invite_token: invitation.invite_token,
+          status: invitation.status,
+          created_at: invitation.created_at,
+          updated_at: invitation.updated_at
+        })
+        .select();
       
       if (insertError) {
         console.error(`[API] Error inserting invitation for ${invitation.email}:`, insertError);
@@ -211,28 +148,10 @@ export async function POST(req: Request) {
     
     console.log(`[API] Successfully migrated ${migratedCount} records`);
     
-    // user_invitationsテーブルをリネーム
+    // 移行が完了したら、user_invitationsテーブルをリネームする方法を提案
     if (migratedCount > 0) {
-      const { error: renameError } = await supabaseAdmin.rpc(
-        'exec_sql',
-        {
-          query: `
-            ALTER TABLE user_invitations RENAME TO user_invitations_backup
-          `
-        }
-      );
-      
-      if (renameError) {
-        console.error('[API] Error renaming user_invitations table:', renameError);
-        return NextResponse.json({ 
-          success: true, 
-          message: `Successfully migrated ${migratedCount} records, but failed to rename user_invitations table`,
-          migratedCount,
-          errors
-        });
-      }
-      
-      console.log('[API] Successfully renamed user_invitations table to user_invitations_backup');
+      console.log('[API] To rename the user_invitations table, run the following SQL:');
+      console.log('ALTER TABLE user_invitations RENAME TO user_invitations_backup');
     }
     
     return NextResponse.json({ 

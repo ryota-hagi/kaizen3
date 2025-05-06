@@ -22,30 +22,51 @@ export async function GET(req: Request) {
       db: { schema: 'public' }
     });
     
-    // テーブル一覧を取得するSQLクエリを実行
-    const { data, error } = await supabaseAdmin.rpc('get_tables_info');
+    // pg_tablesビューを使用してテーブル一覧を取得（こちらはpublicスキーマにあるビュー）
+    const { data: tablesData, error: tablesError } = await supabaseAdmin
+      .from('pg_tables')
+      .select('tablename')
+      .eq('schemaname', 'public');
     
-    if (error) {
-      console.error('[API] Error getting tables info:', error);
+    if (tablesError) {
+      console.error('[API] Error getting tables from pg_tables:', tablesError);
       
-      // 代替方法：information_schemaからテーブル一覧を取得
-      const { data: tablesData, error: tablesError } = await supabaseAdmin
-        .from('information_schema.tables')
-        .select('table_name')
-        .eq('table_schema', 'public');
+      // 代替方法：直接REST APIを使用
+      const baseUrl = url;
+      const apiUrl = `${baseUrl}/rest/v1/`;
+      console.log(`[API] Direct API URL: ${apiUrl}`);
       
-      if (tablesError) {
-        console.error('[API] Error getting tables from information_schema:', tablesError);
+      try {
+        const response = await fetch(`${apiUrl}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`
+          }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[API] Error response from Supabase: ${response.status}`, errorText);
+          return NextResponse.json(
+            { success: false, error: `Supabase API error: ${response.status}` },
+            { status: 500 },
+          );
+        }
+        
+        const data = await response.json();
+        return NextResponse.json({ success: true, endpoints: data });
+      } catch (fetchError) {
+        console.error('[API] Exception in direct Supabase API call:', fetchError);
         return NextResponse.json(
-          { success: false, error: tablesError },
+          { success: false, error: 'Error calling Supabase API directly' },
           { status: 500 },
         );
       }
-      
-      return NextResponse.json({ success: true, tables: tablesData });
     }
     
-    return NextResponse.json({ success: true, tables: data });
+    return NextResponse.json({ success: true, tables: tablesData });
   } catch (error) {
     console.error('[API] Exception in check-tables API:', error);
     return NextResponse.json(

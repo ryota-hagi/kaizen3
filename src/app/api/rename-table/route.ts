@@ -27,11 +27,13 @@ export async function POST(req: Request) {
     console.log(`[API] Target table name: ${INVITATIONS_TABLE}`);
     
     // user_invitationsテーブルが存在するか確認
-    const { data: userInvitationsExists, error: userInvitationsError } = await supabaseAdmin
+    const { data: userInvitationsData, error: userInvitationsError } = await supabaseAdmin
       .from('user_invitations')
-      .select('count()', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true });
     
-    if (userInvitationsError) {
+    const userInvitationsExists = !userInvitationsError;
+    
+    if (!userInvitationsExists) {
       // テーブルが存在しない場合はエラーになる
       console.log('[API] user_invitations table does not exist:', userInvitationsError);
       return NextResponse.json({ 
@@ -44,11 +46,13 @@ export async function POST(req: Request) {
     console.log('[API] user_invitations table exists');
     
     // invitationsテーブルが存在するか確認
-    const { data: invitationsExists, error: invitationsError } = await supabaseAdmin
+    const { data: invitationsData, error: invitationsError } = await supabaseAdmin
       .from(INVITATIONS_TABLE)
-      .select('count()', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true });
     
-    if (!invitationsError) {
+    const invitationsExists = !invitationsError;
+    
+    if (invitationsExists) {
       // テーブルが存在する場合
       console.log(`[API] ${INVITATIONS_TABLE} table already exists`);
       
@@ -69,22 +73,13 @@ export async function POST(req: Request) {
         console.log('[API] No data in user_invitations table');
         
         // データがない場合はテーブルを削除
-        const { error: dropError } = await supabaseAdmin.rpc('exec_sql', {
-          query: `DROP TABLE IF EXISTS user_invitations;`
-        });
+        console.log('[API] Cannot drop user_invitations table via API. Please use Supabase dashboard to run:');
+        console.log('DROP TABLE IF EXISTS user_invitations;');
         
-        if (dropError) {
-          console.error('[API] Error dropping user_invitations table:', dropError);
-          return NextResponse.json(
-            { success: false, error: dropError },
-            { status: 500 },
-          );
-        }
-        
-        console.log('[API] Dropped user_invitations table');
         return NextResponse.json({ 
-          success: true, 
-          message: 'Dropped user_invitations table (no data)'
+          success: false, 
+          message: 'No data in user_invitations table. Please drop the table manually using the Supabase dashboard.',
+          sql: 'DROP TABLE IF EXISTS user_invitations;'
         });
       }
       
@@ -123,21 +118,16 @@ export async function POST(req: Request) {
       
       // user_invitationsテーブルをリネーム
       if (migratedCount > 0) {
-        const { error: renameError } = await supabaseAdmin.rpc('exec_sql', {
-          query: `ALTER TABLE user_invitations RENAME TO user_invitations_backup;`
+        console.log('[API] Cannot rename user_invitations table via API. Please use Supabase dashboard to run:');
+        console.log('ALTER TABLE user_invitations RENAME TO user_invitations_backup;');
+        
+        return NextResponse.json({ 
+          success: true, 
+          message: `Successfully migrated ${migratedCount} records. Please rename the table manually using the Supabase dashboard.`,
+          migratedCount,
+          errors,
+          sql: 'ALTER TABLE user_invitations RENAME TO user_invitations_backup;'
         });
-        
-        if (renameError) {
-          console.error('[API] Error renaming user_invitations table:', renameError);
-          return NextResponse.json({ 
-            success: true, 
-            message: `Successfully migrated ${migratedCount} records, but failed to rename user_invitations table`,
-            migratedCount,
-            errors
-          });
-        }
-        
-        console.log('[API] Successfully renamed user_invitations table to user_invitations_backup');
       }
       
       return NextResponse.json({ 
@@ -149,24 +139,14 @@ export async function POST(req: Request) {
     }
     
     // invitationsテーブルが存在しない場合、user_invitationsテーブルをリネーム
-    console.log(`[API] ${INVITATIONS_TABLE} table does not exist, renaming user_invitations`);
+    console.log(`[API] ${INVITATIONS_TABLE} table does not exist, cannot rename via API`);
+    console.log('[API] Please use Supabase dashboard to run:');
+    console.log(`ALTER TABLE user_invitations RENAME TO ${INVITATIONS_TABLE};`);
     
-    const { error: renameError } = await supabaseAdmin.rpc('exec_sql', {
-      query: `ALTER TABLE user_invitations RENAME TO ${INVITATIONS_TABLE};`
-    });
-    
-    if (renameError) {
-      console.error('[API] Error renaming user_invitations table:', renameError);
-      return NextResponse.json(
-        { success: false, error: renameError },
-        { status: 500 },
-      );
-    }
-    
-    console.log(`[API] Successfully renamed user_invitations table to ${INVITATIONS_TABLE}`);
     return NextResponse.json({ 
-      success: true, 
-      message: `Successfully renamed user_invitations table to ${INVITATIONS_TABLE}`
+      success: false, 
+      message: `${INVITATIONS_TABLE} table does not exist. Please rename the table manually using the Supabase dashboard.`,
+      sql: `ALTER TABLE user_invitations RENAME TO ${INVITATIONS_TABLE};`
     });
   } catch (error) {
     console.error('[API] Exception in rename-table API:', error);
