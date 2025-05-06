@@ -175,8 +175,8 @@ CREATE TABLE IF NOT EXISTS public.app_users (
     document.getElementById('initClient').addEventListener('click', async () => {
       try {
         // Supabase URLとキーを設定
-        const supabaseUrl = 'https://czuedairowlwfqbjmfbg.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZxYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNTU2ODAsImV4cCI6MjA2MTYzMTY4MH0.Dxp1tgP88v0xBz3Dvr9hNoHy2nJR3iBrFcfvr-3LsHE';
+        const supabaseUrl = 'https://czuedairowlwfgbjmfbg.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZnYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNTU2ODAsImV4cCI6MjA2MTYzMTY4MH0.Dxp1tgP88v0xBz3Dvr9hNoHy2nJR3iBrFcfvr-3LsHE';
         
         // Supabaseクライアントを初期化
         supabase = supabaseJs.createClient(supabaseUrl, supabaseKey, {
