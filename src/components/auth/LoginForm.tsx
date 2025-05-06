@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getSupabaseClient } from '@/lib/supabaseClient'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabaseClient'
 
 interface LoginFormProps {
   onSuccess?: () => void
@@ -18,9 +19,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       setLoading(true)
       setError(null)
       
-      const supabase = getSupabaseClient()
+      const client = supabase()
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`
