@@ -3,7 +3,7 @@
 import React, { useState, useEffect, ReactNode, useRef } from 'react'
 import { UserInfo } from '@/utils/api';
 import { UserContext, UserContextType } from './context';
-import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from './utils';
+import { USER_STORAGE_KEY } from './utils';
 import {
   loginWithGoogle,
   logout,
@@ -18,7 +18,12 @@ import {
   verifyInviteToken,
   completeInvitation
 } from './operations/index';
-import { getSupabaseClient } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
+import { 
+  initializeProvider, 
+  setupAuthStateChangeListener,
+  setupSessionCheck
+} from './provider/index';
 
 // プロバイダーコンポーネント
 export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -28,7 +33,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // 初期値はfalse
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 初期化フラグ
   const [companyId, setCompanyId] = useState<string>(''); // 追加: 会社ID
-  const lastSavedUsers = useRef<UserInfo[]>([]); // 最後に保存したユーザーデータを保持するref
+  const alreadyInitialised = useRef(false); // 初期化フラグ
 
   // 初期化時にローカルストレージとセッションストレージからデータを読み込む（マウント時のみ実行）
   useEffect(() => {
@@ -42,144 +47,14 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     setIsInitialized(true);
 
     // 初期データ読み込みロジックを実行
-    const initializeProvider = async () => {
-      if (typeof window === 'undefined') return;
-
-      // 1. Supabaseセッションを確認
-      const supabase = getSupabaseClient();
-      let sessionUser = null;
-      let sessionCompanyId = '';
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log('[Provider Init] Supabase session found.');
-          sessionUser = session.user;
-          sessionCompanyId = session.user?.user_metadata?.company_id ?? '';
-          setCompanyId(sessionCompanyId); // メタデータから会社IDを設定
-          console.log('[Provider Init] Company ID from metadata:', sessionCompanyId);
-        } else {
-          console.log('[Provider Init] No active Supabase session.');
-        }
-      } catch (error) {
-        console.error('[Provider Init] Error checking Supabase session:', error);
-      }
-
-      // 2. ローカルストレージ/セッションストレージからユーザー情報を読み込む
-      let loadedUsers: UserInfo[] = [];
-      let savedUserInfo: UserInfo | null = null;
-
-      // まずセッションストレージから currentUser を試みる
-      try {
-        const sessionUserInfoStr = sessionStorage.getItem(USER_STORAGE_KEY);
-        if (sessionUserInfoStr) {
-          savedUserInfo = JSON.parse(sessionUserInfoStr);
-          console.log('[Provider Init] Restored potential currentUser from sessionStorage:', savedUserInfo?.email);
-        }
-      } catch (error) {
-        console.error('[Provider Init] Failed to parse currentUser from sessionStorage:', error);
-      }
-
-      // セッションになければローカルストレージから currentUser を試みる
-      if (!savedUserInfo) {
-        try {
-          const localUserInfoStr = localStorage.getItem(USER_STORAGE_KEY);
-          if (localUserInfoStr) {
-            savedUserInfo = JSON.parse(localUserInfoStr);
-            console.log('[Provider Init] Restored potential currentUser from localStorage:', savedUserInfo?.email);
-            // セッションにも保存
-            try {
-              sessionStorage.setItem(USER_STORAGE_KEY, localUserInfoStr);
-            } catch (e) {
-              console.error('[Provider Init] Failed to save currentUser to sessionStorage:', e);
-            }
-          }
-        } catch (error) {
-          console.error('[Provider Init] Failed to parse currentUser from localStorage:', error);
-        }
-      }
-
-      // USERS_STORAGE_KEY からユーザーリストを読み込む
-      try {
-        const storedUsersStr = localStorage.getItem(USERS_STORAGE_KEY);
-        if (storedUsersStr) {
-          const parsedData = JSON.parse(storedUsersStr) as { user: UserInfo, password?: string }[];
-          // nullチェックを追加
-          loadedUsers = parsedData.map(item => item.user).filter(user => user != null);
-          console.log('[Provider Init] Loaded users from localStorage:', loadedUsers.length);
-          setUsers(loadedUsers); // ユーザーリストをstateに設定
-          lastSavedUsers.current = loadedUsers; // 初期ロード時のデータを記録
-
-          // パスワード情報も復元 (必要であれば)
-          const loadedPasswords = parsedData.reduce((acc, item) => {
-            if (item.user && item.user.id && item.password) {
-              acc[item.user.id] = item.password;
-            }
-            return acc;
-          }, {} as Record<string, string>);
-          setUserPasswords(loadedPasswords);
-
-        } else {
-          console.log('[Provider Init] No users found in localStorage.');
-        }
-      } catch (error) {
-        console.error('[Provider Init] Failed to parse users from localStorage:', error);
-      }
-
-      // 3. currentUser を確定
-      if (savedUserInfo) {
-        // 保存されていたユーザーがリストに存在するか、またはSupabaseセッションと一致するか確認
-        const userExistsInList = loadedUsers.some(u => u.id === savedUserInfo!.id);
-        const sessionMatchesSaved = sessionUser && sessionUser.id === savedUserInfo.id;
-
-        if (userExistsInList || sessionMatchesSaved) {
-          // ステータスがなければアクティブに
-          if (!savedUserInfo.status) {
-            savedUserInfo.status = 'アクティブ';
-          }
-          // 会社IDがなければセッションから取得したものを設定
-          if (!savedUserInfo.companyId && sessionCompanyId) {
-            savedUserInfo.companyId = sessionCompanyId;
-          }
-          setCurrentUser(savedUserInfo);
-          setIsAuthenticated(true);
-          setCompanyId(savedUserInfo.companyId || sessionCompanyId); // 会社IDも確定
-          console.log('[Provider Init] Set current user:', savedUserInfo.email);
-
-          // リストに存在しないがセッションとは一致する場合、リストに追加する
-          if (!userExistsInList && sessionMatchesSaved) {
-            console.warn('[Provider Init] Current user from storage not in list, but matches session. Adding to list.');
-            const updatedUsers = [...loadedUsers, savedUserInfo];
-            setUsers(updatedUsers);
-            lastSavedUsers.current = updatedUsers;
-            const usersToSave = updatedUsers.map(u => ({ user: u, password: userPasswords[u.id] || '' }));
-            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-            try { sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave)); } catch(e){}
-          }
-
-        } else {
-          console.warn('[Provider Init] Saved user info does not match session or user list. Clearing.');
-          localStorage.removeItem(USER_STORAGE_KEY);
-          sessionStorage.removeItem(USER_STORAGE_KEY);
-          setCurrentUser(null);
-          setIsAuthenticated(false);
-        }
-      } else if (sessionUser) {
-        // ストレージにcurrentUserはないが、Supabaseセッションがある場合
-        // loginWithGoogle相当の処理を行うか、あるいは単に認証済みとするか
-        // ここではシンプルに認証済みとし、詳細はloginWithGoogleに任せる
-        console.log('[Provider Init] No user in storage, but Supabase session exists. Setting authenticated.');
-        setIsAuthenticated(true);
-        // 必要であれば、ここで sessionUser 情報から仮の currentUser を設定することも可能
-        // setCurrentUser({ ... basic user info from sessionUser ... });
-      } else {
-        console.log('[Provider Init] No user in storage and no Supabase session.');
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-      }
-    };
-
-    initializeProvider();
-  }, [isInitialized, userPasswords]); // isInitialized を依存配列に追加
+    initializeProvider(
+      setCurrentUser,
+      setUsers,
+      setIsAuthenticated,
+      setCompanyId,
+      setUserPasswords
+    );
+  }, [isInitialized]); // isInitialized を依存配列に追加
 
   // currentUser と companyInfo の不整合チェック
   useEffect(() => {
@@ -199,103 +74,28 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [currentUser]); // currentUser が変更されたときにチェック
 
-  // Supabaseの認証状態変更を監視
+  // 認証状態変更リスナーを設定
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[Provider] Auth state changed:', event, session?.user?.email);
-        if (event === 'SIGNED_IN') {
-          console.log('[Provider] User SIGNED_IN, attempting to update user info...');
-          // loginWithGoogle内でユーザー情報取得・設定・保存を行う
-          await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
-          // セッションから会社IDを再取得・設定
-          const cid = session?.user?.user_metadata?.company_id ?? '';
-          setCompanyId(cid);
-          console.log('[Provider] Company ID updated from SIGNED_IN event:', cid);
-        } else if (event === 'SIGNED_OUT') {
-          console.log('[Provider] User SIGNED_OUT, clearing state.');
-          setCurrentUser(null);
-          setIsAuthenticated(false);
-          setCompanyId(''); // 会社IDもクリア
-          // ストレージクリアは logout 関数内で行う想定
-        } else if (event === 'USER_UPDATED') {
-          console.log('[Provider] User data UPDATED in Supabase.');
-          // 必要に応じて currentUser や users リストを更新
-          if (session?.user && currentUser && session.user.id === currentUser.id) {
-            const metaCompanyId = session.user.user_metadata?.company_id ?? '';
-            if (metaCompanyId !== currentUser.companyId) {
-              console.log('[Provider] Updating companyId based on USER_UPDATED event.');
-              const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
-              setCurrentUser(updatedCurrentUser);
-              setCompanyId(metaCompanyId);
-              // ストレージにも反映
-              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
-              try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
-            }
-          }
-        }
-      }
+    const subscription = setupAuthStateChangeListener(
+      currentUser,
+      setCurrentUser,
+      setUsers,
+      setIsAuthenticated,
+      setCompanyId,
+      alreadyInitialised
+    );
+
+    // セッションの有効性を定期的にチェック
+    const intervalId = setupSessionCheck(
+      setCurrentUser,
+      setIsAuthenticated,
+      setCompanyId
     );
 
     return () => {
-      subscription.unsubscribe();
-    };
-  }, [currentUser]); // currentUser を依存配列に追加してメタデータ更新に対応
-
-  // 初回のみ実行するAuth監視リスナーを設定
-  const alreadyInitialised = useRef(false); // 初期化フラグ
-
-  useEffect(() => {
-    const supabase = getSupabaseClient();
-    console.log('[Provider] Setting up onAuthStateChange listener'); // リスナー設定ログ
-    
-    const { data: authSubscription } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Provider] onAuthStateChange event:', event);
-      
-      if (alreadyInitialised.current && (event === 'INITIAL_SESSION')) {
-        console.log('[Provider] Already initialized and event is INITIAL_SESSION, skipping.');
-        return; // INITIAL_SESSION は初回以降無視
-      }
-
-      // SIGNED_IN または 初回のINITIAL_SESSION のみ処理
-      if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && !alreadyInitialised.current)) {
-        if (alreadyInitialised.current) {
-          console.log('[Provider] Already initialized but received SIGNED_IN, processing...');
-          // SIGNED_INの場合は再処理が必要な場合があるためフラグをリセットしない
-        } else {
-          console.log('[Provider] Initializing based on event:', event);
-          alreadyInitialised.current = true; // ここでフラグを立てる
-        }
-
-        console.log('[Provider] Loading user data due to auth event:', event);
-        // loginWithGoogle内でユーザー情報取得・設定・保存を行う
-        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
-      } else if (event === 'SIGNED_OUT') {
-        console.log('[Provider] User SIGNED_OUT, clearing state.');
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-        setCompanyId('');
-        alreadyInitialised.current = false; // ログアウトしたら初期化フラグをリセット
-      } else if (event === 'USER_UPDATED') {
-        console.log('[Provider] User data UPDATED in Supabase.');
-        if (session?.user && currentUser && session.user.id === currentUser.id) {
-          const metaCompanyId = session.user.user_metadata?.company_id ?? '';
-          if (metaCompanyId !== currentUser.companyId) {
-            console.log('[Provider] Updating companyId based on USER_UPDATED event.');
-            const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
-            setCurrentUser(updatedCurrentUser);
-            setCompanyId(metaCompanyId);
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
-            try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
-          }
-        }
-      }
-    });
-
-    return () => {
       console.log('[Provider] Unsubscribing from onAuthStateChange'); // クリーンアップログ
-      authSubscription.subscription.unsubscribe();
+      subscription.unsubscribe();
+      clearInterval(intervalId);
     };
   }, [currentUser]); // currentUserの変更でも再実行が必要なロジックがあるため、一旦残す
 

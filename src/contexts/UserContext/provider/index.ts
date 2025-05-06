@@ -1,2 +1,9 @@
-export * from './auth-listeners';
-export * from './initialization';
+import { initializeProvider, handleSessionExpired } from './initialization';
+import { setupAuthStateChangeListener, setupSessionCheck } from './auth-listeners';
+
+export {
+  initializeProvider,
+  handleSessionExpired,
+  setupAuthStateChangeListener,
+  setupSessionCheck
+};

@@ -1,74 +1,23 @@
-import { Dispatch, SetStateAction, MutableRefObject } from 'react';
+import { Dispatch, SetStateAction } from 'react';
 import { UserInfo } from '@/utils/api';
-import { getSupabaseClient } from '@/lib/supabaseClient';
 import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
-import { loginWithGoogle } from '../operations';
+import { supabase } from '@/lib/supabaseClient';
+import { loginWithGoogle } from '../operations/auth';
+import { handleSessionExpired } from './initialization';
 
-/**
- * Supabaseの認証状態変更を監視するリスナーを設定
- */
-export const setupAuthStateListener = (
+// 認証状態変更リスナーを設定する関数
+export const setupAuthStateChangeListener = (
   currentUser: UserInfo | null,
   setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
   setUsers: Dispatch<SetStateAction<UserInfo[]>>,
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
-  setCompanyId: Dispatch<SetStateAction<string>>
-) => {
-  const supabase = getSupabaseClient();
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
-      console.log('[Provider] Auth state changed:', event, session?.user?.email);
-      if (event === 'SIGNED_IN') {
-        console.log('[Provider] User SIGNED_IN, attempting to update user info...');
-        // loginWithGoogle内でユーザー情報取得・設定・保存を行う
-        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
-        // セッションから会社IDを再取得・設定
-        const cid = session?.user?.user_metadata?.company_id ?? '';
-        setCompanyId(cid);
-        console.log('[Provider] Company ID updated from SIGNED_IN event:', cid);
-      } else if (event === 'SIGNED_OUT') {
-        console.log('[Provider] User SIGNED_OUT, clearing state.');
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-        setCompanyId(''); // 会社IDもクリア
-        // ストレージクリアは logout 関数内で行う想定
-      } else if (event === 'USER_UPDATED') {
-        console.log('[Provider] User data UPDATED in Supabase.');
-        // 必要に応じて currentUser や users リストを更新
-        if (session?.user && currentUser && session.user.id === currentUser.id) {
-          const metaCompanyId = session.user.user_metadata?.company_id ?? '';
-          if (metaCompanyId !== currentUser.companyId) {
-            console.log('[Provider] Updating companyId based on USER_UPDATED event.');
-            const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
-            setCurrentUser(updatedCurrentUser);
-            setCompanyId(metaCompanyId);
-            // ストレージにも反映
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
-            try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
-          }
-        }
-      }
-    }
-  );
-
-  return subscription;
-};
-
-/**
- * 初回のみ実行するAuth監視リスナーを設定
- */
-export const setupInitialAuthListener = (
-  alreadyInitialised: MutableRefObject<boolean>,
-  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
-  setUsers: Dispatch<SetStateAction<UserInfo[]>>,
-  setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
   setCompanyId: Dispatch<SetStateAction<string>>,
-  currentUser: UserInfo | null
+  alreadyInitialised: { current: boolean }
 ) => {
-  const supabase = getSupabaseClient();
+  const client = supabase();
   console.log('[Provider] Setting up onAuthStateChange listener');
   
-  const { data: authSubscription } = supabase.auth.onAuthStateChange(async (event, session) => {
+  const { data: authSubscription } = client.auth.onAuthStateChange(async (event, session) => {
     console.log('[Provider] onAuthStateChange event:', event);
     
     if (alreadyInitialised.current && (event === 'INITIAL_SESSION')) {
@@ -89,11 +38,16 @@ export const setupInitialAuthListener = (
       console.log('[Provider] Loading user data due to auth event:', event);
       // loginWithGoogle内でユーザー情報取得・設定・保存を行う
       await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
+      
+      // セッションから会社IDを設定
+      if (session?.user?.user_metadata?.company_id) {
+        const cid = session.user.user_metadata.company_id;
+        setCompanyId(cid);
+        console.log('[Provider] Company ID updated from auth event:', cid);
+      }
     } else if (event === 'SIGNED_OUT') {
       console.log('[Provider] User SIGNED_OUT, clearing state.');
-      setCurrentUser(null);
-      setIsAuthenticated(false);
-      setCompanyId('');
+      handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
       alreadyInitialised.current = false; // ログアウトしたら初期化フラグをリセット
     } else if (event === 'USER_UPDATED') {
       console.log('[Provider] User data UPDATED in Supabase.');
@@ -108,8 +62,51 @@ export const setupInitialAuthListener = (
           try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
         }
       }
+    } else if (event === 'TOKEN_REFRESHED') {
+      console.log('[Provider] Token refreshed, updating session.');
+      // トークンが更新された場合、セッションを更新
+      if (session) {
+        // 必要に応じてセッション情報を更新
+        console.log('[Provider] Session updated after token refresh.');
+      } else {
+        console.warn('[Provider] Token refreshed but no session found.');
+        // セッションがない場合はログアウト処理
+        handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
+      }
+    } else if (event === 'PASSWORD_RECOVERY') {
+      console.log('[Provider] Password recovery event received.');
+      // パスワードリカバリーイベントの処理（必要に応じて）
     }
   });
 
-  return authSubscription;
+  return authSubscription.subscription;
+};
+
+// セッションの有効性を定期的にチェックする関数
+export const setupSessionCheck = (
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
+  setCompanyId: Dispatch<SetStateAction<string>>
+) => {
+  // 5分ごとにセッションをチェック
+  const intervalId = setInterval(async () => {
+    try {
+      const client = supabase();
+      const { data: { session }, error } = await client.auth.getSession();
+      
+      if (error) {
+        console.error('[SessionCheck] Error checking session:', error);
+        return;
+      }
+      
+      if (!session) {
+        console.log('[SessionCheck] No active session found, logging out.');
+        handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
+      }
+    } catch (error) {
+      console.error('[SessionCheck] Exception checking session:', error);
+    }
+  }, 5 * 60 * 1000); // 5分ごと
+  
+  return intervalId;
 };
