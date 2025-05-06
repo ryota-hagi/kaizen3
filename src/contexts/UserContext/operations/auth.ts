@@ -34,8 +34,23 @@ export const loginWithGoogle = async (
       return false;
     }
     
+    // app_usersテーブルからユーザー情報を取得
+    let dbUserInfo = null;
+    try {
+      const { getUserFromDatabase } = await import('@/lib/supabaseClient');
+      const result = await getUserFromDatabase(user.id);
+      if (result.success && result.data) {
+        console.log('[Supabase] User found in database:', result.data);
+        dbUserInfo = result.data;
+      } else {
+        console.log('[Supabase] User not found in database or error:', result.error);
+      }
+    } catch (error) {
+      console.error('[Supabase] Error importing getUserFromDatabase:', error);
+    }
+    
     // ローカルストレージからユーザーリストを取得
-    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({ users: [] }));
     
     // ユーザーIDで既存ユーザーを検索
     const existingUser = currentUsers.find(u => u.id === user.id);
@@ -43,19 +58,22 @@ export const loginWithGoogle = async (
     // Supabaseのユーザーメタデータから会社IDを取得（優先）
     const companyIdFromMetadata = user.user_metadata?.company_id;
     
+    // データベースから会社IDを取得（次に優先）
+    const companyIdFromDatabase = dbUserInfo?.company_id;
+    
     // UserInfo形式に変換
     const userInfo: UserInfo = {
       id: user.id,
       username: user.email?.split('@')[0] || '',
       email: user.email || '',
-      fullName: user.user_metadata?.full_name || '',
-      role: user.user_metadata?.role || existingUser?.role || '管理者', // メタデータから役割を取得
+      fullName: user.user_metadata?.full_name || dbUserInfo?.full_name || '',
+      role: user.user_metadata?.role || dbUserInfo?.role || existingUser?.role || '管理者', // メタデータから役割を取得
       status: 'アクティブ' as UserStatus,
-      createdAt: existingUser?.createdAt || user.created_at || new Date().toISOString(),
+      createdAt: existingUser?.createdAt || (dbUserInfo?.created_at as string) || (user.created_at as string) || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isInvited: false, // 招待フラグをリセット
       inviteToken: existingUser?.inviteToken || '',
-      companyId: companyIdFromMetadata || existingUser?.companyId || '' // メタデータから会社IDを優先取得
+      companyId: companyIdFromMetadata || companyIdFromDatabase || existingUser?.companyId || '' // メタデータから会社IDを優先取得、次にDBから
     };
     
     // ユーザー情報を保存
@@ -213,7 +231,7 @@ export const updateUserAfterGoogleSignIn = async (
     console.log('[updateUserAfterGoogleSignIn] Processing user with data:', userData);
     
     // 既存のユーザー情報を取得
-    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
+    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({ users: [] }));
     
     // Supabaseのユーザーメタデータを更新
     try {
@@ -243,7 +261,7 @@ export const updateUserAfterGoogleSignIn = async (
       fullName: user.user_metadata?.full_name || '',
       role: userData.role || currentUsers.find(u => u.id === user.id)?.role || '一般ユーザー',
       status: 'アクティブ' as UserStatus, // 招待完了状態に設定
-      createdAt: currentUsers.find(u => u.id === user.id)?.createdAt || user.created_at || new Date().toISOString(),
+      createdAt: currentUsers.find(u => u.id === user.id)?.createdAt || (user.created_at as string) || new Date().toISOString(),
       lastLogin: new Date().toISOString(),
       isInvited: false, // 招待フラグをリセット
       inviteToken: userData.inviteToken || currentUsers.find(u => u.id === user.id)?.inviteToken || '',
