@@ -62,6 +62,19 @@ export const loginWithGoogle = async (
     setCurrentUser(userInfo);
     setIsAuthenticated(true);
     
+    // app_usersテーブルにユーザー情報を保存
+    try {
+      const { saveUserToDatabase } = await import('@/lib/supabaseClient');
+      const result = await saveUserToDatabase(user.id, userInfo);
+      if (!result.success) {
+        console.error('[Supabase] Failed to save user to database:', result.error);
+      } else {
+        console.log('[Supabase] User saved to database successfully');
+      }
+    } catch (error) {
+      console.error('[Supabase] Error importing saveUserToDatabase:', error);
+    }
+    
     // ローカルストレージとセッションストレージに保存
     if (typeof window !== 'undefined') {
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
@@ -236,6 +249,19 @@ export const updateUserAfterGoogleSignIn = async (
       inviteToken: userData.inviteToken || currentUsers.find(u => u.id === user.id)?.inviteToken || '',
       companyId: userData.companyId || user.user_metadata?.company_id || currentUsers.find(u => u.id === user.id)?.companyId || ''
     };
+    
+    // app_usersテーブルにユーザー情報を保存
+    try {
+      const { saveUserToDatabase } = await import('@/lib/supabaseClient');
+      const result = await saveUserToDatabase(user.id, updatedUserInfo);
+      if (!result.success) {
+        console.error('[updateUserAfterGoogleSignIn] Failed to save user to database:', result.error);
+      } else {
+        console.log('[updateUserAfterGoogleSignIn] User saved to database successfully');
+      }
+    } catch (error) {
+      console.error('[updateUserAfterGoogleSignIn] Error importing saveUserToDatabase:', error);
+    }
     
     console.log('[updateUserAfterGoogleSignIn] Updating user with company ID:', updatedUserInfo.companyId);
     
