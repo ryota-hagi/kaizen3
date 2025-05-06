@@ -16,9 +16,6 @@ export const supabase = () => {
     // テーブル名を明示的に指定
     console.log('► Creating Supabase client with public schema');
     _client = createClient(url, anon, {
-      db: {
-        schema: 'public',
-      },
       auth: {
         persistSession: true,
         autoRefreshToken: true,
