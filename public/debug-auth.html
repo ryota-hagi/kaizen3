@@ -133,8 +133,8 @@
         // 環境変数を取得（実際にはフロントエンドからは直接取得できないため、
         // Next.jsのAPI経由で取得するか、NEXT_PUBLIC_で始まる環境変数のみ取得可能）
         const envVars = {
-          NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || window.location.origin,
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '設定されています（セキュリティのため表示しません）' : '設定されていません'
+          NEXT_PUBLIC_SUPABASE_URL: 'https://czuedairowlwfqbjmfbg.supabase.co',
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: '設定されています（セキュリティのため表示しません）'
         };
         
         displayResult('envResult', envVars);
@@ -146,13 +146,12 @@
     // 2. Supabaseクライアントの初期化
     document.getElementById('initClient').addEventListener('click', async () => {
       try {
-        // URLからSupabase URLを取得（デモ用）
-        const urlParams = new URLSearchParams(window.location.search);
-        const supabaseUrl = urlParams.get('url') || 'https://czuedairowlwfqbjmfbg.supabase.co';
-        const supabaseKey = urlParams.get('key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZxYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNTU2ODAsImV4cCI6MjA2MTYzMTY4MH0.Dxp1tgP88v0xBz3Dvr9hNoHy2nJR3iBrFcfvr-3LsHE';
+        // Supabase URLとキーを設定
+        const supabaseUrl = 'https://czuedairowlwfqbjmfbg.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZxYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNTU2ODAsImV4cCI6MjA2MTYzMTY4MH0.Dxp1tgP88v0xBz3Dvr9hNoHy2nJR3iBrFcfvr-3LsHE';
         
         // Supabaseクライアントを初期化
-        supabase = supabase || supabaseJs.createClient(supabaseUrl, supabaseKey, {
+        supabase = supabaseJs.createClient(supabaseUrl, supabaseKey, {
           auth: {
             persistSession: true,
             autoRefreshToken: true,
@@ -372,7 +371,7 @@
           .eq('auth_uid', user.id)
           .single();
         
-        if (error) {
+        if (error && error.code !== 'PGRST116') { // PGRST116はレコードが見つからないエラー
           throw error;
         }
         
