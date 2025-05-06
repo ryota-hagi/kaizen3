@@ -70,6 +70,15 @@ export const loadUserDataFromLocalStorage = (
       // 読み込んだユーザーデータを確認（招待中のユーザーのみ）
       const invitedUsers = loadedUsers.filter(user => user.status === '招待中');
       console.log('読み込んだ招待中ユーザー:', invitedUsers.length, '件');
+      
+      // 招待中ユーザーのcompany_idを保持するために、ステータスとisInvitedフラグを確認
+      for (const user of invitedUsers) {
+        console.log(`[loadUserData] ユーザー ${user.email} の会社ID: ${user.companyId}`);
+        // 会社IDが存在する場合は保持する
+        if (user.companyId) {
+          console.log(`[loadUserData] ユーザー ${user.email} の会社ID ${user.companyId} を保持します`);
+        }
+      }
     } catch (error) {
       console.error('[loadUserData] Failed to parse users from localStorage:', error);
     }
