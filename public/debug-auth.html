@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabase認証デバッグ</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 10px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Supabase認証デバッグツール</h1>
+  
+  <div class="section">
+    <h2>1. 環境変数の確認</h2>
+    <button id="checkEnv">環境変数を確認</button>
+    <div id="envResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>2. Supabaseクライアントの初期化</h2>
+    <button id="initClient">クライアントを初期化</button>
+    <div id="clientResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>3. 現在のセッション確認</h2>
+    <button id="checkSession">セッションを確認</button>
+    <div id="sessionResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>4. ユーザー情報の確認</h2>
+    <button id="checkUser">ユーザー情報を確認</button>
+    <div id="userResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>5. データベース接続テスト</h2>
+    <button id="testDb">データベース接続をテスト</button>
+    <div id="dbResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>6. ログイン</h2>
+    <button id="loginWithGoogle">Googleでログイン</button>
+    <div id="loginResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>7. ログアウト</h2>
+    <button id="logout">ログアウト</button>
+    <div id="logoutResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>8. ローカルストレージの確認</h2>
+    <button id="checkStorage">ローカルストレージを確認</button>
+    <div id="storageResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>9. app_usersテーブルの確認</h2>
+    <button id="checkAppUsers">app_usersテーブルを確認</button>
+    <div id="appUsersResult"></div>
+  </div>
+
+  <script>
+    // 結果表示用のヘルパー関数
+    function displayResult(elementId, data, isError = false) {
+      const element = document.getElementById(elementId);
+      if (isError) {
+        element.innerHTML = `<p class="error">エラー:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+      } else {
+        element.innerHTML = `<p class="success">成功:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+      }
+    }
+
+    // Supabaseクライアントの初期化
+    let supabase;
+    
+    // 1. 環境変数の確認
+    document.getElementById('checkEnv').addEventListener('click', async () => {
+      try {
+        // 環境変数を取得（実際にはフロントエンドからは直接取得できないため、
+        // Next.jsのAPI経由で取得するか、NEXT_PUBLIC_で始まる環境変数のみ取得可能）
+        const envVars = {
+          NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || window.location.origin,
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '設定されています（セキュリティのため表示しません）' : '設定されていません'
+        };
+        
+        displayResult('envResult', envVars);
+      } catch (error) {
+        displayResult('envResult', error, true);
+      }
+    });
+
+    // 2. Supabaseクライアントの初期化
+    document.getElementById('initClient').addEventListener('click', async () => {
+      try {
+        // URLからSupabase URLを取得（デモ用）
+        const urlParams = new URLSearchParams(window.location.search);
+        const supabaseUrl = urlParams.get('url') || 'https://czuedairowlwfqbjmfbg.supabase.co';
+        const supabaseKey = urlParams.get('key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZxYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNTU2ODAsImV4cCI6MjA2MTYzMTY4MH0.Dxp1tgP88v0xBz3Dvr9hNoHy2nJR3iBrFcfvr-3LsHE';
+        
+        // Supabaseクライアントを初期化
+        supabase = supabase || supabaseJs.createClient(supabaseUrl, supabaseKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+          }
+        });
+        
+        displayResult('clientResult', {
+          message: 'Supabaseクライアントが初期化されました',
+          url: supabaseUrl,
+          keyLength: supabaseKey.length
+        });
+      } catch (error) {
+        displayResult('clientResult', error, true);
+      }
+    });
+
+    // 3. 現在のセッション確認
+    document.getElementById('checkSession').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data.session) {
+          displayResult('sessionResult', {
+            message: 'アクティブなセッションが見つかりました',
+            sessionId: data.session.id,
+            userId: data.session.user.id,
+            email: data.session.user.email,
+            expiresAt: new Date(data.session.expires_at * 1000).toLocaleString(),
+            metadata: data.session.user.user_metadata
+          });
+        } else {
+          displayResult('sessionResult', { message: 'アクティブなセッションが見つかりませんでした' });
+        }
+      } catch (error) {
+        displayResult('sessionResult', error, true);
+      }
+    });
+
+    // 4. ユーザー情報の確認
+    document.getElementById('checkUser').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        const { data, error } = await supabase.auth.getUser();
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data.user) {
+          displayResult('userResult', {
+            message: 'ユーザー情報が見つかりました',
+            id: data.user.id,
+            email: data.user.email,
+            createdAt: data.user.created_at,
+            metadata: data.user.user_metadata
+          });
+        } else {
+          displayResult('userResult', { message: 'ユーザー情報が見つかりませんでした' });
+        }
+      } catch (error) {
+        displayResult('userResult', error, true);
+      }
+    });
+
+    // 5. データベース接続テスト
+    document.getElementById('testDb').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        // テーブル一覧を取得
+        const { data, error } = await supabase
+          .from('app_users')
+          .select('id')
+          .limit(1);
+        
+        if (error) {
+          throw error;
+        }
+        
+        displayResult('dbResult', {
+          message: 'データベース接続に成功しました',
+          tableExists: true,
+          recordCount: data.length
+        });
+      } catch (error) {
+        displayResult('dbResult', error, true);
+      }
+    });
+
+    // 6. ログイン
+    document.getElementById('loginWithGoogle').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`
+          }
+        });
+        
+        if (error) {
+          throw error;
+        }
+        
+        displayResult('loginResult', {
+          message: 'ログイン処理が開始されました',
+          url: data.url
+        });
+        
+        // リダイレクト
+        window.location.href = data.url;
+      } catch (error) {
+        displayResult('loginResult', error, true);
+      }
+    });
+
+    // 7. ログアウト
+    document.getElementById('logout').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+          throw error;
+        }
+        
+        displayResult('logoutResult', {
+          message: 'ログアウトに成功しました'
+        });
+        
+        // ローカルストレージをクリア
+        localStorage.removeItem('kaizen_user');
+        sessionStorage.removeItem('kaizen_user');
+      } catch (error) {
+        displayResult('logoutResult', error, true);
+      }
+    });
+
+    // 8. ローカルストレージの確認
+    document.getElementById('checkStorage').addEventListener('click', async () => {
+      try {
+        const storageData = {
+          localStorage: {},
+          sessionStorage: {}
+        };
+        
+        // ローカルストレージの内容を取得
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          try {
+            const value = localStorage.getItem(key);
+            storageData.localStorage[key] = JSON.parse(value);
+          } catch (e) {
+            storageData.localStorage[key] = localStorage.getItem(key);
+          }
+        }
+        
+        // セッションストレージの内容を取得
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          try {
+            const value = sessionStorage.getItem(key);
+            storageData.sessionStorage[key] = JSON.parse(value);
+          } catch (e) {
+            storageData.sessionStorage[key] = sessionStorage.getItem(key);
+          }
+        }
+        
+        displayResult('storageResult', storageData);
+      } catch (error) {
+        displayResult('storageResult', error, true);
+      }
+    });
+
+    // 9. app_usersテーブルの確認
+    document.getElementById('checkAppUsers').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        // ユーザー情報を取得
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError) {
+          throw userError;
+        }
+        
+        if (!user) {
+          throw new Error('ユーザーがログインしていません');
+        }
+        
+        // app_usersテーブルからユーザー情報を取得
+        const { data, error } = await supabase
+          .from('app_users')
+          .select('*')
+          .eq('auth_uid', user.id)
+          .single();
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data) {
+          displayResult('appUsersResult', {
+            message: 'app_usersテーブルにユーザー情報が見つかりました',
+            userData: data
+          });
+        } else {
+          // ユーザー情報が見つからない場合は、テーブルに保存
+          const { data: insertData, error: insertError } = await supabase
+            .from('app_users')
+            .upsert({
+              id: user.id,
+              auth_uid: user.id,
+              email: user.email,
+              role: user.user_metadata?.role || '一般ユーザー',
+              status: 'アクティブ',
+              created_at: user.created_at,
+              updated_at: new Date().toISOString(),
+              last_login: new Date().toISOString()
+            }, { onConflict: 'auth_uid' })
+            .select();
+          
+          if (insertError) {
+            throw insertError;
+          }
+          
+          displayResult('appUsersResult', {
+            message: 'ユーザー情報をapp_usersテーブルに保存しました',
+            userData: insertData
+          });
+        }
+      } catch (error) {
+        displayResult('appUsersResult', error, true);
+      }
+    });
+
+    // ページ読み込み時に自動的にクライアントを初期化
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('initClient').click();
+    });
+  </script>
+</body>
+</html>
