@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
-import { getSupabaseClient, createAppUsersTable, saveUserToDatabase, getUserFromDatabase } from '@/lib/supabaseClient'
+import { supabase, createAppUsersTable, saveUserToDatabase, getUserFromDatabase } from '@/lib/supabaseClient'
 
 export default function CallbackClient() {
   const router = useRouter()
@@ -18,8 +18,8 @@ export default function CallbackClient() {
         setLoading(true)
         
         // Supabaseのセッションを取得
-        const supabase = getSupabaseClient()
-        const { data, error } = await supabase.auth.getSession()
+        const client = supabase()
+        const { data, error } = await client.auth.getSession()
         
         if (error) {
           console.error('[DEBUG] Error getting session:', error)
@@ -36,7 +36,7 @@ export default function CallbackClient() {
         }
         
         // ユーザー情報を取得
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        const { data: { user }, error: userError } = await client.auth.getUser()
         
         if (userError || !user) {
           console.error('[DEBUG] Error getting user:', userError)
@@ -62,7 +62,7 @@ export default function CallbackClient() {
         
         if (success) {
           // ユーザーが既存かどうかを確認
-          const { data: { user } } = await supabase.auth.getUser()
+          const { data: { user } } = await client.auth.getUser()
           
           if (!user) {
             setError('ユーザー情報の取得に失敗しました')

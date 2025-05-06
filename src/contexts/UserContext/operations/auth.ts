@@ -1,6 +1,6 @@
 import { UserInfo, UserStatus } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
-import { getSupabaseClient } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import { isEqual } from '@/utils/deepEqual';
 import { fetchAndCacheCompanyInfo } from '@/utils/companyInfo';
 
@@ -11,10 +11,10 @@ export const loginWithGoogle = async (
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ): Promise<boolean> => {
   try {
-    const supabase = getSupabaseClient();
+    const client = supabase();
     
     // 現在のセッションを取得
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
     
     if (sessionError) {
       console.error('[Supabase] Session error:', sessionError);
@@ -27,7 +27,7 @@ export const loginWithGoogle = async (
     }
     
     // ユーザー情報を取得
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await client.auth.getUser();
     
     if (userError || !user) {
       console.error('[Supabase] User error:', userError);
@@ -175,10 +175,10 @@ export const logout = async (
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ) => {
   try {
-    const supabase = getSupabaseClient();
+    const client = supabase();
     
     // Supabaseからログアウト
-    await supabase.auth.signOut();
+    await client.auth.signOut();
     
     // ローカルの状態をクリア
     setCurrentUser(null);
@@ -203,10 +203,10 @@ export const updateUserAfterGoogleSignIn = async (
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
 ): Promise<boolean> => {
   try {
-    const supabase = getSupabaseClient();
+    const client = supabase();
     
     // 現在のセッションを取得
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
     
     if (sessionError || !session) {
       console.error('[Supabase] Session error:', sessionError);
@@ -214,7 +214,7 @@ export const updateUserAfterGoogleSignIn = async (
     }
     
     // ユーザー情報を取得
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await client.auth.getUser();
     
     if (userError || !user) {
       console.error('[Supabase] User error:', userError);
@@ -235,7 +235,7 @@ export const updateUserAfterGoogleSignIn = async (
     
     // Supabaseのユーザーメタデータを更新
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await client.auth.updateUser({
         data: {
           company_id: userData.companyId,
           role: userData.role || '一般ユーザー',
