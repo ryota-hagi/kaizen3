@@ -1,10 +1,9 @@
 'use client'
 
 import React, { useState, useEffect, ReactNode, useRef } from 'react'
-import { isEqual } from '@/utils/deepEqual'
 import { UserInfo } from '@/utils/api';
-import { UserContext, UserContextType, defaultUserContext } from './context';
-import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from './utils';
+import { UserContext, UserContextType } from './context';
+import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from './utils';
 import {
   loginWithGoogle,
   logout,
@@ -16,11 +15,10 @@ import {
   getEmployees,
   deleteCompanyAccount,
   inviteUser,
-  verifyInviteToken, // ★ verifyInviteToken はまだ他の場所で使われる可能性があるので残す
+  verifyInviteToken,
   completeInvitation
 } from './operations/index';
 import { getSupabaseClient } from '@/lib/supabaseClient';
-// import { isUserInvited, needsInviteFlow } from '@/utils/userHelpers'; // ★ 不要になったインポートを削除
 
 // プロバイダーコンポーネント
 export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -43,7 +41,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     console.log('[Provider] useEffect: 初期化処理を実行します');
     setIsInitialized(true);
 
-    // ★★★ 初期データ読み込みロジックをここに集約 ★★★
+    // 初期データ読み込みロジックを実行
     const initializeProvider = async () => {
       if (typeof window === 'undefined') return;
 
@@ -111,17 +109,17 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           setUsers(loadedUsers); // ユーザーリストをstateに設定
           lastSavedUsers.current = loadedUsers; // 初期ロード時のデータを記録
 
-           // パスワード情報も復元 (必要であれば)
-           const loadedPasswords = parsedData.reduce((acc, item) => {
-             if (item.user && item.user.id && item.password) {
-               acc[item.user.id] = item.password;
-             }
-             return acc;
-           }, {} as Record<string, string>);
-           setUserPasswords(loadedPasswords);
+          // パスワード情報も復元 (必要であれば)
+          const loadedPasswords = parsedData.reduce((acc, item) => {
+            if (item.user && item.user.id && item.password) {
+              acc[item.user.id] = item.password;
+            }
+            return acc;
+          }, {} as Record<string, string>);
+          setUserPasswords(loadedPasswords);
 
         } else {
-           console.log('[Provider Init] No users found in localStorage.');
+          console.log('[Provider Init] No users found in localStorage.');
         }
       } catch (error) {
         console.error('[Provider Init] Failed to parse users from localStorage:', error);
@@ -134,29 +132,29 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         const sessionMatchesSaved = sessionUser && sessionUser.id === savedUserInfo.id;
 
         if (userExistsInList || sessionMatchesSaved) {
-           // ステータスがなければアクティブに
-           if (!savedUserInfo.status) {
-             savedUserInfo.status = 'アクティブ';
-           }
-           // 会社IDがなければセッションから取得したものを設定
-           if (!savedUserInfo.companyId && sessionCompanyId) {
-               savedUserInfo.companyId = sessionCompanyId;
-           }
-           setCurrentUser(savedUserInfo);
-           setIsAuthenticated(true);
-           setCompanyId(savedUserInfo.companyId || sessionCompanyId); // 会社IDも確定
-           console.log('[Provider Init] Set current user:', savedUserInfo.email);
+          // ステータスがなければアクティブに
+          if (!savedUserInfo.status) {
+            savedUserInfo.status = 'アクティブ';
+          }
+          // 会社IDがなければセッションから取得したものを設定
+          if (!savedUserInfo.companyId && sessionCompanyId) {
+            savedUserInfo.companyId = sessionCompanyId;
+          }
+          setCurrentUser(savedUserInfo);
+          setIsAuthenticated(true);
+          setCompanyId(savedUserInfo.companyId || sessionCompanyId); // 会社IDも確定
+          console.log('[Provider Init] Set current user:', savedUserInfo.email);
 
-           // リストに存在しないがセッションとは一致する場合、リストに追加する
-           if (!userExistsInList && sessionMatchesSaved) {
-               console.warn('[Provider Init] Current user from storage not in list, but matches session. Adding to list.');
-               const updatedUsers = [...loadedUsers, savedUserInfo];
-               setUsers(updatedUsers);
-               lastSavedUsers.current = updatedUsers;
-               const usersToSave = updatedUsers.map(u => ({ user: u, password: userPasswords[u.id] || '' }));
-               localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-               try { sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave)); } catch(e){}
-           }
+          // リストに存在しないがセッションとは一致する場合、リストに追加する
+          if (!userExistsInList && sessionMatchesSaved) {
+            console.warn('[Provider Init] Current user from storage not in list, but matches session. Adding to list.');
+            const updatedUsers = [...loadedUsers, savedUserInfo];
+            setUsers(updatedUsers);
+            lastSavedUsers.current = updatedUsers;
+            const usersToSave = updatedUsers.map(u => ({ user: u, password: userPasswords[u.id] || '' }));
+            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+            try { sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave)); } catch(e){}
+          }
 
         } else {
           console.warn('[Provider Init] Saved user info does not match session or user list. Clearing.');
@@ -166,26 +164,24 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           setIsAuthenticated(false);
         }
       } else if (sessionUser) {
-          // ストレージにcurrentUserはないが、Supabaseセッションがある場合
-          // loginWithGoogle相当の処理を行うか、あるいは単に認証済みとするか
-          // ここではシンプルに認証済みとし、詳細はloginWithGoogleに任せる
-          console.log('[Provider Init] No user in storage, but Supabase session exists. Setting authenticated.');
-          setIsAuthenticated(true);
-          // 必要であれば、ここで sessionUser 情報から仮の currentUser を設定することも可能
-          // setCurrentUser({ ... basic user info from sessionUser ... });
+        // ストレージにcurrentUserはないが、Supabaseセッションがある場合
+        // loginWithGoogle相当の処理を行うか、あるいは単に認証済みとするか
+        // ここではシンプルに認証済みとし、詳細はloginWithGoogleに任せる
+        console.log('[Provider Init] No user in storage, but Supabase session exists. Setting authenticated.');
+        setIsAuthenticated(true);
+        // 必要であれば、ここで sessionUser 情報から仮の currentUser を設定することも可能
+        // setCurrentUser({ ... basic user info from sessionUser ... });
       } else {
-          console.log('[Provider Init] No user in storage and no Supabase session.');
-          setCurrentUser(null);
-          setIsAuthenticated(false);
+        console.log('[Provider Init] No user in storage and no Supabase session.');
+        setCurrentUser(null);
+        setIsAuthenticated(false);
       }
-
     };
 
     initializeProvider();
+  }, [isInitialized, userPasswords]); // isInitialized を依存配列に追加
 
-  }, [isInitialized]); // isInitialized を依存配列に追加
-
-  // ★★★ 追加: currentUser と companyInfo の不整合チェック ★★★
+  // currentUser と companyInfo の不整合チェック
   useEffect(() => {
     if (currentUser && currentUser.companyId && typeof window !== 'undefined') {
       try {
@@ -195,10 +191,6 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           if (storedCompanyInfo && storedCompanyInfo.id !== currentUser.companyId) {
             console.warn('[Provider] Company info mismatch detected! Clearing stored company info and refetching.');
             localStorage.removeItem('kaizen_company_info'); // 不正な情報を削除
-
-            // 正しい会社情報をフェッチして保存するロジック (必要に応じて実装)
-            // この例では削除のみ
-            // fetchCompany(currentUser.companyId).then(...)
           }
         }
       } catch (error) {
@@ -228,20 +220,20 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           setCompanyId(''); // 会社IDもクリア
           // ストレージクリアは logout 関数内で行う想定
         } else if (event === 'USER_UPDATED') {
-            console.log('[Provider] User data UPDATED in Supabase.');
-            // 必要に応じて currentUser や users リストを更新
-            if (session?.user && currentUser && session.user.id === currentUser.id) {
-                const metaCompanyId = session.user.user_metadata?.company_id ?? '';
-                if (metaCompanyId !== currentUser.companyId) {
-                    console.log('[Provider] Updating companyId based on USER_UPDATED event.');
-                    const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
-                    setCurrentUser(updatedCurrentUser);
-                    setCompanyId(metaCompanyId);
-                    // ストレージにも反映
-                     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
-                     try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
-                }
+          console.log('[Provider] User data UPDATED in Supabase.');
+          // 必要に応じて currentUser や users リストを更新
+          if (session?.user && currentUser && session.user.id === currentUser.id) {
+            const metaCompanyId = session.user.user_metadata?.company_id ?? '';
+            if (metaCompanyId !== currentUser.companyId) {
+              console.log('[Provider] Updating companyId based on USER_UPDATED event.');
+              const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
+              setCurrentUser(updatedCurrentUser);
+              setCompanyId(metaCompanyId);
+              // ストレージにも反映
+              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
+              try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
             }
+          }
         }
       }
     );
@@ -251,39 +243,34 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
   }, [currentUser]); // currentUser を依存配列に追加してメタデータ更新に対応
 
-  // ★★★ ユーザー提案: Auth監視を初回のみ実行する修正 ★★★
+  // 初回のみ実行するAuth監視リスナーを設定
   const alreadyInitialised = useRef(false); // 初期化フラグ
 
   useEffect(() => {
     const supabase = getSupabaseClient();
     console.log('[Provider] Setting up onAuthStateChange listener'); // リスナー設定ログ
+    
     const { data: authSubscription } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Provider] onAuthStateChange event:', event); // イベントログ
+      console.log('[Provider] onAuthStateChange event:', event);
+      
       if (alreadyInitialised.current && (event === 'INITIAL_SESSION')) {
-         console.log('[Provider] Already initialized and event is INITIAL_SESSION, skipping.');
-         return; // INITIAL_SESSION は初回以降無視
+        console.log('[Provider] Already initialized and event is INITIAL_SESSION, skipping.');
+        return; // INITIAL_SESSION は初回以降無視
       }
 
       // SIGNED_IN または 初回のINITIAL_SESSION のみ処理
       if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && !alreadyInitialised.current)) {
-         if (alreadyInitialised.current) {
-             console.log('[Provider] Already initialized but received SIGNED_IN, processing...');
-             // SIGNED_INの場合は再処理が必要な場合があるためフラグをリセットしない
-         } else {
-             console.log('[Provider] Initializing based on event:', event);
-             alreadyInitialised.current = true; // ここでフラグを立てる
-         }
+        if (alreadyInitialised.current) {
+          console.log('[Provider] Already initialized but received SIGNED_IN, processing...');
+          // SIGNED_INの場合は再処理が必要な場合があるためフラグをリセットしない
+        } else {
+          console.log('[Provider] Initializing based on event:', event);
+          alreadyInitialised.current = true; // ここでフラグを立てる
+        }
 
         console.log('[Provider] Loading user data due to auth event:', event);
-        // loadUserData は loginWithGoogle 内で呼ばれるため、ここでは不要かもしれない
-        // await loadUserDataFromLocalStorage(setUsers, setUserPasswords);
-
         // loginWithGoogle内でユーザー情報取得・設定・保存を行う
         await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
-
-        // updateUserAfterGoogleSignIn は loginWithGoogle の後、
-        // または招待フロー完了後に呼び出すべき。ここでは直接呼ばない方が良いかもしれない。
-        // await updateUserAfterGoogleSignIn(...);
       } else if (event === 'SIGNED_OUT') {
         console.log('[Provider] User SIGNED_OUT, clearing state.');
         setCurrentUser(null);
@@ -291,18 +278,18 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         setCompanyId('');
         alreadyInitialised.current = false; // ログアウトしたら初期化フラグをリセット
       } else if (event === 'USER_UPDATED') {
-          console.log('[Provider] User data UPDATED in Supabase.');
-          if (session?.user && currentUser && session.user.id === currentUser.id) {
-              const metaCompanyId = session.user.user_metadata?.company_id ?? '';
-              if (metaCompanyId !== currentUser.companyId) {
-                  console.log('[Provider] Updating companyId based on USER_UPDATED event.');
-                  const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
-                  setCurrentUser(updatedCurrentUser);
-                  setCompanyId(metaCompanyId);
-                   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
-                   try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
-              }
+        console.log('[Provider] User data UPDATED in Supabase.');
+        if (session?.user && currentUser && session.user.id === currentUser.id) {
+          const metaCompanyId = session.user.user_metadata?.company_id ?? '';
+          if (metaCompanyId !== currentUser.companyId) {
+            console.log('[Provider] Updating companyId based on USER_UPDATED event.');
+            const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
+            setCurrentUser(updatedCurrentUser);
+            setCompanyId(metaCompanyId);
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
+            try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
           }
+        }
       }
     });
 
@@ -310,12 +297,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.log('[Provider] Unsubscribing from onAuthStateChange'); // クリーンアップログ
       authSubscription.subscription.unsubscribe();
     };
-  // }, []); // ★★★ 空の依存配列に変更 ★★★ currentUserを除外
   }, [currentUser]); // currentUserの変更でも再実行が必要なロジックがあるため、一旦残す
-
-
-  // ★★★ 招待関連の useEffect は削除 ★★★
-
 
   // コンテキスト値
   const value: UserContextType = {
@@ -378,8 +360,6 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       setUsers,
       setUserPasswords
     ),
-    // verifyInviteToken は招待フロー専用ページで使われるため、Contextからは削除しても良いかもしれないが、
-    // 他の場所で使われている可能性を考慮して一旦残す。ただし、実装はAPI呼び出しに依存すべき。
     verifyInviteToken: (token) => verifyInviteToken(token, users, setUsers, setCompanyId),
     completeInvitation: (token, userData) => completeInvitation(
       token,

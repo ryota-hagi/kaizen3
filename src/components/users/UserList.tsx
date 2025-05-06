@@ -129,10 +129,9 @@ export const UserList: React.FC<UserListProps> = ({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                      ${user.status === '招待中' ? 'bg-yellow-100 text-yellow-800' : 
-                        user.status === 'ログアウト中' ? 'bg-gray-100 text-gray-800' : 
+                      ${user.status === 'ログアウト中' ? 'bg-gray-100 text-gray-800' : 
                         'bg-green-100 text-green-800'}`}>
-                      {user.status || (user.isInvited ? '招待中' : 'アクティブ')}
+                      {user.status || 'アクティブ'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

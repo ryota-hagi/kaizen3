@@ -73,38 +73,6 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
               )}
             </div>
             
-            {/* 招待中のユーザーの場合は招待リンクを表示 */}
-            {user.status === '招待中' && user.inviteToken && (
-              <div className="col-span-2 bg-yellow-50 p-3 rounded-md border border-yellow-200">
-                <p className="text-sm font-medium text-yellow-800 mb-2">招待リンク</p>
-                <div className="flex items-center">
-                  <input
-                    type="text"
-                    value={generateInviteLink(user)}
-                    readOnly
-                    className="flex-1 px-3 py-2 text-xs border border-secondary-300 rounded-l-md focus:outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      const link = generateInviteLink(user);
-                      navigator.clipboard.writeText(link)
-                        .then(() => {
-                          alert('招待リンクをクリップボードにコピーしました');
-                        })
-                        .catch(err => {
-                          console.error('クリップボードへのコピーに失敗しました:', err);
-                        });
-                    }}
-                    className="px-3 py-2 bg-primary-600 text-white text-xs rounded-r-md hover:bg-primary-700 transition-colors"
-                  >
-                    コピー
-                  </button>
-                </div>
-                <p className="text-xs text-yellow-600 mt-1">
-                  このリンクを招待したユーザーに共有してください。リンクをクリックするとアカウントを有効化できます。
-                </p>
-              </div>
-            )}
             <div>
               <p className="text-sm text-secondary-500">役割</p>
               {isEditMode ? (
@@ -171,12 +139,6 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
               <p className="text-sm text-secondary-500">ユーザーID</p>
               <p className="font-medium">{user.id}</p>
             </div>
-            {user.inviteToken && (
-              <div>
-                <p className="text-sm text-secondary-500">招待トークン</p>
-                <p className="font-medium text-xs break-all">{user.inviteToken}</p>
-              </div>
-            )}
             <div className="col-span-2">
               <p className="text-sm text-secondary-500">紐づけ従業員</p>
               {isEditMode ? (

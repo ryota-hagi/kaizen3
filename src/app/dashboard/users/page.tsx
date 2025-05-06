@@ -48,34 +48,7 @@ export default function UsersPage() {
     )
   }
   
-  // 招待中のユーザーリストを取得（会社IDが同一のもののみ）
-  const getInvitedUsers = () => {
-    if (!currentUser || !currentUser.companyId) return [];
-    
-    return users.filter(user => 
-      user.status === '招待中' && 
-      user.companyId === currentUser.companyId
-    );
-  }
-  
-  // コンポーネントがマウントされたときと、usersが変更されたときに招待中ユーザーをログに出力
-  useEffect(() => {
-    const invitedUsers = getInvitedUsers();
-    if (invitedUsers.length > 0) {
-      console.log(`[UsersPage] Found ${invitedUsers.length} invited users`);
-      
-      // 招待中ユーザーの詳細をログに出力
-      invitedUsers.forEach((user, index) => {
-        console.log(`[UsersPage] Invited user ${index}:`, {
-          id: user.id,
-          email: user.email,
-          inviteToken: user.inviteToken || '',
-          status: user.status,
-          companyId: user.companyId || 'not set'
-        });
-      });
-    }
-  }, [users]);
+  // ユーザーリストを取得（会社IDが同一のもののみ）
   
   // ユーザー詳細モーダルを開く
   const openUserModal = (userId: string) => {
@@ -198,14 +171,9 @@ export default function UsersPage() {
     })
   }
   
-  // 招待リンクを生成（会社IDを含める）
+  // ダミーの関数（互換性のため）
   const generateInviteLink = (user: UserInfo) => {
-    if (!user.inviteToken) return '';
-    
-    const baseUrl = window.location.origin;
-    const companyId = user.companyId || (currentUser ? currentUser.companyId : '');
-    
-    return `${baseUrl}/auth/invited-login?token=${user.inviteToken}&invite=true&companyId=${companyId}`;
+    return '';
   }
   
   // 同じ会社のユーザーのみ表示
@@ -226,13 +194,7 @@ export default function UsersPage() {
               システムユーザーの管理と権限設定を行います
             </p>
           </div>
-          <div className="flex space-x-4">
-            <Link
-              href="/dashboard/users/add"
-              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-            >
-              ユーザーを追加
-            </Link>
+          <div>
             <Link
               href="/dashboard"
               className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
