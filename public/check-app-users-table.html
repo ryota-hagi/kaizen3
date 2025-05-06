@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>app_usersテーブル確認ツール</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1, h2 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 10px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    .code-block {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>app_usersテーブル確認ツール</h1>
+  
+  <div class="section">
+    <h2>1. Supabaseクライアントの初期化</h2>
+    <button id="initClient">クライアントを初期化</button>
+    <div id="clientResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>2. テーブル一覧の取得</h2>
+    <button id="listTables">テーブル一覧を取得</button>
+    <div id="tablesResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>3. app_usersテーブルの確認</h2>
+    <button id="checkAppUsers">app_usersテーブルを確認</button>
+    <div id="appUsersResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>4. app_usersテーブルのスキーマ確認</h2>
+    <button id="checkSchema">スキーマを確認</button>
+    <div id="schemaResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>5. app_usersテーブルのデータ確認</h2>
+    <button id="checkData">データを確認</button>
+    <div id="dataResult"></div>
+  </div>
+
+  <div class="section">
+    <h2>6. app_usersテーブルの作成</h2>
+    <p>テーブルが存在しない場合は、以下のSQLを実行してテーブルを作成します。</p>
+    <div class="code-block">
+CREATE TABLE IF NOT EXISTS public.app_users (
+  id UUID PRIMARY KEY,
+  auth_uid UUID UNIQUE NOT NULL,
+  email TEXT NOT NULL,
+  full_name TEXT,
+  role TEXT DEFAULT '一般ユーザー',
+  status TEXT DEFAULT 'アクティブ',
+  company_id TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+    </div>
+    <button id="createTable">テーブルを作成</button>
+    <div id="createResult"></div>
+  </div>
+
+  <script>
+    // 結果表示用のヘルパー関数
+    function displayResult(elementId, data, isError = false) {
+      const element = document.getElementById(elementId);
+      if (isError) {
+        element.innerHTML = `<p class="error">エラー:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+      } else {
+        element.innerHTML = `<p class="success">成功:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+      }
+    }
+
+    // テーブル表示用のヘルパー関数
+    function displayTable(elementId, headers, data) {
+      const element = document.getElementById(elementId);
+      let html = '<table><thead><tr>';
+      
+      // ヘッダー行を作成
+      headers.forEach(header => {
+        html += `<th>${header}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+      
+      // データ行を作成
+      data.forEach(row => {
+        html += '<tr>';
+        headers.forEach(header => {
+          html += `<td>${row[header] !== null ? row[header] : ''}</td>`;
+        });
+        html += '</tr>';
+      });
+      
+      html += '</tbody></table>';
+      element.innerHTML = html;
+    }
+
+    // Supabaseクライアントの初期化
+    let supabase;
+    
+    // 1. Supabaseクライアントの初期化
+    document.getElementById('initClient').addEventListener('click', async () => {
+      try {
+        // Supabase URLとキーを設定
+        const supabaseUrl = 'https://czuedairowlwfqbjmfbg.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZxYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNTU2ODAsImV4cCI6MjA2MTYzMTY4MH0.Dxp1tgP88v0xBz3Dvr9hNoHy2nJR3iBrFcfvr-3LsHE';
+        
+        // Supabaseクライアントを初期化
+        supabase = supabaseJs.createClient(supabaseUrl, supabaseKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+          }
+        });
+        
+        displayResult('clientResult', {
+          message: 'Supabaseクライアントが初期化されました',
+          url: supabaseUrl,
+          keyLength: supabaseKey.length
+        });
+      } catch (error) {
+        displayResult('clientResult', error, true);
+      }
+    });
+
+    // 2. テーブル一覧の取得
+    document.getElementById('listTables').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        // テーブル一覧を取得
+        const { data, error } = await supabase
+          .from('information_schema.tables')
+          .select('table_name')
+          .eq('table_schema', 'public');
+        
+        if (error) {
+          throw error;
+        }
+        
+        displayResult('tablesResult', {
+          message: 'テーブル一覧を取得しました',
+          tables: data.map(table => table.table_name)
+        });
+      } catch (error) {
+        displayResult('tablesResult', error, true);
+      }
+    });
+
+    // 3. app_usersテーブルの確認
+    document.getElementById('checkAppUsers').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        // app_usersテーブルが存在するか確認
+        const { data, error } = await supabase
+          .from('information_schema.tables')
+          .select('table_name')
+          .eq('table_schema', 'public')
+          .eq('table_name', 'app_users');
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data && data.length > 0) {
+          displayResult('appUsersResult', {
+            message: 'app_usersテーブルが存在します',
+            exists: true
+          });
+        } else {
+          displayResult('appUsersResult', {
+            message: 'app_usersテーブルが存在しません',
+            exists: false
+          });
+        }
+      } catch (error) {
+        displayResult('appUsersResult', error, true);
+      }
+    });
+
+    // 4. app_usersテーブルのスキーマ確認
+    document.getElementById('checkSchema').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        // app_usersテーブルのスキーマを確認
+        const { data, error } = await supabase
+          .from('information_schema.columns')
+          .select('column_name, data_type, is_nullable, column_default')
+          .eq('table_schema', 'public')
+          .eq('table_name', 'app_users');
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data && data.length > 0) {
+          // テーブル形式で表示
+          const headers = ['column_name', 'data_type', 'is_nullable', 'column_default'];
+          displayTable('schemaResult', headers, data);
+        } else {
+          displayResult('schemaResult', {
+            message: 'app_usersテーブルのスキーマ情報が取得できませんでした',
+            exists: false
+          }, true);
+        }
+      } catch (error) {
+        displayResult('schemaResult', error, true);
+      }
+    });
+
+    // 5. app_usersテーブルのデータ確認
+    document.getElementById('checkData').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        // app_usersテーブルのデータを確認
+        const { data, error } = await supabase
+          .from('app_users')
+          .select('*')
+          .limit(10);
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data && data.length > 0) {
+          displayResult('dataResult', {
+            message: 'app_usersテーブルのデータを取得しました',
+            count: data.length,
+            data: data
+          });
+        } else {
+          displayResult('dataResult', {
+            message: 'app_usersテーブルにデータがありません',
+            count: 0
+          });
+        }
+      } catch (error) {
+        displayResult('dataResult', error, true);
+      }
+    });
+
+    // 6. app_usersテーブルの作成
+    document.getElementById('createTable').addEventListener('click', async () => {
+      try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        }
+        
+        // app_usersテーブルを作成
+        const { data, error } = await supabase.rpc('execute_sql', {
+          sql_query: `
+            CREATE TABLE IF NOT EXISTS public.app_users (
+              id UUID PRIMARY KEY,
+              auth_uid UUID UNIQUE NOT NULL,
+              email TEXT NOT NULL,
+              full_name TEXT,
+              role TEXT DEFAULT '一般ユーザー',
+              status TEXT DEFAULT 'アクティブ',
+              company_id TEXT,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+          `
+        });
+        
+        if (error) {
+          // RPC関数が存在しない場合は、別の方法でテーブルを作成
+          try {
+            const { error: sqlError } = await supabase.auth.admin.executeSql(`
+              CREATE TABLE IF NOT EXISTS public.app_users (
+                id UUID PRIMARY KEY,
+                auth_uid UUID UNIQUE NOT NULL,
+                email TEXT NOT NULL,
+                full_name TEXT,
+                role TEXT DEFAULT '一般ユーザー',
+                status TEXT DEFAULT 'アクティブ',
+                company_id TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+              );
+            `);
+            
+            if (sqlError) {
+              throw sqlError;
+            }
+            
+            displayResult('createResult', {
+              message: 'app_usersテーブルを作成しました（admin.executeSql経由）'
+            });
+          } catch (sqlError) {
+            displayResult('createResult', {
+              message: 'テーブルの作成に失敗しました。Supabaseダッシュボードで直接SQLを実行してください。',
+              error: error,
+              sqlError: sqlError
+            }, true);
+          }
+        } else {
+          displayResult('createResult', {
+            message: 'app_usersテーブルを作成しました'
+          });
+        }
+      } catch (error) {
+        displayResult('createResult', {
+          message: 'テーブルの作成に失敗しました。Supabaseダッシュボードで直接SQLを実行してください。',
+          error: error
+        }, true);
+      }
+    });
+
+    // ページ読み込み時に自動的にクライアントを初期化
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('initClient').click();
+    });
+  </script>
+</body>
+</html>
