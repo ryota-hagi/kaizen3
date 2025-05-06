@@ -34,28 +34,14 @@ export const loadUserDataFromLocalStorage = (
       let parsedData = JSON.parse(savedUsers) as UserWithPassword[];
       console.log('[loadUserData] Parsed data from localStorage:', parsedData.length, 'items');
 
-      // --- fixUserData ロジックをここに統合 ---
+      // データの修正処理
       console.log('[loadUserData] Applying data fixes...');
-      let urlToken = '';
-      let urlCompanyId = '';
-      if (typeof window !== 'undefined') {
-        const urlParams = new URLSearchParams(window.location.search);
-        urlToken = urlParams.get('token') || '';
-        urlCompanyId = urlParams.get('companyId') || '';
-        
-        // セッションストレージと localStorage からも取得（バックアップ）
-        if (!urlToken) {
-          urlToken = sessionStorage.getItem('invite_token') || localStorage.getItem('invite_token') || '';
-        }
-        if (!urlCompanyId) {
-          urlCompanyId = sessionStorage.getItem('invite_company_id') || localStorage.getItem('invite_company_id') || '';
-        }
-      }
-
       const rawUsers = parsedData.map(item => item.user).filter(user => user != null) as UserInfo[];
+      
+      // 単純に配列を返すだけの fixUserData 関数を使用
       const fixed = fixUserData(rawUsers);
 
-      // ✅ 変更が無い場合 save をスキップ
+      // 変更が無い場合は保存をスキップ
       if (!isEqual(fixed, rawUsers)) {
         const usersToSave = fixed.map(u => ({
           user: u,

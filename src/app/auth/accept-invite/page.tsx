@@ -1,13 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 
 // 招待受諾ページの状態
 type Status = 'loading' | 'verifying' | 'redirecting' | 'error' | 'idle';
 
+// メインコンポーネント - Suspenseで囲む
 export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AcceptInviteContent />
+    </Suspense>
+  );
+}
+
+// 実際のコンテンツコンポーネント
+function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>('loading');
@@ -44,7 +54,7 @@ export default function AcceptInvitePage() {
 
         // 2. APIでトークンとCompanyIDを検証
         console.log(`[AcceptInvite] Verifying token: ${inviteToken}, companyId: ${companyId}`);
-        const verifyUrl = `/api/invitations/verify`; // バッククォートのエスケープを削除
+        const verifyUrl = `/api/invitations/verify`;
         const response = await fetch(verifyUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -74,12 +84,11 @@ export default function AcceptInvitePage() {
         const { error: signInError } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: `${window.location.origin}/auth/accept-invite/callback`, // バッククォートのエスケープを削除
+            redirectTo: `${window.location.origin}/auth/accept-invite/callback`,
           },
         });
 
         if (signInError) {
-          // 不要なバックスラッシュを削除
           throw new Error(`Googleログインへのリダイレクトに失敗しました: ${signInError.message}`);
         }
         // リダイレクトされるので、これ以降のコードは通常実行されない
