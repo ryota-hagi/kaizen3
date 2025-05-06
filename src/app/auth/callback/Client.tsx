@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
 import { supabase, createAppUsersTable, saveUserToDatabase, getUserFromDatabase } from '@/lib/supabaseClient'
+import { createCompaniesTable } from '@/lib/createCompaniesTable'
 
 export default function CallbackClient() {
   const router = useRouter()
@@ -47,14 +48,23 @@ export default function CallbackClient() {
         
         console.log('[DEBUG] Authenticated user email:', user.email)
         
-        // app_usersテーブルが存在するか確認し、なければ作成
+        // 必要なテーブルが存在するか確認し、なければ作成
         try {
-          const { success: tableSuccess, error: tableError } = await createAppUsersTable()
-          if (!tableSuccess) {
-            console.error('[DEBUG] Error creating app_users table:', tableError)
+          // app_usersテーブルの作成
+          const { success: userTableSuccess, error: userTableError } = await createAppUsersTable()
+          if (!userTableSuccess) {
+            console.error('[DEBUG] Error creating app_users table:', userTableError)
+          }
+          
+          // companiesテーブルの作成
+          const { success: companyTableSuccess, error: companyTableError } = await createCompaniesTable()
+          if (!companyTableSuccess) {
+            console.error('[DEBUG] Error creating companies table:', companyTableError)
+          } else {
+            console.log('[DEBUG] Companies table check/creation completed successfully')
           }
         } catch (tableError) {
-          console.error('[DEBUG] Exception creating app_users table:', tableError)
+          console.error('[DEBUG] Exception creating tables:', tableError)
         }
         
         // 通常のログイン
@@ -92,12 +102,14 @@ export default function CallbackClient() {
               
               if (!saveResult.success) {
                 console.error('[DEBUG] Error saving user to database:', saveResult.error)
+                // エラーがあっても処理を続行
               }
             } else {
               console.log('[DEBUG] User found in database:', result.data)
             }
           } catch (dbError) {
             console.error('[DEBUG] Database operation error:', dbError)
+            // データベースエラーがあっても認証フローを続行
           }
           
         if (companyIdFromMetadata) {
