@@ -63,6 +63,30 @@ export default function CallbackClient() {
           // Supabaseのユーザーメタデータから会社IDを取得
           const companyIdFromMetadata = user.user_metadata?.company_id
           
+          // app_usersテーブルにユーザー情報が存在するか確認
+          try {
+            const { getUserFromDatabase } = await import('@/lib/supabaseClient')
+            const result = await getUserFromDatabase(user.id)
+            
+            if (!result.success || !result.data) {
+              console.log('[DEBUG] User not found in database, creating new record')
+              
+              // ユーザー情報をデータベースに保存
+              const { saveUserToDatabase } = await import('@/lib/supabaseClient')
+              await saveUserToDatabase(user.id, {
+                id: user.id,
+                email: user.email || '',
+                fullName: user.user_metadata?.full_name || '',
+                role: user.user_metadata?.role || '一般ユーザー',
+                status: 'アクティブ',
+                createdAt: user.created_at,
+                companyId: companyIdFromMetadata || ''
+              })
+            }
+          } catch (dbError) {
+            console.error('[DEBUG] Database operation error:', dbError)
+          }
+          
           if (companyIdFromMetadata) {
             // 会社IDがある場合はダッシュボードへ
             router.push('/dashboard')
