@@ -48,10 +48,11 @@ export const saveUserToDatabase = async (userId: string, userData: any) => {
           id: userId,
           auth_uid: userId,
           email: userData.email,
-          company_id: userData.companyId,
-          role: userData.role,
-          status: userData.status,
-          created_at: userData.createdAt,
+          full_name: userData.fullName || '',
+          company_id: userData.companyId || '',
+          role: userData.role || '一般ユーザー',
+          status: userData.status || 'アクティブ',
+          created_at: userData.createdAt || new Date().toISOString(),
           updated_at: new Date().toISOString(),
           last_login: new Date().toISOString()
         },
@@ -92,6 +93,79 @@ export const getUserFromDatabase = async (userId: string) => {
     return { success: true, data };
   } catch (error) {
     console.error('[Supabase] Exception getting user from database:', error);
+    return { success: false, error };
+  }
+};
+
+// ユーザーメタデータを更新する関数
+export const updateUserMetadata = async (userId: string, metadata: any) => {
+  try {
+    const client = supabase();
+    
+    // ユーザーメタデータを更新
+    const { data, error } = await client.auth.admin.updateUserById(
+      userId,
+      { user_metadata: metadata }
+    );
+    
+    if (error) {
+      console.error('[Supabase] Error updating user metadata:', error);
+      return { success: false, error };
+    }
+    
+    console.log('[Supabase] User metadata updated successfully:', data);
+    return { success: true, data };
+  } catch (error) {
+    console.error('[Supabase] Exception updating user metadata:', error);
+    return { success: false, error };
+  }
+};
+
+// app_usersテーブルを作成する関数
+export const createAppUsersTable = async () => {
+  try {
+    const client = supabase();
+    
+    // app_usersテーブルが存在するか確認
+    const { data: existingTable, error: checkError } = await client
+      .from('information_schema.tables')
+      .select('table_name')
+      .eq('table_schema', 'public')
+      .eq('table_name', 'app_users')
+      .single();
+    
+    if (!checkError && existingTable) {
+      console.log('[Supabase] app_users table already exists');
+      return { success: true, message: 'Table already exists' };
+    }
+    
+    // app_usersテーブルを作成
+    const { error } = await client.rpc('execute_sql', {
+      sql_query: `
+        CREATE TABLE IF NOT EXISTS public.app_users (
+          id UUID PRIMARY KEY,
+          auth_uid UUID UNIQUE NOT NULL,
+          email TEXT NOT NULL,
+          full_name TEXT,
+          role TEXT DEFAULT '一般ユーザー',
+          status TEXT DEFAULT 'アクティブ',
+          company_id TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `
+    });
+    
+    if (error) {
+      console.error('[Supabase] Error creating app_users table:', error);
+      return { success: false, error };
+    }
+    
+    console.log('[Supabase] app_users table created successfully');
+    return { success: true, message: 'Table created successfully' };
+  } catch (error) {
+    console.error('[Supabase] Exception creating app_users table:', error);
     return { success: false, error };
   }
 };

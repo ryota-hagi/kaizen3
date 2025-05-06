@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
-import { getSupabaseClient } from '@/lib/supabaseClient'
+import { getSupabaseClient, createAppUsersTable, saveUserToDatabase, getUserFromDatabase } from '@/lib/supabaseClient'
 
 export default function CallbackClient() {
   const router = useRouter()
@@ -47,6 +47,16 @@ export default function CallbackClient() {
         
         console.log('[DEBUG] Authenticated user email:', user.email)
         
+        // app_usersテーブルが存在するか確認し、なければ作成
+        try {
+          const { success: tableSuccess, error: tableError } = await createAppUsersTable()
+          if (!tableSuccess) {
+            console.error('[DEBUG] Error creating app_users table:', tableError)
+          }
+        } catch (tableError) {
+          console.error('[DEBUG] Exception creating app_users table:', tableError)
+        }
+        
         // 通常のログイン
         const success = await loginWithGoogle()
         
@@ -65,16 +75,13 @@ export default function CallbackClient() {
           
           // app_usersテーブルにユーザー情報が存在するか確認
           try {
-            const { getUserFromDatabase } = await import('@/lib/supabaseClient')
             const result = await getUserFromDatabase(user.id)
             
             if (!result.success || !result.data) {
               console.log('[DEBUG] User not found in database, creating new record')
               
               // ユーザー情報をデータベースに保存
-              const { saveUserToDatabase } = await import('@/lib/supabaseClient')
-              await saveUserToDatabase(user.id, {
-                id: user.id,
+              const saveResult = await saveUserToDatabase(user.id, {
                 email: user.email || '',
                 fullName: user.user_metadata?.full_name || '',
                 role: user.user_metadata?.role || '一般ユーザー',
@@ -82,6 +89,12 @@ export default function CallbackClient() {
                 createdAt: user.created_at,
                 companyId: companyIdFromMetadata || ''
               })
+              
+              if (!saveResult.success) {
+                console.error('[DEBUG] Error saving user to database:', saveResult.error)
+              }
+            } else {
+              console.log('[DEBUG] User found in database:', result.data)
             }
           } catch (dbError) {
             console.error('[DEBUG] Database operation error:', dbError)
