@@ -100,13 +100,15 @@ export default function CallbackClient() {
             console.error('[DEBUG] Database operation error:', dbError)
           }
           
-          if (companyIdFromMetadata) {
-            // 会社IDがある場合はダッシュボードへ
-            router.push('/dashboard')
-          } else {
-            // 会社IDがない場合は会社登録ページへ
-            router.push('/auth/register/company')
-          }
+        if (companyIdFromMetadata) {
+          // 会社IDがある場合はダッシュボードへ
+          console.log('[DEBUG] Redirecting to dashboard with company ID:', companyIdFromMetadata)
+          router.push('/dashboard')
+        } else {
+          // 会社IDがない場合は会社登録ページへ
+          console.log('[DEBUG] Redirecting to company registration page')
+          router.push('/auth/register/company')
+        }
         } else {
           setError('ログインに失敗しました')
         }
