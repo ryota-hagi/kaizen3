@@ -34,56 +34,6 @@ export const loginWithGoogle = async (
       return false;
     }
     
-    // URLSearchParams から token 取得
-    const token = new URL(window.location.href).searchParams.get('token');
-    
-    if (token) {
-      // 招待トークンがある場合、招待を完了する
-      console.log('[Supabase] Completing invitation with token:', token);
-      
-      try {
-        const response = await fetch('/api/invitations/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            invite_token: token, 
-            auth_uid: user.id,
-            email: user.email
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log('[Supabase] Invitation completed:', result);
-          
-          // 招待完了後、セッションストレージからトークンを削除
-          sessionStorage.removeItem('invite_token');
-          localStorage.removeItem('invite_token');
-          
-          // 会社IDを取得
-          const companyId = result.data?.company_id || '';
-          
-          if (companyId) {
-            // Supabaseのユーザーメタデータを更新
-            await supabase.auth.updateUser({
-              data: {
-                company_id: companyId,
-                role: result.data?.role || '一般ユーザー',
-                status: 'アクティブ',
-                isInvited: false
-              }
-            });
-            
-            console.log('[Supabase] User metadata updated with company ID:', companyId);
-          }
-        } else {
-          console.error('[Supabase] Failed to complete invitation:', await response.text());
-        }
-      } catch (error) {
-        console.error('[Supabase] Error completing invitation:', error);
-      }
-    }
-    
     // ローカルストレージからユーザーリストを取得
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({}));
     
@@ -206,12 +156,6 @@ export const logout = async (
     if (typeof window !== 'undefined') {
       localStorage.removeItem(USER_STORAGE_KEY);
       sessionStorage.removeItem(USER_STORAGE_KEY);
-      
-      // 招待関連の情報も削除
-      sessionStorage.removeItem('invite_token');
-      localStorage.removeItem('invite_token');
-      sessionStorage.removeItem('invite_company_id');
-      localStorage.removeItem('invite_company_id');
     }
     
     console.log('[Logout] User logged out successfully');
@@ -250,12 +194,6 @@ export const updateUserAfterGoogleSignIn = async (
     const isInvitedUser = userData.isInvited || userData.status === '招待中';
     if (isInvitedUser && (!userData.companyId || userData.companyId.trim() === '')) {
       console.error('[updateUserAfterGoogleSignIn] Company ID is required for invited users');
-      return false;
-    }
-    
-    // 招待ユーザーの場合、トークンが必須
-    if (isInvitedUser && (!userData.inviteToken || userData.inviteToken.trim() === '')) {
-      console.error('[updateUserAfterGoogleSignIn] Invite token is required for invited users');
       return false;
     }
 
@@ -315,10 +253,6 @@ export const updateUserAfterGoogleSignIn = async (
       } catch (e) {
         console.error('[Supabase] Failed to save to sessionStorage:', e);
       }
-      
-      // 招待トークンをセッションストレージから削除
-      sessionStorage.removeItem('invite_token');
-      localStorage.removeItem('invite_token');
     }
     
     // ユーザーリストを更新
