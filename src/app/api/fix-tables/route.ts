@@ -28,56 +28,15 @@ export async function POST(req: Request) {
     
     // SQLクエリが指定されている場合は、それを実行
     if (body.sql) {
-      console.log('[API] Executing custom SQL:', body.sql);
+      console.log('[API] Custom SQL execution is not supported in this environment');
+      console.log('[API] Please use the Supabase dashboard to execute SQL queries');
+      console.log('[API] SQL query:', body.sql);
       
-      try {
-        // 直接REST APIを使用してSQLを実行
-        const apiUrl = `${url}/rest/v1/rpc/exec_sql`;
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': serviceKey,
-            'Authorization': `Bearer ${serviceKey}`,
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({
-            query: body.sql
-          })
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[API] SQL execution error:', errorText);
-          return NextResponse.json(
-            { 
-              success: false, 
-              error: `SQL execution error: ${response.status}`,
-              message: errorText
-            },
-            { status: response.status },
-          );
-        }
-        
-        const result = await response.json();
-        console.log('[API] SQL execution successful');
-        
-        return NextResponse.json({
-          success: true,
-          message: 'SQL executed successfully',
-          result
-        });
-      } catch (error: any) {
-        console.error('[API] Exception executing SQL:', error);
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: 'SQL execution error',
-            message: error.message
-          },
-          { status: 500 },
-        );
-      }
+      return NextResponse.json({
+        success: false,
+        message: 'Custom SQL execution is not supported in this environment. Please use the Supabase dashboard to execute SQL queries.',
+        sql: body.sql
+      });
     }
     
     // 通常のテーブル修正処理
@@ -135,81 +94,33 @@ export async function POST(req: Request) {
         
         // 3. invitationsテーブルを作成
         try {
-          // 直接REST APIを使用してテーブルを作成
-          const apiUrl = `${url}/rest/v1/`;
-          const response = await fetch(`${apiUrl}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': serviceKey,
-              'Authorization': `Bearer ${serviceKey}`,
-              'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
-              name: 'invitations',
-              schema: 'public',
-              columns: [
-                {
-                  name: 'id',
-                  type: 'uuid',
-                  primaryKey: true,
-                  defaultValue: 'uuid_generate_v4()'
-                },
-                {
-                  name: 'email',
-                  type: 'text',
-                  nullable: false
-                },
-                {
-                  name: 'role',
-                  type: 'text',
-                  nullable: false
-                },
-                {
-                  name: 'company_id',
-                  type: 'text',
-                  nullable: true
-                },
-                {
-                  name: 'invite_token',
-                  type: 'text',
-                  nullable: false,
-                  unique: true
-                },
-                {
-                  name: 'status',
-                  type: 'text',
-                  nullable: false,
-                  defaultValue: "'pending'"
-                },
-                {
-                  name: 'created_at',
-                  type: 'timestamp with time zone',
-                  defaultValue: 'now()'
-                },
-                {
-                  name: 'updated_at',
-                  type: 'timestamp with time zone',
-                  defaultValue: 'now()'
-                }
-              ]
-            })
-          });
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            result.errors.push({
-              step: 'create_invitations_table',
-              error: `API error: ${response.status} - ${errorText}`
-            });
+          // テーブル作成のSQLを提供
+          const createTableSQL = `
+            CREATE TABLE IF NOT EXISTS invitations (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              email TEXT NOT NULL,
+              role TEXT NOT NULL,
+              company_id TEXT,
+              invite_token TEXT NOT NULL UNIQUE,
+              status TEXT NOT NULL DEFAULT 'pending',
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
             
-            return NextResponse.json(result);
-          }
+            -- 検索を高速化するためのインデックスを追加
+            CREATE INDEX IF NOT EXISTS idx_invite_token ON invitations(invite_token);
+          `;
+          
+          console.log('[API] Cannot create table via API. Please use the Supabase dashboard to run:');
+          console.log(createTableSQL);
           
           result.actions.push({
             step: 'create_invitations_table',
-            result: 'invitationsテーブルを作成しました'
+            result: 'テーブル作成のSQLを生成しました。Supabaseダッシュボードで実行してください。',
+            sql: createTableSQL
           });
+          
+          return NextResponse.json(result);
         } catch (error: any) {
           result.errors.push({
             step: 'create_invitations_table',
@@ -255,17 +166,10 @@ export async function POST(req: Request) {
         let errors = [];
         
         for (const invitation of userInvitationsData) {
-          // 直接REST APIを使用してデータを挿入
-          const apiUrl = `${url}/rest/v1/invitations`;
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': serviceKey,
-              'Authorization': `Bearer ${serviceKey}`,
-              'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
+          // invitationsテーブルに挿入
+          const { error: insertError } = await supabaseAdmin
+            .from('invitations')
+            .insert({
               email: invitation.email,
               role: invitation.role,
               company_id: invitation.company_id || '',
@@ -273,14 +177,12 @@ export async function POST(req: Request) {
               status: invitation.status,
               created_at: invitation.created_at,
               updated_at: invitation.updated_at
-            })
-          });
+            });
           
-          if (!response.ok) {
-            const errorText = await response.text();
+          if (insertError) {
             errors.push({
               email: invitation.email,
-              error: `API error: ${response.status} - ${errorText}`
+              error: insertError.message
             });
           } else {
             migratedCount++;
@@ -304,34 +206,16 @@ export async function POST(req: Request) {
     
     // 5. user_invitationsテーブルをリネーム
     try {
-      // 直接REST APIを使用してテーブルをリネーム
-      const apiUrl = `${url}/rest/v1/rpc/exec_sql`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          query: `ALTER TABLE user_invitations RENAME TO user_invitations_backup;`
-        })
-      });
+      // テーブルリネームのSQLを提供
+      const renameTableSQL = `ALTER TABLE user_invitations RENAME TO user_invitations_backup;`;
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        result.errors.push({
-          step: 'rename_table',
-          error: `API error: ${response.status} - ${errorText}`
-        });
-        
-        return NextResponse.json(result);
-      }
+      console.log('[API] Cannot rename table via API. Please use the Supabase dashboard to run:');
+      console.log(renameTableSQL);
       
       result.actions.push({
         step: 'rename_table',
-        result: 'user_invitationsテーブルをuser_invitations_backupにリネームしました'
+        result: 'テーブルリネームのSQLを生成しました。Supabaseダッシュボードで実行してください。',
+        sql: renameTableSQL
       });
     } catch (error: any) {
       result.errors.push({
