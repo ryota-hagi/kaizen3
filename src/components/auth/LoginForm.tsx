@@ -24,7 +24,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/callback`
         }
       })
       
