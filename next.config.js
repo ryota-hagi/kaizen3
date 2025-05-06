@@ -35,6 +35,33 @@ const nextConfig = {
       },
     ];
   },
+  // ビルド時にAPIエンドポイントを呼び出さないようにする設定
+  // これにより、ビルド時のエラーを防止できます
+  webpack: (config, { isServer }) => {
+    // APIルートをビルド時に除外
+    if (isServer) {
+      // サーバーサイドビルド時のみ適用
+      config.externals = [...config.externals, 
+        // 以下のパターンに一致するモジュールを外部化（ビルド時に実行しない）
+        /^(supabase|@supabase)/
+      ];
+    }
+    return config;
+  },
+  // 特定のAPIルートをビルド時に除外する設定
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'x-build-exclude',
+            value: 'true',
+          },
+        ],
+      },
+    ];
+  },
 }
 
 module.exports = nextConfig

@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// ビルド時にエラーが発生しないようにするための対策
+// Next.jsのビルド時に実行されないようにする
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge'; // edgeランタイムを使用
+
 export async function GET(req: Request) {
+  // ビルド時に実行されないようにするためのチェック
+  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+    console.log('[API] Skipping API call during build time');
+    return NextResponse.json({ success: true, message: 'Skipped during build' });
+  }
+
   try {
     // サーバーサイドでサービスロールキーを使用してSupabaseクライアントを作成
     const url = process.env.SUPABASE_URL!;
@@ -90,7 +101,7 @@ export async function GET(req: Request) {
           headers: {
             'Content-Type': 'application/json',
             'apikey': serviceKey,
-            'Authorization': `Bearer ${serviceKey}`
+            'Authorization': `Bearer ${serviceKey}`,
           }
         });
         

@@ -2,7 +2,18 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { INVITATIONS_TABLE } from '@/constants/invitations';
 
+// ビルド時にエラーが発生しないようにするための対策
+// Next.jsのビルド時に実行されないようにする
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge'; // edgeランタイムを使用
+
 export async function POST(req: Request) {
+  // ビルド時に実行されないようにするためのチェック
+  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+    console.log('[API] Skipping API call during build time');
+    return NextResponse.json({ success: true, message: 'Skipped during build' });
+  }
+
   try {
     // サーバーサイドでサービスロールキーを使用してSupabaseクライアントを作成
     const url = process.env.SUPABASE_URL!;
@@ -52,45 +63,33 @@ export async function POST(req: Request) {
     if (!invitationsExists) {
       console.log('[API] invitations table does not exist, creating it');
       
-      // 直接REST APIを使用してテーブルを作成
-      const baseUrl = url;
-      const apiUrl = `${baseUrl}/rest/v1/`;
-      
-      try {
-        // テーブル作成のSQLを実行
-        const createTableQuery = `
-          CREATE TABLE IF NOT EXISTS invitations (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            email TEXT NOT NULL,
-            role TEXT NOT NULL,
-            company_id TEXT,
-            invite_token TEXT NOT NULL UNIQUE,
-            status TEXT NOT NULL DEFAULT 'pending',
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          );
-          
-          -- 検索を高速化するためのインデックスを追加
-          CREATE INDEX IF NOT EXISTS idx_invite_token ON invitations(invite_token);
-        `;
-        
-        // Supabaseの管理コンソールでSQLを実行するか、
-        // 別の方法でテーブルを作成する必要があります
-        console.log('[API] Please create the invitations table manually using the Supabase dashboard');
-        console.log('[API] SQL to create table:', createTableQuery);
-        
-        return NextResponse.json({ 
-          success: false, 
-          message: 'invitations table does not exist. Please create it manually using the Supabase dashboard.',
-          sql: createTableQuery
-        });
-      } catch (error) {
-        console.error('[API] Error creating invitations table:', error);
-        return NextResponse.json(
-          { success: false, error: 'Failed to create invitations table' },
-          { status: 500 },
+      // テーブル作成のSQLを提供
+      const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS invitations (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          email TEXT NOT NULL,
+          role TEXT NOT NULL,
+          company_id TEXT,
+          invite_token TEXT NOT NULL UNIQUE,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
-      }
+        
+        -- 検索を高速化するためのインデックスを追加
+        CREATE INDEX IF NOT EXISTS idx_invite_token ON invitations(invite_token);
+      `;
+      
+      // Supabaseの管理コンソールでSQLを実行するか、
+      // 別の方法でテーブルを作成する必要があります
+      console.log('[API] Please create the invitations table manually using the Supabase dashboard');
+      console.log('[API] SQL to create table:', createTableQuery);
+      
+      return NextResponse.json({ 
+        success: false, 
+        message: 'invitations table does not exist. Please create it manually using the Supabase dashboard.',
+        sql: createTableQuery
+      });
     }
     
     // user_invitationsテーブルからデータを取得
