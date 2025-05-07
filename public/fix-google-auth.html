@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google認証修正ツール</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #4b5563;
+      margin-top: 30px;
+    }
+    .instructions {
+      background-color: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .warning {
+      background-color: #fff7ed;
+      border-left: 4px solid #f97316;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    .success {
+      background-color: #ecfdf5;
+      border-left: 4px solid #10b981;
+    }
+    .error {
+      background-color: #fef2f2;
+      border-left: 4px solid #ef4444;
+    }
+    #output {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 14px;
+      display: none;
+    }
+    .solution {
+      background-color: #f0fdf4;
+      border-left: 4px solid #22c55e;
+      padding: 15px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Google認証修正ツール</h1>
+  
+  <div class="instructions">
+    <p>このツールは、Google認証後にログインできない問題を解決するためのものです。</p>
+    <p>以下の手順で問題を解決してください。</p>
+  </div>
+
+  <div class="solution">
+    <h3>解決方法</h3>
+    <p>Google認証後にログインできない問題は、主に以下の原因が考えられます：</p>
+    <ol>
+      <li>認証情報の不整合</li>
+      <li>セッション情報の破損</li>
+      <li>キャッシュの問題</li>
+    </ol>
+    <p>以下のボタンを順番に試して問題を解決してください。</p>
+  </div>
+
+  <h2>実行ボタン</h2>
+  <button id="clearAuthBtn">1. 認証情報をクリアしてログインページへ</button>
+  <button id="clearAuthAndCacheBtn">2. 認証情報とキャッシュをクリアしてログインページへ</button>
+  <button id="clearSupabaseAuthBtn">3. Supabase認証情報のみクリア</button>
+  <button id="showAuthInfoBtn">現在の認証情報を表示</button>
+  
+  <div id="status"></div>
+  <pre id="output"></pre>
+
+  <script>
+    // ステータス表示関数
+    function showStatus(message, isError = false) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = message;
+      statusDiv.className = isError ? 'error' : 'success';
+    }
+    
+    // 出力表示関数
+    function showOutput(message) {
+      const outputDiv = document.getElementById('output');
+      outputDiv.style.display = 'block';
+      outputDiv.textContent = message;
+    }
+    
+    // 認証情報クリアボタンのイベントリスナー
+    document.getElementById('clearAuthBtn').addEventListener('click', async function() {
+      try {
+        // ローカルストレージとセッションストレージをクリア
+        clearAuthStorage();
+        
+        // Supabaseの認証情報をクリア
+        await clearSupabaseAuth();
+        
+        showStatus('認証情報をクリアしました。ログインページにリダイレクトします...');
+        
+        // 少し待ってからリダイレクト
+        setTimeout(() => {
+          window.location.href = '/auth/login';
+        }, 2000);
+      } catch (error) {
+        console.error('エラー:', error);
+        showStatus(`エラーが発生しました: ${error.message}`, true);
+      }
+    });
+    
+    // 認証情報とキャッシュクリアボタンのイベントリスナー
+    document.getElementById('clearAuthAndCacheBtn').addEventListener('click', async function() {
+      try {
+        // ローカルストレージとセッションストレージをクリア
+        clearAuthStorage();
+        
+        // Supabaseの認証情報をクリア
+        await clearSupabaseAuth();
+        
+        // キャッシュをクリア
+        await clearCache();
+        
+        showStatus('認証情報とキャッシュをクリアしました。ログインページにリダイレクトします...');
+        
+        // 少し待ってからリダイレクト
+        setTimeout(() => {
+          window.location.href = '/auth/login';
+        }, 2000);
+      } catch (error) {
+        console.error('エラー:', error);
+        showStatus(`エラーが発生しました: ${error.message}`, true);
+      }
+    });
+    
+    // Supabase認証情報のみクリアボタンのイベントリスナー
+    document.getElementById('clearSupabaseAuthBtn').addEventListener('click', async function() {
+      try {
+        // Supabaseの認証情報をクリア
+        await clearSupabaseAuth();
+        
+        showStatus('Supabase認証情報をクリアしました。ログインページにリダイレクトします...');
+        
+        // 少し待ってからリダイレクト
+        setTimeout(() => {
+          window.location.href = '/auth/login';
+        }, 2000);
+      } catch (error) {
+        console.error('エラー:', error);
+        showStatus(`エラーが発生しました: ${error.message}`, true);
+      }
+    });
+    
+    // 認証情報表示ボタンのイベントリスナー
+    document.getElementById('showAuthInfoBtn').addEventListener('click', function() {
+      try {
+        // ローカルストレージとセッションストレージの認証情報を取得
+        const authInfo = getAuthInfo();
+        
+        // 出力に表示
+        showOutput(JSON.stringify(authInfo, null, 2));
+      } catch (error) {
+        console.error('エラー:', error);
+        showStatus(`エラーが発生しました: ${error.message}`, true);
+      }
+    });
+    
+    // ローカルストレージとセッションストレージをクリアする関数
+    function clearAuthStorage() {
+      // ローカルストレージをクリア
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('users');
+      localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
+      
+      // セッションストレージをクリア
+      sessionStorage.removeItem('currentUser');
+      sessionStorage.removeItem('users');
+      sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
+      sessionStorage.removeItem('invite_token');
+      
+      console.log('ローカルストレージとセッションストレージをクリアしました');
+    }
+    
+    // Supabaseの認証情報をクリアする関数
+    async function clearSupabaseAuth() {
+      try {
+        // Supabase Clientを作成
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
+        const supabaseUrl = 'https://czuedairowlwfgbjmfbg.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZnYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTk0MzA0NzcsImV4cCI6MjAxNTAwNjQ3N30.Nh83ebqzf1iGHTaGywss6QKt3g1Ov-87KBKpEDPKcj8';
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        // ログアウト
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+          console.error('Supabaseログアウトエラー:', error);
+          throw new Error(`Supabaseログアウトエラー: ${error.message}`);
+        }
+        
+        console.log('Supabaseの認証情報をクリアしました');
+      } catch (error) {
+        console.error('Supabase認証クリアエラー:', error);
+        throw error;
+      }
+    }
+    
+    // キャッシュをクリアする関数
+    async function clearCache() {
+      try {
+        // キャッシュをクリア
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames.map(cacheName => caches.delete(cacheName))
+          );
+          console.log('キャッシュをクリアしました');
+        } else {
+          console.log('このブラウザではキャッシュAPIがサポートされていません');
+        }
+      } catch (error) {
+        console.error('キャッシュクリアエラー:', error);
+        throw error;
+      }
+    }
+    
+    // 認証情報を取得する関数
+    function getAuthInfo() {
+      const info = {
+        localStorage: {
+          currentUser: localStorage.getItem('currentUser'),
+          users: localStorage.getItem('users'),
+          supabaseAuthToken: localStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token')
+        },
+        sessionStorage: {
+          currentUser: sessionStorage.getItem('currentUser'),
+          users: sessionStorage.getItem('users'),
+          supabaseAuthToken: sessionStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token'),
+          inviteToken: sessionStorage.getItem('invite_token')
+        }
+      };
+      
+      // JSONをパースして読みやすくする
+      try {
+        if (info.localStorage.currentUser) {
+          info.localStorage.currentUser = JSON.parse(info.localStorage.currentUser);
+        }
+        if (info.localStorage.users) {
+          info.localStorage.users = JSON.parse(info.localStorage.users);
+        }
+        if (info.localStorage.supabaseAuthToken) {
+          info.localStorage.supabaseAuthToken = JSON.parse(info.localStorage.supabaseAuthToken);
+        }
+        if (info.sessionStorage.currentUser) {
+          info.sessionStorage.currentUser = JSON.parse(info.sessionStorage.currentUser);
+        }
+        if (info.sessionStorage.users) {
+          info.sessionStorage.users = JSON.parse(info.sessionStorage.users);
+        }
+        if (info.sessionStorage.supabaseAuthToken) {
+          info.sessionStorage.supabaseAuthToken = JSON.parse(info.sessionStorage.supabaseAuthToken);
+        }
+      } catch (error) {
+        console.error('JSON解析エラー:', error);
+      }
+      
+      return info;
+    }
+  </script>
+</body>
+</html>

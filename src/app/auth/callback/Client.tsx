@@ -18,86 +18,154 @@ export default function CallbackClient() {
   const { loginWithGoogle, verifyInviteToken, updateUserAfterGoogleSignIn } = useUser()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [debugInfo, setDebugInfo] = useState<string[]>([])
+  
+  // デバッグ情報を追加する関数
+  const addDebugInfo = (info: string) => {
+    console.log(info)
+    setDebugInfo(prev => [...prev, info])
+  }
   
   useEffect(() => {
     const handleCallback = async () => {
       try {
         setLoading(true)
+        addDebugInfo('認証コールバック処理を開始します')
+        
+        // URLからハッシュフラグメントを取得（access_tokenなど）
+        const hashFragment = typeof window !== 'undefined' ? window.location.hash : ''
+        if (hashFragment) {
+          addDebugInfo(`ハッシュフラグメントを検出: ${hashFragment.substring(0, 20)}...`)
+        }
         
         // Supabaseのセッションを取得
         const client = supabase()
+        addDebugInfo('Supabaseクライアントを初期化しました')
+        
         const { data, error } = await client.auth.getSession()
         
         if (error) {
-          console.error('[DEBUG] Error getting session:', error)
+          addDebugInfo(`セッション取得エラー: ${error.message}`)
           setError('認証中にエラーが発生しました')
           setLoading(false)
           return
         }
         
         if (!data.session) {
-          console.error('[DEBUG] No session found')
-          setError('セッションが見つかりません')
-          setLoading(false)
-          return
+          addDebugInfo('セッションが見つかりません')
+          
+          // セッションがない場合、ハッシュフラグメントからトークンを取得して処理
+          if (hashFragment && hashFragment.includes('access_token')) {
+            addDebugInfo('URLからアクセストークンを検出しました。セッションを設定します')
+            
+            try {
+              // ハッシュフラグメントからトークンを抽出
+              const params = new URLSearchParams(hashFragment.substring(1))
+              const accessToken = params.get('access_token')
+              
+              if (accessToken) {
+                addDebugInfo('アクセストークンを使用してセッションを設定します')
+                
+                // セッションを設定
+                const { error: setSessionError } = await client.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: params.get('refresh_token') || '',
+                })
+                
+                if (setSessionError) {
+                  addDebugInfo(`セッション設定エラー: ${setSessionError.message}`)
+                  setError('セッションの設定に失敗しました')
+                  setLoading(false)
+                  return
+                }
+                
+                addDebugInfo('セッションを正常に設定しました')
+              } else {
+                addDebugInfo('アクセストークンが見つかりません')
+                setError('認証トークンが見つかりません')
+                setLoading(false)
+                return
+              }
+            } catch (tokenError) {
+              addDebugInfo(`トークン処理エラー: ${tokenError}`)
+              setError('認証トークンの処理に失敗しました')
+              setLoading(false)
+              return
+            }
+          } else {
+            addDebugInfo('セッションとアクセストークンの両方が見つかりません')
+            setError('セッションが見つかりません')
+            setLoading(false)
+            return
+          }
+        } else {
+          addDebugInfo('有効なセッションを検出しました')
         }
         
         // ユーザー情報を取得
-        const { data: { user }, error: userError } = await client.auth.getUser()
+        const { data: userData, error: userError } = await client.auth.getUser()
         
-        if (userError || !user) {
-          console.error('[DEBUG] Error getting user:', userError)
+        if (userError || !userData.user) {
+          addDebugInfo(`ユーザー情報取得エラー: ${userError?.message || 'ユーザーが見つかりません'}`)
           setError('ユーザー情報の取得に失敗しました')
           setLoading(false)
           return
         }
         
-        console.log('[DEBUG] Authenticated user email:', user.email)
+        const user = userData.user
+        addDebugInfo(`認証されたユーザーのメール: ${user.email}`)
         
         // 必要なテーブルが存在するか確認
         try {
           // app_usersテーブルの確認
+          addDebugInfo('app_usersテーブルを確認中...')
           const { success: userTableSuccess, exists: userTableExists, error: userTableError } = await checkAppUsersTable()
           if (!userTableSuccess) {
-            console.error('[DEBUG] Error checking app_users table:', userTableError)
+            addDebugInfo(`app_usersテーブル確認エラー: ${userTableError}`)
           } else if (!userTableExists) {
-            console.warn('[DEBUG] app_users table does not exist. Please create it in the Supabase dashboard.')
+            addDebugInfo('app_usersテーブルが存在しません')
+          } else {
+            addDebugInfo('app_usersテーブルが存在します')
           }
           
           // companiesテーブルの確認
+          addDebugInfo('companiesテーブルを確認中...')
           const { success: companyTableSuccess, error: companyTableError } = await createCompaniesTable()
           if (!companyTableSuccess) {
-            console.error('[DEBUG] Error checking companies table:', companyTableError)
+            addDebugInfo(`companiesテーブル確認エラー: ${companyTableError}`)
           } else {
-            console.log('[DEBUG] Companies table check completed successfully')
+            addDebugInfo('companiesテーブルの確認が完了しました')
           }
           
           // invitationsテーブルの確認
+          addDebugInfo('invitationsテーブルを確認中...')
           const { success: invitationsTableSuccess, exists: invitationsTableExists, error: invitationsTableError } = await checkInvitationsTable()
           if (!invitationsTableSuccess) {
-            console.error('[DEBUG] Error checking invitations table:', invitationsTableError)
+            addDebugInfo(`invitationsテーブル確認エラー: ${invitationsTableError}`)
           } else if (!invitationsTableExists) {
-            console.warn('[DEBUG] invitations table does not exist. Please create it in the Supabase dashboard.')
+            addDebugInfo('invitationsテーブルが存在しません')
           } else {
-            console.log('[DEBUG] Invitations table check completed successfully')
+            addDebugInfo('invitationsテーブルが存在します')
           }
         } catch (tableError) {
-          console.error('[DEBUG] Exception checking tables:', tableError)
+          addDebugInfo(`テーブル確認例外: ${tableError}`)
         }
         
         // 招待トークンの確認
         const inviteToken = sessionStorage.getItem('invite_token')
         
         if (inviteToken) {
-          console.log('[DEBUG] Found invite token in session storage:', inviteToken)
+          addDebugInfo(`セッションストレージで招待トークンを検出: ${inviteToken}`)
           
           // 招待トークンの検証
+          addDebugInfo('招待トークンを検証中...')
           const { valid, user: invitedUser, error: verifyError } = await verifyInviteToken(inviteToken)
           
           if (valid && invitedUser) {
-            console.log('[DEBUG] Valid invitation found for company:', invitedUser.companyId)
+            addDebugInfo(`会社IDの有効な招待を検出: ${invitedUser.companyId}`)
             
             // 招待が有効な場合、ユーザー情報を更新して招待を完了
+            addDebugInfo('Google認証後にユーザー情報を更新中...')
             const updateSuccess = await updateUserAfterGoogleSignIn({
               companyId: invitedUser.companyId,
               role: invitedUser.role || '一般ユーザー',
@@ -107,85 +175,98 @@ export default function CallbackClient() {
             if (updateSuccess) {
               // 招待トークンをクリア
               sessionStorage.removeItem('invite_token')
+              addDebugInfo('招待トークンをクリアしました')
               
               // ダッシュボードにリダイレクト
-              console.log('[DEBUG] Redirecting invited user to dashboard')
+              addDebugInfo('招待されたユーザーをダッシュボードにリダイレクトします')
               router.push('/dashboard')
               return
             } else {
-              console.error('[DEBUG] Failed to update user after invitation')
+              addDebugInfo('招待後のユーザー更新に失敗しました')
               setError('招待の処理中にエラーが発生しました')
               setLoading(false)
               return
             }
           } else {
-            console.error('[DEBUG] Invalid invitation token:', verifyError)
+            addDebugInfo(`無効な招待トークン: ${verifyError}`)
             // 無効な招待トークンの場合は通常のログインフローに進む
             sessionStorage.removeItem('invite_token')
+            addDebugInfo('無効な招待トークンをクリアしました')
           }
         }
         
         // 通常のログイン
+        addDebugInfo('通常のログインプロセスを開始します')
         const success = await loginWithGoogle()
         
         if (success) {
-          // ユーザーが既存かどうかを確認
-          const { data: { user } } = await client.auth.getUser()
+          addDebugInfo('Googleログインに成功しました')
           
-          if (!user) {
+          // ユーザーが既存かどうかを確認
+          const { data: refreshedUserData } = await client.auth.getUser()
+          const refreshedUser = refreshedUserData.user
+          
+          if (!refreshedUser) {
+            addDebugInfo('更新されたユーザー情報の取得に失敗しました')
             setError('ユーザー情報の取得に失敗しました')
             setLoading(false)
             return
           }
           
           // Supabaseのユーザーメタデータから会社IDを取得
-          const companyIdFromMetadata = user.user_metadata?.company_id
+          const companyIdFromMetadata = refreshedUser.user_metadata?.company_id
+          addDebugInfo(`メタデータから会社ID: ${companyIdFromMetadata || 'なし'}`)
           
           // app_usersテーブルにユーザー情報が存在するか確認
           try {
-            const result = await getUserFromDatabase(user.id)
+            addDebugInfo('データベースからユーザー情報を取得中...')
+            const result = await getUserFromDatabase(refreshedUser.id)
             
             if (!result.success || !result.data) {
-              console.log('[DEBUG] User not found in database, creating new record')
+              addDebugInfo('ユーザーがデータベースに見つかりません。新しいレコードを作成します')
               
               // ユーザー情報をデータベースに保存
-              const saveResult = await saveUserToDatabase(user.id, {
-                email: user.email || '',
-                fullName: user.user_metadata?.full_name || '',
-                role: user.user_metadata?.role || '一般ユーザー',
+              const saveResult = await saveUserToDatabase(refreshedUser.id, {
+                email: refreshedUser.email || '',
+                fullName: refreshedUser.user_metadata?.full_name || '',
+                role: refreshedUser.user_metadata?.role || '一般ユーザー',
                 status: 'アクティブ',
-                createdAt: user.created_at,
+                createdAt: refreshedUser.created_at,
                 companyId: companyIdFromMetadata || ''
               })
               
               if (!saveResult.success) {
-                console.error('[DEBUG] Error saving user to database:', saveResult.error)
+                addDebugInfo(`ユーザーのデータベース保存エラー: ${saveResult.error}`)
                 // エラーがあっても処理を続行
+              } else {
+                addDebugInfo('ユーザー情報をデータベースに保存しました')
               }
             } else {
-              console.log('[DEBUG] User found in database:', result.data)
+              addDebugInfo(`ユーザーがデータベースに見つかりました: ${result.data.email}`)
             }
           } catch (dbError) {
-            console.error('[DEBUG] Database operation error:', dbError)
+            addDebugInfo(`データベース操作エラー: ${dbError}`)
             // データベースエラーがあっても認証フローを続行
           }
           
           if (companyIdFromMetadata) {
             // 会社IDがある場合はダッシュボードへ
-            console.log('[DEBUG] Redirecting to dashboard with company ID:', companyIdFromMetadata)
+            addDebugInfo(`会社ID ${companyIdFromMetadata} でダッシュボードにリダイレクトします`)
             router.push('/dashboard')
           } else {
             // 会社IDがない場合は会社登録ページへ
-            console.log('[DEBUG] Redirecting to company registration page')
+            addDebugInfo('会社登録ページにリダイレクトします')
             router.push('/auth/register/company')
           }
         } else {
+          addDebugInfo('ログインに失敗しました')
           setError('ログインに失敗しました')
+          setLoading(false)
         }
       } catch (err) {
         console.error('Callback error:', err)
+        addDebugInfo(`コールバックエラー: ${err}`)
         setError('認証処理中にエラーが発生しました')
-      } finally {
         setLoading(false)
       }
     }
@@ -203,12 +284,34 @@ export default function CallbackClient() {
           <div className="bg-red-50 text-red-700 p-4 rounded-md mb-4">
             {error}
           </div>
-          <div className="flex justify-center">
+          
+          {/* デバッグ情報を表示 */}
+          <div className="mt-4 mb-4">
+            <details>
+              <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
+                デバッグ情報を表示
+              </summary>
+              <div className="mt-2 p-2 bg-gray-100 rounded text-xs font-mono whitespace-pre-wrap">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="mb-1">{info}</div>
+                ))}
+              </div>
+            </details>
+          </div>
+          
+          <div className="flex flex-col space-y-2">
             <button
               onClick={() => router.push('/auth/login')}
               className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
             >
               ログインページに戻る
+            </button>
+            
+            <button
+              onClick={() => router.push('/fix-google-auth.html')}
+              className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors"
+            >
+              認証修正ツールを開く
             </button>
           </div>
         </div>
@@ -227,6 +330,20 @@ export default function CallbackClient() {
           <p className="text-secondary-600">
             認証情報を処理しています...
           </p>
+          
+          {/* デバッグ情報を表示 */}
+          <div className="mt-4 w-full">
+            <details>
+              <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
+                デバッグ情報を表示
+              </summary>
+              <div className="mt-2 p-2 bg-gray-100 rounded text-xs font-mono text-left whitespace-pre-wrap max-h-60 overflow-y-auto">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="mb-1">{info}</div>
+                ))}
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     </div>
