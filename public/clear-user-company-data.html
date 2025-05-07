@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ユーザーと会社データのクリア</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #4b5563;
+      margin-top: 30px;
+    }
+    pre {
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .instructions {
+      background-color: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .warning {
+      background-color: #fff7ed;
+      border-left: 4px solid #f97316;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    .success {
+      background-color: #ecfdf5;
+      border-left: 4px solid #10b981;
+    }
+    .error {
+      background-color: #fef2f2;
+      border-left: 4px solid #ef4444;
+    }
+    #storageData {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>ユーザーと会社データのクリア</h1>
+  
+  <div class="instructions">
+    <p>このツールは、リダイレクトループの問題を解決するために、ローカルストレージに保存されているユーザーデータと会社データをクリアします。</p>
+    <p>また、Supabaseのセッションもクリアして、新しい状態からログインし直すことができます。</p>
+  </div>
+
+  <div class="warning">
+    <h3>注意事項</h3>
+    <p>このツールを実行すると、ローカルに保存されているユーザーデータと会社データがすべて削除されます。</p>
+    <p>実行後は、再度ログインする必要があります。</p>
+  </div>
+
+  <h2>現在のローカルストレージデータ</h2>
+  <div id="storageData"></div>
+
+  <h2>実行ボタン</h2>
+  <button id="clearUserDataBtn">ユーザーデータをクリア</button>
+  <button id="clearCompanyDataBtn">会社データをクリア</button>
+  <button id="clearAllDataBtn">すべてのデータをクリア</button>
+  <button id="clearSessionBtn">Supabaseセッションをクリア</button>
+  <button id="redirectBtn">ログインページにリダイレクト</button>
+  
+  <div id="status"></div>
+
+  <script>
+    // ローカルストレージのデータを表示
+    function displayStorageData() {
+      const storageData = document.getElementById('storageData');
+      storageData.innerHTML = '';
+      
+      const data = {
+        'kaizen_user': localStorage.getItem('kaizen_user'),
+        'kaizen_users': localStorage.getItem('kaizen_users'),
+        'kaizen_company_info': localStorage.getItem('kaizen_company_info'),
+        'supabase.auth.token': localStorage.getItem('supabase.auth.token')
+      };
+      
+      storageData.innerHTML = JSON.stringify(data, null, 2);
+    }
+    
+    // ページ読み込み時にデータを表示
+    window.addEventListener('load', displayStorageData);
+    
+    // ユーザーデータをクリア
+    document.getElementById('clearUserDataBtn').addEventListener('click', function() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.style.display = 'block';
+      
+      try {
+        localStorage.removeItem('kaizen_user');
+        localStorage.removeItem('kaizen_users');
+        
+        statusDiv.textContent = 'ユーザーデータをクリアしました。';
+        statusDiv.className = 'success';
+        
+        // データ表示を更新
+        displayStorageData();
+      } catch (error) {
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // 会社データをクリア
+    document.getElementById('clearCompanyDataBtn').addEventListener('click', function() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.style.display = 'block';
+      
+      try {
+        localStorage.removeItem('kaizen_company_info');
+        
+        statusDiv.textContent = '会社データをクリアしました。';
+        statusDiv.className = 'success';
+        
+        // データ表示を更新
+        displayStorageData();
+      } catch (error) {
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // すべてのデータをクリア
+    document.getElementById('clearAllDataBtn').addEventListener('click', function() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.style.display = 'block';
+      
+      try {
+        localStorage.removeItem('kaizen_user');
+        localStorage.removeItem('kaizen_users');
+        localStorage.removeItem('kaizen_company_info');
+        
+        statusDiv.textContent = 'すべてのデータをクリアしました。';
+        statusDiv.className = 'success';
+        
+        // データ表示を更新
+        displayStorageData();
+      } catch (error) {
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // Supabaseセッションをクリア
+    document.getElementById('clearSessionBtn').addEventListener('click', function() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.style.display = 'block';
+      
+      try {
+        // Supabase関連のすべてのデータを削除
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('supabase.')) {
+            localStorage.removeItem(key);
+          }
+        }
+        
+        statusDiv.textContent = 'Supabaseセッションをクリアしました。';
+        statusDiv.className = 'success';
+        
+        // データ表示を更新
+        displayStorageData();
+      } catch (error) {
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // ログインページにリダイレクト
+    document.getElementById('redirectBtn').addEventListener('click', function() {
+      window.location.href = '/auth/login';
+    });
+  </script>
+</body>
+</html>
