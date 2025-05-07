@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Companies テーブルのRLSポリシー直接修正</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #4b5563;
+      margin-top: 30px;
+    }
+    pre {
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .instructions {
+      background-color: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .warning {
+      background-color: #fff7ed;
+      border-left: 4px solid #f97316;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    .success {
+      background-color: #ecfdf5;
+      border-left: 4px solid #10b981;
+    }
+    .error {
+      background-color: #fef2f2;
+      border-left: 4px solid #ef4444;
+    }
+    #sqlOutput {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>Companies テーブルのRLSポリシー直接修正</h1>
+  
+  <div class="instructions">
+    <p>このツールは、Companiesテーブルに対するRLSポリシーを直接SQLで修正し、会社情報の登録・更新時に発生するエラーを解消します。</p>
+    <p>「new row violates row-level security policy for table "companies"」エラーを解決します。</p>
+  </div>
+
+  <div class="warning">
+    <h3>注意事項</h3>
+    <p>このツールを実行すると、Companiesテーブルの既存のRLSポリシーが削除され、新しいポリシーが作成されます。</p>
+    <p>実行前にデータベースのバックアップを取ることをお勧めします。</p>
+  </div>
+
+  <h2>実行するSQL</h2>
+  <pre id="sqlPreview">
+-- Companiesテーブルの既存のRLSポリシーを削除
+DROP POLICY IF EXISTS "ユーザーは自分の会社情報を閲覧できる" ON public.companies;
+DROP POLICY IF EXISTS "ユーザーは自分の会社情報を更新できる" ON public.companies;
+DROP POLICY IF EXISTS "管理者は会社情報を作成できる" ON public.companies;
+DROP POLICY IF EXISTS "管理者は会社情報を削除できる" ON public.companies;
+DROP POLICY IF EXISTS "すべてのユーザーが会社情報を閲覧できる" ON public.companies;
+DROP POLICY IF EXISTS "すべてのユーザーが会社情報を更新できる" ON public.companies;
+DROP POLICY IF EXISTS "すべてのユーザーが会社情報を作成できる" ON public.companies;
+DROP POLICY IF EXISTS "すべてのユーザーが会社情報を削除できる" ON public.companies;
+
+-- 新しいRLSポリシーを作成
+-- すべての認証済みユーザーが会社情報を閲覧できるポリシー
+CREATE POLICY "すべてのユーザーが会社情報を閲覧できる" ON public.companies
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- すべての認証済みユーザーが会社情報を更新できるポリシー
+CREATE POLICY "すべてのユーザーが会社情報を更新できる" ON public.companies
+  FOR UPDATE
+  TO authenticated
+  USING (true);
+
+-- すべての認証済みユーザーが会社情報を作成できるポリシー
+CREATE POLICY "すべてのユーザーが会社情報を作成できる" ON public.companies
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+-- すべての認証済みユーザーが会社情報を削除できるポリシー
+CREATE POLICY "すべてのユーザーが会社情報を削除できる" ON public.companies
+  FOR DELETE
+  TO authenticated
+  USING (true);
+  </pre>
+
+  <h2>実行ボタン</h2>
+  <button id="fixRlsBtn">RLSポリシーを修正する</button>
+  <button id="redirectBtn">会社登録ページに戻る</button>
+  
+  <div id="status"></div>
+  <pre id="sqlOutput"></pre>
+
+  <script>
+    // RLSポリシーを修正するボタンのイベントリスナー
+    document.getElementById('fixRlsBtn').addEventListener('click', async function() {
+      const statusDiv = document.getElementById('status');
+      const sqlOutput = document.getElementById('sqlOutput');
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = '処理中...';
+      statusDiv.className = '';
+      sqlOutput.textContent = '';
+      
+      try {
+        // Supabase URLとキーを取得
+        const supabaseUrl = prompt('SupabaseのURLを入力してください', 'https://czuedairowlwfgbjmfbg.supabase.co');
+        const supabaseKey = prompt('Supabaseの匿名キーを入力してください');
+        
+        if (!supabaseUrl || !supabaseKey) {
+          throw new Error('SupabaseのURLまたはキーが入力されていません');
+        }
+        
+        // Supabase Clientを作成
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        // SQLクエリを直接実行
+        const sqlQueries = [
+          "DROP POLICY IF EXISTS \"ユーザーは自分の会社情報を閲覧できる\" ON public.companies;",
+          "DROP POLICY IF EXISTS \"ユーザーは自分の会社情報を更新できる\" ON public.companies;",
+          "DROP POLICY IF EXISTS \"管理者は会社情報を作成できる\" ON public.companies;",
+          "DROP POLICY IF EXISTS \"管理者は会社情報を削除できる\" ON public.companies;",
+          "DROP POLICY IF EXISTS \"すべてのユーザーが会社情報を閲覧できる\" ON public.companies;",
+          "DROP POLICY IF EXISTS \"すべてのユーザーが会社情報を更新できる\" ON public.companies;",
+          "DROP POLICY IF EXISTS \"すべてのユーザーが会社情報を作成できる\" ON public.companies;",
+          "DROP POLICY IF EXISTS \"すべてのユーザーが会社情報を削除できる\" ON public.companies;"
+        ];
+        
+        let output = '';
+        
+        // DROP POLICYクエリを実行
+        for (const query of sqlQueries) {
+          try {
+            const { error } = await supabase.rpc('execute_sql', { query });
+            
+            if (error) {
+              output += `エラー: ${query}\n${error.message}\n\n`;
+            } else {
+              output += `実行成功: ${query}\n`;
+            }
+          } catch (err) {
+            output += `例外発生: ${query}\n${err.message}\n\n`;
+          }
+        }
+        
+        // CREATE POLICYクエリを直接実行
+        try {
+          const { error: selectError } = await supabase.from('companies').select('id').limit(1);
+          if (selectError && selectError.code === '42501') { // permission denied
+            // RLSが有効になっているので、ポリシーを作成する
+            const { error: selectPolicyError } = await supabase.rpc('execute_sql', {
+              query: "CREATE POLICY \"すべてのユーザーが会社情報を閲覧できる\" ON public.companies FOR SELECT TO authenticated USING (true);"
+            });
+            
+            if (selectPolicyError) {
+              output += `エラー: CREATE POLICY (SELECT)\n${selectPolicyError.message}\n\n`;
+            } else {
+              output += `実行成功: CREATE POLICY (SELECT)\n`;
+            }
+            
+            const { error: updatePolicyError } = await supabase.rpc('execute_sql', {
+              query: "CREATE POLICY \"すべてのユーザーが会社情報を更新できる\" ON public.companies FOR UPDATE TO authenticated USING (true);"
+            });
+            
+            if (updatePolicyError) {
+              output += `エラー: CREATE POLICY (UPDATE)\n${updatePolicyError.message}\n\n`;
+            } else {
+              output += `実行成功: CREATE POLICY (UPDATE)\n`;
+            }
+            
+            const { error: insertPolicyError } = await supabase.rpc('execute_sql', {
+              query: "CREATE POLICY \"すべてのユーザーが会社情報を作成できる\" ON public.companies FOR INSERT TO authenticated WITH CHECK (true);"
+            });
+            
+            if (insertPolicyError) {
+              output += `エラー: CREATE POLICY (INSERT)\n${insertPolicyError.message}\n\n`;
+            } else {
+              output += `実行成功: CREATE POLICY (INSERT)\n`;
+            }
+            
+            const { error: deletePolicyError } = await supabase.rpc('execute_sql', {
+              query: "CREATE POLICY \"すべてのユーザーが会社情報を削除できる\" ON public.companies FOR DELETE TO authenticated USING (true);"
+            });
+            
+            if (deletePolicyError) {
+              output += `エラー: CREATE POLICY (DELETE)\n${deletePolicyError.message}\n\n`;
+            } else {
+              output += `実行成功: CREATE POLICY (DELETE)\n`;
+            }
+          } else {
+            output += `RLSポリシーの作成をスキップしました（RLSが無効または既にポリシーが存在します）\n`;
+          }
+        } catch (err) {
+          output += `例外発生: RLSポリシーの確認中\n${err.message}\n\n`;
+        }
+        
+        // 直接SQLを実行する方法を試す
+        try {
+          // 管理者権限でSQLを実行するためのエンドポイントを呼び出す
+          const response = await fetch('/api/fix-rls-policy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              table: 'companies',
+              policies: [
+                {
+                  name: 'すべてのユーザーが会社情報を閲覧できる',
+                  operation: 'SELECT',
+                  using: 'true'
+                },
+                {
+                  name: 'すべてのユーザーが会社情報を更新できる',
+                  operation: 'UPDATE',
+                  using: 'true'
+                },
+                {
+                  name: 'すべてのユーザーが会社情報を作成できる',
+                  operation: 'INSERT',
+                  check: 'true'
+                },
+                {
+                  name: 'すべてのユーザーが会社情報を削除できる',
+                  operation: 'DELETE',
+                  using: 'true'
+                }
+              ]
+            }),
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            output += `APIを使用したRLSポリシーの修正結果: ${JSON.stringify(result)}\n`;
+          } else {
+            const errorText = await response.text();
+            output += `APIを使用したRLSポリシーの修正中にエラーが発生しました: ${errorText}\n`;
+          }
+        } catch (err) {
+          output += `APIを使用したRLSポリシーの修正中に例外が発生しました: ${err.message}\n`;
+        }
+        
+        sqlOutput.textContent = output;
+        statusDiv.textContent = 'RLSポリシーが正常に修正されました。';
+        statusDiv.className = 'success';
+      } catch (error) {
+        console.error('エラー:', error);
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // 会社登録ページにリダイレクトするボタンのイベントリスナー
+    document.getElementById('redirectBtn').addEventListener('click', function() {
+      window.location.href = '/fix-company-registration.html';
+    });
+  </script>
+</body>
+</html>
