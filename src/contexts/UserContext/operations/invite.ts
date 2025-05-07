@@ -1,6 +1,5 @@
 import { UserInfo } from '@/utils/api';
 import { Dispatch, SetStateAction } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '@/lib/supabaseClient';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 
@@ -19,7 +18,7 @@ export const inviteUser = async (
     const client = supabase();
     
     // 招待トークンの生成
-    const token = uuidv4();
+    const token = crypto.randomUUID();
     
     // 有効期限を設定（7日後）
     const expiresAt = new Date();
