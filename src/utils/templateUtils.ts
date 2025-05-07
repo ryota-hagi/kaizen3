@@ -46,20 +46,10 @@ function camelToSnakeCase(obj: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
   
   Object.keys(obj).forEach(key => {
-    // 特別なケース：companyIdはcompany_idに直接変換
-    if (key === 'companyId') {
-      result['company_id'] = obj[key];
-    } else {
-      // 通常のキャメルケースをスネークケースに変換
-      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      result[snakeKey] = obj[key];
-    }
+    // キャメルケースをスネークケースに変換
+    const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+    result[snakeKey] = obj[key];
   });
-  
-  // company_idが存在することを確認
-  if (!result['company_id'] && obj['companyId']) {
-    result['company_id'] = obj['companyId'];
-  }
   
   return result;
 }
@@ -131,19 +121,12 @@ export async function addTemplate(template: Omit<TemplateUI, 'id'>, companyId: s
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[templateUtils] Original Company ID:', companyId);
-    console.log('[templateUtils] Normalized Company ID:', normalizedCompanyId);
-    
     // UI用のテンプレート情報をDB用に変換
-    const dbTemplate = {
-      title: template.title,
-      content: template.content,
-      company_id: normalizedCompanyId
+    const templateObj = {
+      ...template,
+      companyId
     };
-    
-    console.log('[templateUtils] Template data to insert:', dbTemplate);
+    const dbTemplate = camelToSnakeCase(templateObj);
 
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
@@ -182,39 +165,79 @@ export async function updateTemplate(template: TemplateUI, companyId: string): P
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[templateUtils] Original Company ID:', companyId);
-    console.log('[templateUtils] Normalized Company ID:', normalizedCompanyId);
-    
-    // UI用のテンプレート情報をDB用に変換
-    const dbTemplate = {
-      id: template.id,
-      title: template.title,
-      content: template.content,
-      company_id: normalizedCompanyId
+    // UI用のテンプレート情報をDB用に変換（idを除外）
+    const { id, ...templateWithoutId } = template;
+    const templateObj = {
+      ...templateWithoutId,
+      companyId
     };
     
-    console.log('[templateUtils] Template data to update:', dbTemplate);
+    const dbTemplate = camelToSnakeCase(templateObj);
+    console.log('[templateUtils] Template data to update:', {
+      id,
+      ...dbTemplate
+    });
 
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from('templates')
-      .update(dbTemplate)
-      .eq('id', template.id)
-      .eq('company_id', normalizedCompanyId)
-      .select()
-      .single();
+    // 直接IDを使用して更新（UUIDエラーが発生する可能性があるため、try-catchで囲む）
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('templates')
+        .update(dbTemplate)
+        .eq('id', id)
+        .eq('company_id', companyId)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('[templateUtils] Failed to update template:', error);
-      return { success: false, error };
+      if (error) {
+        console.error('[templateUtils] Failed to update template with ID:', error);
+        throw error;
+      }
+
+      // DBのテンプレート情報をUI用に変換
+      const uiTemplate = data ? convertTemplateToUI(data) : undefined;
+
+      return { success: true, data: uiTemplate };
+    } catch (idError) {
+      // IDによる更新が失敗した場合、タイトルで検索して更新を試みる
+      console.warn('[templateUtils] Failed to update by ID, trying by title:', idError);
+      
+      const supabase = getSupabaseClient();
+      
+      // タイトルで検索
+      const { data: existingTemplates, error: fetchError } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('title', template.title);
+      
+      if (fetchError || !existingTemplates || existingTemplates.length === 0) {
+        console.error('[templateUtils] Template not found by title:', template.title);
+        return { success: false, error: 'Template not found' };
+      }
+      
+      // 最初の一致するテンプレートを使用（型アサーションを追加）
+      const existingTemplate = existingTemplates[0] as unknown as Template;
+      
+      // 既存のレコードのUUIDを使用して更新
+      const { data, error } = await supabase
+        .from('templates')
+        .update(dbTemplate)
+        .eq('id', existingTemplate.id as string)
+        .eq('company_id', companyId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[templateUtils] Failed to update template by title:', error);
+        return { success: false, error };
+      }
+
+      // DBのテンプレート情報をUI用に変換
+      const uiTemplate = data ? convertTemplateToUI(data) : undefined;
+
+      return { success: true, data: uiTemplate };
     }
-
-    // DBのテンプレート情報をUI用に変換
-    const uiTemplate = data ? convertTemplateToUI(data) : undefined;
-
-    return { success: true, data: uiTemplate };
   } catch (e) {
     console.error('[templateUtils] Unexpected error updating template:', e);
     return { success: false, error: e };
@@ -236,17 +259,12 @@ export async function deleteTemplate(id: string, companyId: string): Promise<{ s
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[templateUtils] Original Company ID:', companyId);
-    console.log('[templateUtils] Normalized Company ID:', normalizedCompanyId);
-
     const supabase = getSupabaseClient();
     const { error } = await supabase
       .from('templates')
       .delete()
       .eq('id', id)
-      .eq('company_id', normalizedCompanyId);
+      .eq('company_id', companyId);
 
     if (error) {
       console.error('[templateUtils] Failed to delete template:', error);
@@ -284,11 +302,6 @@ export async function syncTemplatesToSupabase(companyId: string): Promise<{ succ
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[templateUtils] Original Company ID:', companyId);
-    console.log('[templateUtils] Normalized Company ID:', normalizedCompanyId);
-    
     const cachedTemplates = getCachedTemplates();
     if (cachedTemplates.length === 0) {
       console.log('[templateUtils] No cached templates to sync');
@@ -301,7 +314,7 @@ export async function syncTemplatesToSupabase(companyId: string): Promise<{ succ
     const { data: existingTemplates, error: fetchError } = await supabase
       .from('templates')
       .select('id')
-      .eq('company_id', normalizedCompanyId);
+      .eq('company_id', companyId);
 
     if (fetchError) {
       console.error('[templateUtils] Failed to fetch existing templates:', fetchError);
@@ -314,17 +327,14 @@ export async function syncTemplatesToSupabase(companyId: string): Promise<{ succ
     const templatesToAdd = cachedTemplates
       .filter(t => !existingIds.has(t.id))
       .map(t => {
+        const templateData = camelToSnakeCase(t);
         return {
-          id: t.id,
-          title: t.title,
-          content: t.content,
-          company_id: normalizedCompanyId
+          ...templateData,
+          company_id: companyId
         };
       });
 
     if (templatesToAdd.length > 0) {
-      console.log('[templateUtils] Templates to add:', templatesToAdd);
-      
       const { error: insertError } = await supabase
         .from('templates')
         .insert(templatesToAdd);
