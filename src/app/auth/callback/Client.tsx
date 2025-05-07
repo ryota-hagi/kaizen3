@@ -260,7 +260,9 @@ export default function CallbackClient() {
               addDebugInfo(`ユーザーがデータベースに見つかりました: ${result.data.email}`)
               
               // データベースから会社IDを取得
-              companyIdFromDatabase = result.data.company_id || '';
+              companyIdFromDatabase = typeof result.data.company_id === 'string' 
+                ? result.data.company_id 
+                : result.data.company_id ? String(result.data.company_id) : '';
               addDebugInfo(`データベースから会社ID: ${companyIdFromDatabase || 'なし'}`)
               
               // データベースに会社IDがあるが、メタデータにない場合は、メタデータを更新
