@@ -13,6 +13,32 @@ export interface CompanyInfo {
 }
 
 /**
+ * キャメルケースをスネークケースに変換する関数
+ * 例: foundedYear -> founded_year
+ */
+function camelToSnakeCase(str: string): string {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
+/**
+ * オブジェクトのキーをキャメルケースからスネークケースに変換する関数
+ */
+function convertKeysToSnakeCase(obj: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  
+  Object.keys(obj).forEach(key => {
+    // userCountsなどの内部オブジェクトは除外（Supabaseに送信しない）
+    if (key === 'userCounts') return;
+    
+    // キーをスネークケースに変換
+    const snakeKey = camelToSnakeCase(key);
+    result[snakeKey] = obj[key];
+  });
+  
+  return result;
+}
+
+/**
  * 会社情報をSupabaseのcompaniesテーブルに更新する関数
  * 
  * @param companyInfo 更新する会社情報
@@ -25,10 +51,33 @@ export async function updateCompanyInfo(companyInfo: CompanyInfo): Promise<{ suc
   }
 
   try {
+    // キャメルケースのプロパティ名をスネークケースに変換
+    const snakeCaseCompanyInfo = convertKeysToSnakeCase(companyInfo);
+    
+    // foundedYearをfounded_yearに明示的に変換
+    if (companyInfo.foundedYear) {
+      snakeCaseCompanyInfo.founded_year = companyInfo.foundedYear;
+      delete snakeCaseCompanyInfo.foundedYear; // 重複を避けるために削除
+    }
+    
+    // businessDescriptionをbusiness_descriptionに明示的に変換
+    if (companyInfo.businessDescription) {
+      snakeCaseCompanyInfo.business_description = companyInfo.businessDescription;
+      delete snakeCaseCompanyInfo.businessDescription; // 重複を避けるために削除
+    }
+    
+    // contactEmailをcontact_emailに明示的に変換
+    if (companyInfo.contactEmail) {
+      snakeCaseCompanyInfo.contact_email = companyInfo.contactEmail;
+      delete snakeCaseCompanyInfo.contactEmail; // 重複を避けるために削除
+    }
+    
+    console.log('[companyInfo] Converted to snake case:', snakeCaseCompanyInfo);
+    
     const supabase = getSupabaseClient()
     const { data, error } = await supabase
       .from('companies')
-      .upsert(companyInfo, { onConflict: 'id' })
+      .upsert(snakeCaseCompanyInfo, { onConflict: 'id' })
       .select()
 
     if (error) {
