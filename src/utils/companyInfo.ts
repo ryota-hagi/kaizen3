@@ -13,6 +13,48 @@ export interface CompanyInfo {
 }
 
 /**
+ * 会社情報をSupabaseのcompaniesテーブルに更新する関数
+ * 
+ * @param companyInfo 更新する会社情報
+ * @returns 成功したかどうかと、エラーまたはデータ
+ */
+export async function updateCompanyInfo(companyInfo: CompanyInfo): Promise<{ success: boolean, data?: any, error?: any }> {
+  if (!companyInfo || !companyInfo.id) {
+    console.error('[companyInfo] companyId is missing, skip update')
+    return { success: false, error: 'Company ID is required' }
+  }
+
+  try {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from('companies')
+      .upsert(companyInfo, { onConflict: 'id' })
+      .select()
+
+    if (error) {
+      console.error('[companyInfo] Failed to update company info:', error)
+      return { success: false, error }
+    }
+
+    console.log('[companyInfo] Company info updated successfully:', data)
+    
+    // ローカルストレージも更新
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('kaizen_company_info', JSON.stringify(companyInfo))
+      } catch (e) {
+        console.error('[companyInfo] Failed to cache updated company info:', e)
+      }
+    }
+
+    return { success: true, data }
+  } catch (e) {
+    console.error('[companyInfo] Unexpected error updating company info:', e)
+    return { success: false, error: e }
+  }
+}
+
+/**
  * companyId から Supabase の companies テーブルを検索し、
  * 取得したデータを localStorage(`kaizen_company_info`) にキャッシュして返す。
  *

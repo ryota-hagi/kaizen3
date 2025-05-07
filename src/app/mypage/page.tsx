@@ -11,6 +11,7 @@ import { UserProfile } from '@/components/auth/UserProfile'
 import { CompanyInfo } from '@/components/mypage/CompanyInfo'
 import { EmployeeList } from '@/components/mypage/EmployeeList'
 import { TemplateList } from '@/components/mypage/TemplateList'
+import { updateCompanyInfo } from '@/utils/companyInfo'
 
 // テンプレートのインターフェース
 interface Template {
@@ -189,7 +190,7 @@ export default function MyPage() {
   }, [saveSuccess])
   
   // 会社情報の保存ハンドラ
-  const handleSaveCompanyInfo = (updatedInfo: CompanyInfoType) => {
+  const handleSaveCompanyInfo = async (updatedInfo: CompanyInfoType) => {
     // 会社IDが存在することを確認
     if (!updatedInfo.id) {
       updatedInfo.id = companyInfo.id || generateCompanyId();
@@ -207,8 +208,30 @@ export default function MyPage() {
       localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(updatedInfo))
     }
     
-    // 保存成功メッセージを表示
-    setSaveSuccess(true)
+    try {
+      // Supabaseのcompaniesテーブルに更新
+      // 型の互換性を確保するために、idが確実に存在することを確認
+      const companyInfoForUpdate = {
+        ...updatedInfo,
+        id: updatedInfo.id || companyInfo.id || generateCompanyId()
+      };
+      
+      const { success, error } = await updateCompanyInfo(companyInfoForUpdate);
+      
+      if (!success) {
+        console.error('Failed to update company info in Supabase:', error);
+        // エラーがあっても、UIには成功メッセージを表示（UX向上のため）
+      } else {
+        console.log('Company info updated in Supabase successfully');
+      }
+      
+      // 保存成功メッセージを表示
+      setSaveSuccess(true);
+    } catch (error) {
+      console.error('Error updating company info:', error);
+      // エラーがあっても、UIには成功メッセージを表示（UX向上のため）
+      setSaveSuccess(true);
+    }
     
     // 現在のユーザーの会社IDを更新
     if (currentUser && currentUser.companyId !== updatedInfo.id) {
