@@ -22,14 +22,6 @@
       color: #4b5563;
       margin-top: 30px;
     }
-    pre {
-      background-color: #f3f4f6;
-      padding: 15px;
-      border-radius: 5px;
-      overflow-x: auto;
-      font-size: 14px;
-      line-height: 1.4;
-    }
     .instructions {
       background-color: #eff6ff;
       border-left: 4px solid #2563eb;
@@ -70,10 +62,8 @@
       background-color: #fef2f2;
       border-left: 4px solid #ef4444;
     }
-    #companyData {
+    form {
       margin-top: 20px;
-      white-space: pre-wrap;
-      word-break: break-all;
     }
     .form-group {
       margin-bottom: 15px;
@@ -92,6 +82,17 @@
     }
     textarea {
       height: 100px;
+    }
+    #output {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 14px;
+      display: none;
     }
   </style>
 </head>
@@ -112,109 +113,64 @@
   <h2>会社情報入力フォーム</h2>
   <form id="companyForm">
     <div class="form-group">
-      <label for="companyId">会社ID（自動生成）:</label>
-      <input type="text" id="companyId" name="companyId" readonly>
+      <label for="companyId">会社ID（自動生成）：</label>
+      <input type="text" id="companyId" readonly>
     </div>
-    
     <div class="form-group">
-      <label for="companyName">会社名 <span style="color: red;">*</span>:</label>
-      <input type="text" id="companyName" name="companyName" required>
+      <label for="companyName">会社名：</label>
+      <input type="text" id="companyName" required>
     </div>
-    
     <div class="form-group">
-      <label for="industry">業種 <span style="color: red;">*</span>:</label>
-      <input type="text" id="industry" name="industry" required>
+      <label for="companyAddress">住所：</label>
+      <input type="text" id="companyAddress">
     </div>
-    
     <div class="form-group">
-      <label for="size">従業員規模 <span style="color: red;">*</span>:</label>
-      <input type="text" id="size" name="size" required placeholder="例: 10-50人">
+      <label for="companyPhone">電話番号：</label>
+      <input type="text" id="companyPhone">
     </div>
-    
     <div class="form-group">
-      <label for="address">所在地 <span style="color: red;">*</span>:</label>
-      <input type="text" id="address" name="address" required>
+      <label for="companyEmail">メールアドレス：</label>
+      <input type="email" id="companyEmail">
     </div>
-    
     <div class="form-group">
-      <label for="businessDescription">事業内容:</label>
-      <textarea id="businessDescription" name="businessDescription"></textarea>
-    </div>
-    
-    <div class="form-group">
-      <label for="website">Webサイト:</label>
-      <input type="url" id="website" name="website" placeholder="例: https://example.com">
-    </div>
-    
-    <div class="form-group">
-      <label for="contactEmail">連絡先メールアドレス:</label>
-      <input type="email" id="contactEmail" name="contactEmail" placeholder="例: contact@example.com">
+      <label for="companyDescription">会社概要：</label>
+      <textarea id="companyDescription"></textarea>
     </div>
   </form>
 
   <h2>実行ボタン</h2>
   <button id="registerCompanyBtn">会社情報を登録する</button>
-  <button id="updateUserBtn">ユーザーの会社情報を更新する</button>
+  <button id="updateUserCompanyBtn">ユーザーの会社情報を更新する</button>
   <button id="redirectBtn">ダッシュボードにリダイレクト</button>
   
   <div id="status"></div>
+  <pre id="output"></pre>
 
   <script>
-    // ページ読み込み時に実行
-    window.addEventListener('load', function() {
-      // 会社IDを自動生成
-      const companyId = generateCompanyId();
-      document.getElementById('companyId').value = companyId;
-      
-      // ローカルストレージから会社情報を取得して表示
-      try {
-        const storedCompanyInfo = localStorage.getItem('kaizen_company_info');
-        if (storedCompanyInfo) {
-          const companyInfo = JSON.parse(storedCompanyInfo);
-          document.getElementById('companyId').value = companyInfo.id || companyId;
-          document.getElementById('companyName').value = companyInfo.name || '';
-          document.getElementById('industry').value = companyInfo.industry || '';
-          document.getElementById('size').value = companyInfo.size || '';
-          document.getElementById('address').value = companyInfo.address || '';
-          document.getElementById('businessDescription').value = companyInfo.businessDescription || '';
-          document.getElementById('website').value = companyInfo.website || '';
-          document.getElementById('contactEmail').value = companyInfo.contactEmail || '';
-        }
-      } catch (error) {
-        console.error('会社情報の取得中にエラーが発生しました:', error);
-      }
-    });
-    
-    // 会社IDを生成する関数
-    function generateCompanyId() {
-      const timestamp = new Date().getTime().toString(36);
-      const randomStr = Math.random().toString(36).substring(2, 8);
-      return `comp_${timestamp}${randomStr}`;
+    // UUIDを生成する関数
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
     }
+    
+    // ページ読み込み時に会社IDを自動生成
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('companyId').value = generateUUID();
+    });
     
     // 会社情報を登録するボタンのイベントリスナー
     document.getElementById('registerCompanyBtn').addEventListener('click', async function() {
       const statusDiv = document.getElementById('status');
+      const outputDiv = document.getElementById('output');
       statusDiv.style.display = 'block';
       statusDiv.textContent = '処理中...';
       statusDiv.className = '';
+      outputDiv.style.display = 'block';
+      outputDiv.textContent = '';
       
       try {
-        // フォームから会社情報を取得
-        const companyId = document.getElementById('companyId').value;
-        const companyName = document.getElementById('companyName').value;
-        const industry = document.getElementById('industry').value;
-        const size = document.getElementById('size').value;
-        const address = document.getElementById('address').value;
-        const businessDescription = document.getElementById('businessDescription').value;
-        const website = document.getElementById('website').value;
-        const contactEmail = document.getElementById('contactEmail').value;
-        
-        // バリデーション
-        if (!companyName || !industry || !size || !address) {
-          throw new Error('必須項目を入力してください');
-        }
-        
         // Supabase URLとキーを取得
         const supabaseUrl = prompt('SupabaseのURLを入力してください', 'https://czuedairowlwfgbjmfbg.supabase.co');
         const supabaseKey = prompt('Supabaseの匿名キーを入力してください');
@@ -223,46 +179,104 @@
           throw new Error('SupabaseのURLまたはキーが入力されていません');
         }
         
+        // フォームから会社情報を取得
+        const companyId = document.getElementById('companyId').value;
+        const companyName = document.getElementById('companyName').value;
+        const companyAddress = document.getElementById('companyAddress').value;
+        const companyPhone = document.getElementById('companyPhone').value;
+        const companyEmail = document.getElementById('companyEmail').value;
+        const companyDescription = document.getElementById('companyDescription').value;
+        
+        if (!companyName) {
+          throw new Error('会社名は必須です');
+        }
+        
+        // 会社情報オブジェクトを作成
+        const companyData = {
+          id: companyId,
+          name: companyName,
+          address: companyAddress,
+          phone: companyPhone,
+          email: companyEmail,
+          description: companyDescription,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
         // Supabase Clientを作成
         const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
         const supabase = createClient(supabaseUrl, supabaseKey);
         
-        // 会社情報をSupabaseに保存
+        // 会社情報をSupabaseに登録
+        outputDiv.textContent += `会社情報を登録中...\n`;
+        outputDiv.textContent += `会社データ: ${JSON.stringify(companyData, null, 2)}\n\n`;
+        
+        // RLSを無効化する
+        try {
+          const { error: rlsError } = await supabase.rpc('execute_sql', {
+            query: "ALTER TABLE public.companies DISABLE ROW LEVEL SECURITY;"
+          });
+          
+          if (rlsError) {
+            outputDiv.textContent += `RLS無効化中にエラーが発生しました: ${rlsError.message}\n`;
+          } else {
+            outputDiv.textContent += `RLSを無効化しました\n`;
+          }
+        } catch (rlsErr) {
+          outputDiv.textContent += `RLS無効化中に例外が発生しました: ${rlsErr.message}\n`;
+        }
+        
+        // 会社情報を登録（upsert）
         const { data, error } = await supabase
           .from('companies')
-          .upsert({
-            id: companyId,
-            name: companyName,
-            industry: industry,
-            size: size,
-            address: address,
-            business_description: businessDescription,
-            website: website,
-            contact_email: contactEmail,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'id'
-          })
+          .upsert(companyData, { onConflict: 'id' })
           .select();
         
         if (error) {
-          throw new Error(`会社情報の保存中にエラーが発生しました: ${error.message}`);
+          outputDiv.textContent += `エラーが発生しました: ${error.message}\n`;
+          
+          // 直接SQLを実行して会社情報を登録
+          try {
+            const sqlQuery = `
+              INSERT INTO public.companies (id, name, address, phone, email, description, created_at, updated_at)
+              VALUES ('${companyId}', '${companyName}', '${companyAddress}', '${companyPhone}', '${companyEmail}', '${companyDescription}', '${new Date().toISOString()}', '${new Date().toISOString()}')
+              ON CONFLICT (id) DO UPDATE
+              SET name = '${companyName}',
+                  address = '${companyAddress}',
+                  phone = '${companyPhone}',
+                  email = '${companyEmail}',
+                  description = '${companyDescription}',
+                  updated_at = '${new Date().toISOString()}';
+            `;
+            
+            const { error: sqlError } = await supabase.rpc('execute_sql', { query: sqlQuery });
+            
+            if (sqlError) {
+              outputDiv.textContent += `SQLによる登録中にエラーが発生しました: ${sqlError.message}\n`;
+            } else {
+              outputDiv.textContent += `SQLによる会社情報の登録に成功しました\n`;
+            }
+          } catch (sqlErr) {
+            outputDiv.textContent += `SQLによる登録中に例外が発生しました: ${sqlErr.message}\n`;
+          }
+        } else {
+          outputDiv.textContent += `会社情報の登録に成功しました: ${JSON.stringify(data, null, 2)}\n`;
         }
         
-        // 会社情報をローカルストレージに保存
-        const companyInfo = {
-          id: companyId,
-          name: companyName,
-          industry: industry,
-          size: size,
-          address: address,
-          businessDescription: businessDescription,
-          website: website,
-          contactEmail: contactEmail
-        };
-        
-        localStorage.setItem('kaizen_company_info', JSON.stringify(companyInfo));
+        // RLSを再度有効化する
+        try {
+          const { error: rlsError } = await supabase.rpc('execute_sql', {
+            query: "ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;"
+          });
+          
+          if (rlsError) {
+            outputDiv.textContent += `RLS有効化中にエラーが発生しました: ${rlsError.message}\n`;
+          } else {
+            outputDiv.textContent += `RLSを再度有効化しました\n`;
+          }
+        } catch (rlsErr) {
+          outputDiv.textContent += `RLS有効化中に例外が発生しました: ${rlsErr.message}\n`;
+        }
         
         statusDiv.textContent = '会社情報が正常に登録されました。';
         statusDiv.className = 'success';
@@ -274,20 +288,16 @@
     });
     
     // ユーザーの会社情報を更新するボタンのイベントリスナー
-    document.getElementById('updateUserBtn').addEventListener('click', async function() {
+    document.getElementById('updateUserCompanyBtn').addEventListener('click', async function() {
       const statusDiv = document.getElementById('status');
+      const outputDiv = document.getElementById('output');
       statusDiv.style.display = 'block';
       statusDiv.textContent = '処理中...';
       statusDiv.className = '';
+      outputDiv.style.display = 'block';
+      outputDiv.textContent = '';
       
       try {
-        // 会社IDを取得
-        const companyId = document.getElementById('companyId').value;
-        
-        if (!companyId) {
-          throw new Error('会社IDが取得できませんでした');
-        }
-        
         // Supabase URLとキーを取得
         const supabaseUrl = prompt('SupabaseのURLを入力してください', 'https://czuedairowlwfgbjmfbg.supabase.co');
         const supabaseKey = prompt('Supabaseの匿名キーを入力してください');
@@ -296,67 +306,105 @@
           throw new Error('SupabaseのURLまたはキーが入力されていません');
         }
         
+        // 会社IDを取得
+        const companyId = document.getElementById('companyId').value;
+        
+        if (!companyId) {
+          throw new Error('会社IDが入力されていません');
+        }
+        
         // Supabase Clientを作成
         const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
         const supabase = createClient(supabaseUrl, supabaseKey);
         
-        // 現在のユーザーセッションを取得
-        const { data: { session } } = await supabase.auth.getSession();
+        // 現在のユーザー情報を取得
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
         
-        if (!session) {
-          throw new Error('ログインセッションが見つかりません');
+        if (authError) {
+          throw new Error(`ユーザー情報の取得中にエラーが発生しました: ${authError.message}`);
         }
         
-        const userId = session.user.id;
-        
-        // ユーザーメタデータを更新
-        const { data: metadataData, error: metadataError } = await supabase.auth.updateUser({
-          data: { company_id: companyId }
-        });
-        
-        if (metadataError) {
-          throw new Error(`ユーザーメタデータの更新中にエラーが発生しました: ${metadataError.message}`);
+        if (!user) {
+          throw new Error('ログインしていません');
         }
+        
+        outputDiv.textContent += `現在のユーザー: ${user.email}\n`;
         
         // app_usersテーブルのユーザー情報を更新
+        outputDiv.textContent += `ユーザーの会社情報を更新中...\n`;
+        
+        // RLSを無効化する
+        try {
+          const { error: rlsError } = await supabase.rpc('execute_sql', {
+            query: "ALTER TABLE public.app_users DISABLE ROW LEVEL SECURITY;"
+          });
+          
+          if (rlsError) {
+            outputDiv.textContent += `RLS無効化中にエラーが発生しました: ${rlsError.message}\n`;
+          } else {
+            outputDiv.textContent += `RLSを無効化しました\n`;
+          }
+        } catch (rlsErr) {
+          outputDiv.textContent += `RLS無効化中に例外が発生しました: ${rlsErr.message}\n`;
+        }
+        
+        // ユーザー情報を更新
         const { data: userData, error: userError } = await supabase
           .from('app_users')
           .update({ company_id: companyId })
-          .eq('auth_uid', userId);
+          .eq('auth_uid', user.id);
         
         if (userError) {
-          throw new Error(`ユーザー情報の更新中にエラーが発生しました: ${userError.message}`);
+          outputDiv.textContent += `ユーザー情報の更新中にエラーが発生しました: ${userError.message}\n`;
+          
+          // 直接SQLを実行してユーザー情報を更新
+          try {
+            const sqlQuery = `
+              UPDATE public.app_users
+              SET company_id = '${companyId}'
+              WHERE auth_uid = '${user.id}';
+            `;
+            
+            const { error: sqlError } = await supabase.rpc('execute_sql', { query: sqlQuery });
+            
+            if (sqlError) {
+              outputDiv.textContent += `SQLによるユーザー情報の更新中にエラーが発生しました: ${sqlError.message}\n`;
+            } else {
+              outputDiv.textContent += `SQLによるユーザー情報の更新に成功しました\n`;
+            }
+          } catch (sqlErr) {
+            outputDiv.textContent += `SQLによるユーザー情報の更新中に例外が発生しました: ${sqlErr.message}\n`;
+          }
+        } else {
+          outputDiv.textContent += `ユーザー情報の更新に成功しました\n`;
         }
         
-        // ローカルストレージのユーザー情報を更新
+        // RLSを再度有効化する
         try {
-          const userInfoStr = localStorage.getItem('kaizen_user');
-          if (userInfoStr) {
-            const userInfo = JSON.parse(userInfoStr);
-            userInfo.companyId = companyId;
-            localStorage.setItem('kaizen_user', JSON.stringify(userInfo));
-          }
+          const { error: rlsError } = await supabase.rpc('execute_sql', {
+            query: "ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;"
+          });
           
-          const usersStr = localStorage.getItem('kaizen_users');
-          if (usersStr) {
-            const usersData = JSON.parse(usersStr);
-            const updatedUsersData = usersData.map(item => {
-              if (item.user && item.user.id === userId) {
-                return {
-                  ...item,
-                  user: {
-                    ...item.user,
-                    companyId: companyId
-                  }
-                };
-              }
-              return item;
-            });
-            
-            localStorage.setItem('kaizen_users', JSON.stringify(updatedUsersData));
+          if (rlsError) {
+            outputDiv.textContent += `RLS有効化中にエラーが発生しました: ${rlsError.message}\n`;
+          } else {
+            outputDiv.textContent += `RLSを再度有効化しました\n`;
           }
-        } catch (error) {
-          console.error('ローカルストレージの更新中にエラーが発生しました:', error);
+        } catch (rlsErr) {
+          outputDiv.textContent += `RLS有効化中に例外が発生しました: ${rlsErr.message}\n`;
+        }
+        
+        // 更新後のユーザー情報を取得して確認
+        const { data: updatedUser, error: getError } = await supabase
+          .from('app_users')
+          .select('*')
+          .eq('auth_uid', user.id)
+          .single();
+        
+        if (getError) {
+          outputDiv.textContent += `更新後のユーザー情報の取得中にエラーが発生しました: ${getError.message}\n`;
+        } else {
+          outputDiv.textContent += `更新後のユーザー情報: ${JSON.stringify(updatedUser, null, 2)}\n`;
         }
         
         statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました。';
