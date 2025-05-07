@@ -212,8 +212,37 @@ export async function updateTemplate(template: TemplateUI, companyId: string): P
         .eq('title', template.title);
       
       if (fetchError || !existingTemplates || existingTemplates.length === 0) {
-        console.error('[templateUtils] Template not found by title:', template.title);
-        return { success: false, error: 'Template not found' };
+        console.log('[templateUtils] Template not found by title, trying to add as new template:', template.title);
+        
+        // テンプレートが見つからない場合は、新しいテンプレートとして追加
+        try {
+          // idを除外して新しいテンプレートとして追加
+          const newTemplateObj = {
+            ...templateWithoutId,
+            companyId
+          };
+          
+          const dbNewTemplate = camelToSnakeCase(newTemplateObj);
+          
+          const { data: newData, error: insertError } = await supabase
+            .from('templates')
+            .insert(dbNewTemplate)
+            .select()
+            .single();
+            
+          if (insertError) {
+            console.error('[templateUtils] Failed to add new template:', insertError);
+            return { success: false, error: insertError };
+          }
+          
+          // DBのテンプレート情報をUI用に変換
+          const uiNewTemplate = newData ? convertTemplateToUI(newData) : undefined;
+          
+          return { success: true, data: uiNewTemplate };
+        } catch (addError) {
+          console.error('[templateUtils] Unexpected error adding new template:', addError);
+          return { success: false, error: addError };
+        }
       }
       
       // 最初の一致するテンプレートを使用（型アサーションを追加）
