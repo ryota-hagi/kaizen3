@@ -169,27 +169,6 @@ export async function updateEmployee(employee: EmployeeUI, companyId: string): P
   }
 
   try {
-    // 既存の従業員情報を取得
-    const supabase = getSupabaseClient();
-    
-    // まず、既存のレコードを取得して、UUIDを確認
-    const { data: existingEmployee, error: fetchError } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('name', employee.name)
-      .single();
-    
-    if (fetchError) {
-      console.error('[employeeUtils] Failed to fetch existing employee:', fetchError);
-      return { success: false, error: fetchError };
-    }
-    
-    if (!existingEmployee) {
-      console.error('[employeeUtils] Employee not found:', employee.name);
-      return { success: false, error: 'Employee not found' };
-    }
-    
     // UI用の従業員情報をDB用に変換（idを除外）
     const { id, ...employeeWithoutId } = employee;
     const employeeObj = {
@@ -199,24 +178,66 @@ export async function updateEmployee(employee: EmployeeUI, companyId: string): P
     
     const dbEmployee = camelToSnakeCase(employeeObj);
 
-    // 既存のレコードのUUIDを使用して更新
-    const { data, error } = await supabase
-      .from('employees')
-      .update(dbEmployee)
-      .eq('id', existingEmployee.id as string)
-      .eq('company_id', companyId)
-      .select()
-      .single();
+    // 直接IDを使用して更新（UUIDエラーが発生する可能性があるため、try-catchで囲む）
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('employees')
+        .update(dbEmployee)
+        .eq('id', id)
+        .eq('company_id', companyId)
+        .select()
+        .single();
 
-    if (error) {
-      console.error('[employeeUtils] Failed to update employee:', error);
-      return { success: false, error };
+      if (error) {
+        console.error('[employeeUtils] Failed to update employee with ID:', error);
+        throw error;
+      }
+
+      // DBの従業員情報をUI用に変換
+      const uiEmployee = data ? convertEmployeeToUI(data) : undefined;
+
+      return { success: true, data: uiEmployee };
+    } catch (idError) {
+      // IDによる更新が失敗した場合、名前で検索して更新を試みる
+      console.warn('[employeeUtils] Failed to update by ID, trying by name:', idError);
+      
+      const supabase = getSupabaseClient();
+      
+      // 名前で検索
+      const { data: existingEmployees, error: fetchError } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('name', employee.name);
+      
+      if (fetchError || !existingEmployees || existingEmployees.length === 0) {
+        console.error('[employeeUtils] Employee not found by name:', employee.name);
+        return { success: false, error: 'Employee not found' };
+      }
+      
+      // 最初の一致する従業員を使用（型アサーションを追加）
+      const existingEmployee = existingEmployees[0] as unknown as Employee;
+      
+      // 既存のレコードのUUIDを使用して更新
+      const { data, error } = await supabase
+        .from('employees')
+        .update(dbEmployee)
+        .eq('id', existingEmployee.id as string)
+        .eq('company_id', companyId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[employeeUtils] Failed to update employee by name:', error);
+        return { success: false, error };
+      }
+
+      // DBの従業員情報をUI用に変換
+      const uiEmployee = data ? convertEmployeeToUI(data) : undefined;
+
+      return { success: true, data: uiEmployee };
     }
-
-    // DBの従業員情報をUI用に変換
-    const uiEmployee = data ? convertEmployeeToUI(data) : undefined;
-
-    return { success: true, data: uiEmployee };
   } catch (e) {
     console.error('[employeeUtils] Unexpected error updating employee:', e);
     return { success: false, error: e };
