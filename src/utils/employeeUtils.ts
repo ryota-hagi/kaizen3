@@ -50,20 +50,10 @@ function camelToSnakeCase(obj: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
   
   Object.keys(obj).forEach(key => {
-    // 特別なケース：companyIdはcompany_idに直接変換
-    if (key === 'companyId') {
-      result['company_id'] = obj[key];
-    } else {
-      // 通常のキャメルケースをスネークケースに変換
-      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      result[snakeKey] = obj[key];
-    }
+    // キャメルケースをスネークケースに変換
+    const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+    result[snakeKey] = obj[key];
   });
-  
-  // company_idが存在することを確認
-  if (!result['company_id'] && obj['companyId']) {
-    result['company_id'] = obj['companyId'];
-  }
   
   return result;
 }
@@ -135,21 +125,12 @@ export async function addEmployee(employee: Omit<EmployeeUI, 'id'>, companyId: s
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[employeeUtils] Original Company ID:', companyId);
-    console.log('[employeeUtils] Normalized Company ID:', normalizedCompanyId);
-    
     // UI用の従業員情報をDB用に変換
-    const dbEmployee = {
-      name: employee.name,
-      position: employee.position,
-      department: employee.department,
-      hourly_rate: employee.hourlyRate,
-      company_id: normalizedCompanyId
+    const employeeObj = {
+      ...employee,
+      companyId
     };
-    
-    console.log('[employeeUtils] Employee data to insert:', dbEmployee);
+    const dbEmployee = camelToSnakeCase(employeeObj);
 
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
@@ -188,29 +169,21 @@ export async function updateEmployee(employee: EmployeeUI, companyId: string): P
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[employeeUtils] Original Company ID:', companyId);
-    console.log('[employeeUtils] Normalized Company ID:', normalizedCompanyId);
-    
-    // UI用の従業員情報をDB用に変換
-    const dbEmployee = {
-      id: employee.id,
-      name: employee.name,
-      position: employee.position,
-      department: employee.department,
-      hourly_rate: employee.hourlyRate,
-      company_id: normalizedCompanyId
+    // UI用の従業員情報をDB用に変換（idを除外）
+    const { id, ...employeeWithoutId } = employee;
+    const employeeObj = {
+      ...employeeWithoutId,
+      companyId
     };
     
-    console.log('[employeeUtils] Employee data to update:', dbEmployee);
+    const dbEmployee = camelToSnakeCase(employeeObj);
 
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('employees')
       .update(dbEmployee)
       .eq('id', employee.id)
-      .eq('company_id', normalizedCompanyId)
+      .eq('company_id', companyId)
       .select()
       .single();
 
@@ -244,17 +217,12 @@ export async function deleteEmployee(id: string, companyId: string): Promise<{ s
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[employeeUtils] Original Company ID:', companyId);
-    console.log('[employeeUtils] Normalized Company ID:', normalizedCompanyId);
-
     const supabase = getSupabaseClient();
     const { error } = await supabase
       .from('employees')
       .delete()
       .eq('id', id)
-      .eq('company_id', normalizedCompanyId);
+      .eq('company_id', companyId);
 
     if (error) {
       console.error('[employeeUtils] Failed to delete employee:', error);
@@ -292,11 +260,6 @@ export async function syncEmployeesToSupabase(companyId: string): Promise<{ succ
   }
 
   try {
-    // 会社IDを大文字に変換
-    const normalizedCompanyId = companyId.toUpperCase();
-    console.log('[employeeUtils] Original Company ID:', companyId);
-    console.log('[employeeUtils] Normalized Company ID:', normalizedCompanyId);
-    
     const cachedEmployees = getCachedEmployees();
     if (cachedEmployees.length === 0) {
       console.log('[employeeUtils] No cached employees to sync');
@@ -309,7 +272,7 @@ export async function syncEmployeesToSupabase(companyId: string): Promise<{ succ
     const { data: existingEmployees, error: fetchError } = await supabase
       .from('employees')
       .select('id')
-      .eq('company_id', normalizedCompanyId);
+      .eq('company_id', companyId);
 
     if (fetchError) {
       console.error('[employeeUtils] Failed to fetch existing employees:', fetchError);
@@ -322,19 +285,14 @@ export async function syncEmployeesToSupabase(companyId: string): Promise<{ succ
     const employeesToAdd = cachedEmployees
       .filter(e => !existingIds.has(e.id))
       .map(e => {
+        const employeeData = camelToSnakeCase(e);
         return {
-          id: e.id,
-          name: e.name,
-          position: e.position,
-          department: e.department,
-          hourly_rate: e.hourlyRate,
-          company_id: normalizedCompanyId
+          ...employeeData,
+          company_id: companyId
         };
       });
 
     if (employeesToAdd.length > 0) {
-      console.log('[employeeUtils] Employees to add:', employeesToAdd);
-      
       const { error: insertError } = await supabase
         .from('employees')
         .insert(employeesToAdd);
