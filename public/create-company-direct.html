@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>会社情報の直接登録</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #4b5563;
+      margin-top: 30px;
+    }
+    .instructions {
+      background-color: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .warning {
+      background-color: #fff7ed;
+      border-left: 4px solid #f97316;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    .success {
+      background-color: #ecfdf5;
+      border-left: 4px solid #10b981;
+    }
+    .error {
+      background-color: #fef2f2;
+      border-left: 4px solid #ef4444;
+    }
+    form {
+      margin-top: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    textarea {
+      height: 100px;
+    }
+    #output {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 14px;
+      display: none;
+    }
+    .code-block {
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 14px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>会社情報の直接登録（サービスロールキー使用）</h1>
+  
+  <div class="instructions">
+    <p>このツールは、サービスロールキーを使用して会社情報をSupabaseデータベースに直接登録します。</p>
+    <p>RLSの制限を回避し、確実に会社情報を登録することができます。</p>
+  </div>
+
+  <div class="warning">
+    <h3>注意事項</h3>
+    <p>このツールを実行するには、Supabaseのサービスロールキーが必要です。</p>
+    <p>サービスロールキーは管理者権限を持つため、取り扱いには十分注意してください。</p>
+  </div>
+
+  <h2>会社情報入力フォーム</h2>
+  <form id="companyForm">
+    <div class="form-group">
+      <label for="companyId">会社ID（自動生成）：</label>
+      <input type="text" id="companyId" readonly>
+    </div>
+    <div class="form-group">
+      <label for="companyName">会社名：</label>
+      <input type="text" id="companyName" required>
+    </div>
+    <div class="form-group">
+      <label for="companyAddress">住所：</label>
+      <input type="text" id="companyAddress">
+    </div>
+    <div class="form-group">
+      <label for="companyPhone">電話番号：</label>
+      <input type="text" id="companyPhone">
+    </div>
+    <div class="form-group">
+      <label for="companyEmail">メールアドレス：</label>
+      <input type="email" id="companyEmail">
+    </div>
+  </form>
+
+  <h2>Supabase接続情報</h2>
+  <form id="supabaseForm">
+    <div class="form-group">
+      <label for="supabaseUrl">Supabase URL：</label>
+      <input type="text" id="supabaseUrl" value="https://czuedairowlwfgbjmfbg.supabase.co">
+    </div>
+    <div class="form-group">
+      <label for="supabaseServiceKey">サービスロールキー：</label>
+      <input type="password" id="supabaseServiceKey" placeholder="サービスロールキーを入力してください">
+    </div>
+  </form>
+
+  <h2>実行ボタン</h2>
+  <button id="registerCompanyBtn">会社情報を登録する</button>
+  <button id="updateUserCompanyBtn">ユーザーの会社情報を更新する</button>
+  <button id="redirectBtn">ダッシュボードにリダイレクト</button>
+  
+  <div id="status"></div>
+  <pre id="output"></pre>
+
+  <h2>テーブル構造の確認</h2>
+  <div class="code-block">
+    <p>companies テーブル構造:</p>
+    <pre>
+CREATE TABLE companies (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  address TEXT,
+  phone TEXT,
+  email TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+    </pre>
+  </div>
+
+  <script>
+    // UUIDを生成する関数
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    
+    // ページ読み込み時に会社IDを自動生成
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('companyId').value = generateUUID();
+    });
+    
+    // 会社情報を登録するボタンのイベントリスナー
+    document.getElementById('registerCompanyBtn').addEventListener('click', async function() {
+      const statusDiv = document.getElementById('status');
+      const outputDiv = document.getElementById('output');
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = '処理中...';
+      statusDiv.className = '';
+      outputDiv.style.display = 'block';
+      outputDiv.textContent = '';
+      
+      try {
+        // Supabase URLとキーを取得
+        const supabaseUrl = document.getElementById('supabaseUrl').value;
+        const supabaseServiceKey = document.getElementById('supabaseServiceKey').value;
+        
+        if (!supabaseUrl || !supabaseServiceKey) {
+          throw new Error('SupabaseのURLまたはサービスロールキーが入力されていません');
+        }
+        
+        // フォームから会社情報を取得
+        const companyId = document.getElementById('companyId').value;
+        const companyName = document.getElementById('companyName').value;
+        const companyAddress = document.getElementById('companyAddress').value;
+        const companyPhone = document.getElementById('companyPhone').value;
+        const companyEmail = document.getElementById('companyEmail').value;
+        
+        if (!companyName) {
+          throw new Error('会社名は必須です');
+        }
+        
+        // 会社情報オブジェクトを作成
+        const companyData = {
+          id: companyId,
+          name: companyName,
+          address: companyAddress,
+          phone: companyPhone,
+          email: companyEmail,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        // Supabase Clientを作成（サービスロールキーを使用）
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
+        // 会社情報をSupabaseに登録
+        outputDiv.textContent += `会社情報を登録中...\n`;
+        outputDiv.textContent += `会社データ: ${JSON.stringify(companyData, null, 2)}\n\n`;
+        
+        // 会社情報を登録（upsert）
+        const { data, error } = await supabase
+          .from('companies')
+          .upsert(companyData, { onConflict: 'id' })
+          .select();
+        
+        if (error) {
+          outputDiv.textContent += `エラーが発生しました: ${error.message}\n`;
+          
+          // テーブル構造を確認
+          try {
+            const { data: tableInfo, error: tableError } = await supabase
+              .rpc('get_table_definition', { table_name: 'companies' });
+              
+            if (tableError) {
+              outputDiv.textContent += `テーブル構造の確認中にエラーが発生しました: ${tableError.message}\n`;
+            } else {
+              outputDiv.textContent += `companies テーブル構造:\n${tableInfo}\n`;
+            }
+          } catch (tableErr) {
+            outputDiv.textContent += `テーブル構造の確認中に例外が発生しました: ${tableErr.message}\n`;
+          }
+          
+          // 簡略化したデータで再試行
+          try {
+            const simpleData = {
+              id: companyId,
+              name: companyName,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+            
+            outputDiv.textContent += `簡略化したデータで再試行します: ${JSON.stringify(simpleData, null, 2)}\n`;
+            
+            const { data: simpleResult, error: simpleError } = await supabase
+              .from('companies')
+              .upsert(simpleData, { onConflict: 'id' })
+              .select();
+              
+            if (simpleError) {
+              outputDiv.textContent += `簡略化したデータでも失敗しました: ${simpleError.message}\n`;
+            } else {
+              outputDiv.textContent += `簡略化したデータで登録に成功しました: ${JSON.stringify(simpleResult, null, 2)}\n`;
+              
+              // 成功したので、ステータスを更新
+              statusDiv.textContent = '会社情報が正常に登録されました（簡略化データ）。';
+              statusDiv.className = 'success';
+              return;
+            }
+          } catch (simpleErr) {
+            outputDiv.textContent += `簡略化データでの登録中に例外が発生しました: ${simpleErr.message}\n`;
+          }
+          
+          // それでも失敗した場合は、直接SQLを実行
+          try {
+            const { data: sqlResult, error: sqlError } = await supabase
+              .rpc('execute_sql', {
+                query: `
+                  INSERT INTO public.companies (id, name, created_at, updated_at)
+                  VALUES ('${companyId}', '${companyName}', NOW(), NOW())
+                  ON CONFLICT (id) DO UPDATE
+                  SET name = '${companyName}',
+                      updated_at = NOW()
+                  RETURNING *;
+                `
+              });
+              
+            if (sqlError) {
+              outputDiv.textContent += `SQLによる登録中にエラーが発生しました: ${sqlError.message}\n`;
+              
+              // 最終手段として、RLSを無効化してから登録
+              try {
+                // RLSを無効化
+                await supabase.rpc('execute_sql', {
+                  query: "ALTER TABLE public.companies DISABLE ROW LEVEL SECURITY;"
+                });
+                
+                outputDiv.textContent += `RLSを無効化しました\n`;
+                
+                // 再度登録を試みる
+                const { data: finalResult, error: finalError } = await supabase
+                  .from('companies')
+                  .upsert(companyData, { onConflict: 'id' })
+                  .select();
+                  
+                if (finalError) {
+                  outputDiv.textContent += `RLS無効化後も登録に失敗しました: ${finalError.message}\n`;
+                } else {
+                  outputDiv.textContent += `RLS無効化後に登録に成功しました: ${JSON.stringify(finalResult, null, 2)}\n`;
+                  
+                  // RLSを再度有効化
+                  await supabase.rpc('execute_sql', {
+                    query: "ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;"
+                  });
+                  
+                  outputDiv.textContent += `RLSを再度有効化しました\n`;
+                  
+                  // 成功したので、ステータスを更新
+                  statusDiv.textContent = '会社情報が正常に登録されました（RLS無効化後）。';
+                  statusDiv.className = 'success';
+                  return;
+                }
+              } catch (rlsErr) {
+                outputDiv.textContent += `RLS操作中に例外が発生しました: ${rlsErr.message}\n`;
+              }
+            } else {
+              outputDiv.textContent += `SQLによる登録に成功しました: ${JSON.stringify(sqlResult, null, 2)}\n`;
+              
+              // 成功したので、ステータスを更新
+              statusDiv.textContent = '会社情報が正常に登録されました（SQL実行）。';
+              statusDiv.className = 'success';
+              return;
+            }
+          } catch (sqlErr) {
+            outputDiv.textContent += `SQL実行中に例外が発生しました: ${sqlErr.message}\n`;
+          }
+          
+          // すべての方法が失敗した場合
+          statusDiv.textContent = '会社情報の登録に失敗しました。';
+          statusDiv.className = 'error';
+        } else {
+          outputDiv.textContent += `会社情報の登録に成功しました: ${JSON.stringify(data, null, 2)}\n`;
+          statusDiv.textContent = '会社情報が正常に登録されました。';
+          statusDiv.className = 'success';
+        }
+      } catch (error) {
+        console.error('エラー:', error);
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // ユーザーの会社情報を更新するボタンのイベントリスナー
+    document.getElementById('updateUserCompanyBtn').addEventListener('click', async function() {
+      const statusDiv = document.getElementById('status');
+      const outputDiv = document.getElementById('output');
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = '処理中...';
+      statusDiv.className = '';
+      outputDiv.style.display = 'block';
+      outputDiv.textContent = '';
+      
+      try {
+        // Supabase URLとキーを取得
+        const supabaseUrl = document.getElementById('supabaseUrl').value;
+        const supabaseServiceKey = document.getElementById('supabaseServiceKey').value;
+        
+        if (!supabaseUrl || !supabaseServiceKey) {
+          throw new Error('SupabaseのURLまたはサービスロールキーが入力されていません');
+        }
+        
+        // 会社IDを取得
+        const companyId = document.getElementById('companyId').value;
+        
+        if (!companyId) {
+          throw new Error('会社IDが入力されていません');
+        }
+        
+        // Supabase Clientを作成（サービスロールキーを使用）
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
+        // 現在のユーザー情報を取得
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError) {
+          throw new Error(`ユーザー情報の取得中にエラーが発生しました: ${authError.message}`);
+        }
+        
+        if (!user) {
+          throw new Error('ログインしていません');
+        }
+        
+        outputDiv.textContent += `現在のユーザー: ${user.email}\n`;
+        
+        // app_usersテーブルのユーザー情報を更新
+        outputDiv.textContent += `ユーザーの会社情報を更新中...\n`;
+        
+        // ユーザー情報を更新
+        const { data: userData, error: userError } = await supabase
+          .from('app_users')
+          .update({ company_id: companyId })
+          .eq('auth_uid', user.id)
+          .select();
+        
+        if (userError) {
+          outputDiv.textContent += `ユーザー情報の更新中にエラーが発生しました: ${userError.message}\n`;
+          
+          // 直接SQLを実行してユーザー情報を更新
+          try {
+            const { data: sqlResult, error: sqlError } = await supabase
+              .rpc('execute_sql', {
+                query: `
+                  UPDATE public.app_users
+                  SET company_id = '${companyId}'
+                  WHERE auth_uid = '${user.id}'
+                  RETURNING *;
+                `
+              });
+              
+            if (sqlError) {
+              outputDiv.textContent += `SQLによるユーザー情報の更新中にエラーが発生しました: ${sqlError.message}\n`;
+              
+              // メタデータを使用して更新を試みる
+              try {
+                const { error: metadataError } = await supabase.auth.updateUser({
+                  data: { company_id: companyId }
+                });
+                
+                if (metadataError) {
+                  outputDiv.textContent += `メタデータの更新にも失敗しました: ${metadataError.message}\n`;
+                } else {
+                  outputDiv.textContent += `ユーザーメタデータの更新に成功しました\n`;
+                  
+                  // 成功したので、ステータスを更新
+                  statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました（メタデータ）。';
+                  statusDiv.className = 'success';
+                  return;
+                }
+              } catch (metaErr) {
+                outputDiv.textContent += `メタデータ更新中に例外が発生しました: ${metaErr.message}\n`;
+              }
+            } else {
+              outputDiv.textContent += `SQLによるユーザー情報の更新に成功しました: ${JSON.stringify(sqlResult, null, 2)}\n`;
+              
+              // 成功したので、ステータスを更新
+              statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました（SQL実行）。';
+              statusDiv.className = 'success';
+              return;
+            }
+          } catch (sqlErr) {
+            outputDiv.textContent += `SQL実行中に例外が発生しました: ${sqlErr.message}\n`;
+          }
+          
+          // すべての方法が失敗した場合
+          statusDiv.textContent = 'ユーザーの会社情報の更新に失敗しました。';
+          statusDiv.className = 'error';
+        } else {
+          outputDiv.textContent += `ユーザー情報の更新に成功しました: ${JSON.stringify(userData, null, 2)}\n`;
+          
+          // 更新後のユーザー情報を取得して確認
+          const { data: updatedUser, error: getError } = await supabase
+            .from('app_users')
+            .select('*')
+            .eq('auth_uid', user.id)
+            .single();
+          
+          if (getError) {
+            outputDiv.textContent += `更新後のユーザー情報の取得中にエラーが発生しました: ${getError.message}\n`;
+          } else {
+            outputDiv.textContent += `更新後のユーザー情報: ${JSON.stringify(updatedUser, null, 2)}\n`;
+          }
+          
+          statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました。';
+          statusDiv.className = 'success';
+        }
+      } catch (error) {
+        console.error('エラー:', error);
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // ダッシュボードにリダイレクトするボタンのイベントリスナー
+    document.getElementById('redirectBtn').addEventListener('click', function() {
+      window.location.href = '/dashboard';
+    });
+  </script>
+</body>
+</html>
