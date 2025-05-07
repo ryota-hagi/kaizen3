@@ -211,20 +211,8 @@
         outputDiv.textContent += `会社情報を登録中...\n`;
         outputDiv.textContent += `会社データ: ${JSON.stringify(companyData, null, 2)}\n\n`;
         
-        // RLSを無効化する
-        try {
-          const { error: rlsError } = await supabase.rpc('execute_sql', {
-            query: "ALTER TABLE public.companies DISABLE ROW LEVEL SECURITY;"
-          });
-          
-          if (rlsError) {
-            outputDiv.textContent += `RLS無効化中にエラーが発生しました: ${rlsError.message}\n`;
-          } else {
-            outputDiv.textContent += `RLSを無効化しました\n`;
-          }
-        } catch (rlsErr) {
-          outputDiv.textContent += `RLS無効化中に例外が発生しました: ${rlsErr.message}\n`;
-        }
+        // RLSを無効化する処理はスキップ（execute_sql関数が使用できないため）
+        outputDiv.textContent += `RLS無効化処理をスキップします\n`;
         
         // 会社情報を登録（upsert）
         const { data, error } = await supabase
@@ -235,48 +223,57 @@
         if (error) {
           outputDiv.textContent += `エラーが発生しました: ${error.message}\n`;
           
-          // 直接SQLを実行して会社情報を登録
+          // 直接SQLを実行する代わりに、エラーを表示
+          outputDiv.textContent += `会社情報の登録に失敗しました。別の方法を試してください。\n`;
+          
+          // 別の方法で登録を試みる
           try {
-            const sqlQuery = `
-              INSERT INTO public.companies (id, name, address, phone, email, description, created_at, updated_at)
-              VALUES ('${companyId}', '${companyName}', '${companyAddress}', '${companyPhone}', '${companyEmail}', '${companyDescription}', '${new Date().toISOString()}', '${new Date().toISOString()}')
-              ON CONFLICT (id) DO UPDATE
-              SET name = '${companyName}',
-                  address = '${companyAddress}',
-                  phone = '${companyPhone}',
-                  email = '${companyEmail}',
-                  description = '${companyDescription}',
-                  updated_at = '${new Date().toISOString()}';
-            `;
+            // 会社情報を分割して登録
+            const basicCompanyData = {
+              id: companyId,
+              name: companyName,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
             
-            const { error: sqlError } = await supabase.rpc('execute_sql', { query: sqlQuery });
-            
-            if (sqlError) {
-              outputDiv.textContent += `SQLによる登録中にエラーが発生しました: ${sqlError.message}\n`;
+            const { data: basicData, error: basicError } = await supabase
+              .from('companies')
+              .upsert(basicCompanyData, { onConflict: 'id' })
+              .select();
+              
+            if (basicError) {
+              outputDiv.textContent += `基本情報の登録に失敗しました: ${basicError.message}\n`;
             } else {
-              outputDiv.textContent += `SQLによる会社情報の登録に成功しました\n`;
+              outputDiv.textContent += `基本情報の登録に成功しました: ${JSON.stringify(basicData, null, 2)}\n`;
+              
+              // 追加情報を更新
+              if (companyAddress || companyPhone || companyEmail) {
+                const additionalData = {};
+                if (companyAddress) additionalData.address = companyAddress;
+                if (companyPhone) additionalData.phone = companyPhone;
+                if (companyEmail) additionalData.email = companyEmail;
+                
+                const { error: updateError } = await supabase
+                  .from('companies')
+                  .update(additionalData)
+                  .eq('id', companyId);
+                  
+                if (updateError) {
+                  outputDiv.textContent += `追加情報の更新に失敗しました: ${updateError.message}\n`;
+                } else {
+                  outputDiv.textContent += `追加情報の更新に成功しました\n`;
+                }
+              }
             }
-          } catch (sqlErr) {
-            outputDiv.textContent += `SQLによる登録中に例外が発生しました: ${sqlErr.message}\n`;
+          } catch (altErr) {
+            outputDiv.textContent += `代替方法による登録中に例外が発生しました: ${altErr.message}\n`;
           }
         } else {
           outputDiv.textContent += `会社情報の登録に成功しました: ${JSON.stringify(data, null, 2)}\n`;
         }
         
-        // RLSを再度有効化する
-        try {
-          const { error: rlsError } = await supabase.rpc('execute_sql', {
-            query: "ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;"
-          });
-          
-          if (rlsError) {
-            outputDiv.textContent += `RLS有効化中にエラーが発生しました: ${rlsError.message}\n`;
-          } else {
-            outputDiv.textContent += `RLSを再度有効化しました\n`;
-          }
-        } catch (rlsErr) {
-          outputDiv.textContent += `RLS有効化中に例外が発生しました: ${rlsErr.message}\n`;
-        }
+        // RLSを再度有効化する処理はスキップ（execute_sql関数が使用できないため）
+        outputDiv.textContent += `RLS有効化処理をスキップします\n`;
         
         statusDiv.textContent = '会社情報が正常に登録されました。';
         statusDiv.className = 'success';
@@ -357,23 +354,39 @@
         if (userError) {
           outputDiv.textContent += `ユーザー情報の更新中にエラーが発生しました: ${userError.message}\n`;
           
-          // 直接SQLを実行してユーザー情報を更新
+          // 直接SQLを実行する代わりに、別の方法を試す
+          outputDiv.textContent += `通常の方法でのユーザー情報の更新に失敗しました。別の方法を試します。\n`;
+          
           try {
-            const sqlQuery = `
-              UPDATE public.app_users
-              SET company_id = '${companyId}'
-              WHERE auth_uid = '${user.id}';
-            `;
-            
-            const { error: sqlError } = await supabase.rpc('execute_sql', { query: sqlQuery });
-            
-            if (sqlError) {
-              outputDiv.textContent += `SQLによるユーザー情報の更新中にエラーが発生しました: ${sqlError.message}\n`;
+            // 別の方法でユーザー情報を更新
+            const { error: retryError } = await supabase
+              .from('app_users')
+              .update({ company_id: companyId })
+              .eq('auth_uid', user.id)
+              .select();
+              
+            if (retryError) {
+              outputDiv.textContent += `再試行でもユーザー情報の更新に失敗しました: ${retryError.message}\n`;
+              
+              // メタデータを使用して更新を試みる
+              try {
+                const { error: metadataError } = await supabase.auth.updateUser({
+                  data: { company_id: companyId }
+                });
+                
+                if (metadataError) {
+                  outputDiv.textContent += `メタデータの更新にも失敗しました: ${metadataError.message}\n`;
+                } else {
+                  outputDiv.textContent += `ユーザーメタデータの更新に成功しました\n`;
+                }
+              } catch (metaErr) {
+                outputDiv.textContent += `メタデータ更新中に例外が発生しました: ${metaErr.message}\n`;
+              }
             } else {
-              outputDiv.textContent += `SQLによるユーザー情報の更新に成功しました\n`;
+              outputDiv.textContent += `再試行によるユーザー情報の更新に成功しました\n`;
             }
-          } catch (sqlErr) {
-            outputDiv.textContent += `SQLによるユーザー情報の更新中に例外が発生しました: ${sqlErr.message}\n`;
+          } catch (retryErr) {
+            outputDiv.textContent += `再試行中に例外が発生しました: ${retryErr.message}\n`;
           }
         } else {
           outputDiv.textContent += `ユーザー情報の更新に成功しました\n`;
