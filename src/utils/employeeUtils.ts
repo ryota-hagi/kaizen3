@@ -169,6 +169,27 @@ export async function updateEmployee(employee: EmployeeUI, companyId: string): P
   }
 
   try {
+    // 既存の従業員情報を取得
+    const supabase = getSupabaseClient();
+    
+    // まず、既存のレコードを取得して、UUIDを確認
+    const { data: existingEmployee, error: fetchError } = await supabase
+      .from('employees')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('name', employee.name)
+      .single();
+    
+    if (fetchError) {
+      console.error('[employeeUtils] Failed to fetch existing employee:', fetchError);
+      return { success: false, error: fetchError };
+    }
+    
+    if (!existingEmployee) {
+      console.error('[employeeUtils] Employee not found:', employee.name);
+      return { success: false, error: 'Employee not found' };
+    }
+    
     // UI用の従業員情報をDB用に変換（idを除外）
     const { id, ...employeeWithoutId } = employee;
     const employeeObj = {
@@ -178,11 +199,11 @@ export async function updateEmployee(employee: EmployeeUI, companyId: string): P
     
     const dbEmployee = camelToSnakeCase(employeeObj);
 
-    const supabase = getSupabaseClient();
+    // 既存のレコードのUUIDを使用して更新
     const { data, error } = await supabase
       .from('employees')
       .update(dbEmployee)
-      .eq('id', employee.id)
+      .eq('id', existingEmployee.id as string)
       .eq('company_id', companyId)
       .select()
       .single();
