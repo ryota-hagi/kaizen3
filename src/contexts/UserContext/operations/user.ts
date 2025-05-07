@@ -1,5 +1,6 @@
 import { UserInfo, Employee } from '@/utils/api';
 import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
+import { supabase } from '@/lib/supabaseClient';
 
 // ユーザープロフィールの更新
 export const updateUserProfile = async (
@@ -161,46 +162,84 @@ export const deleteUser = async (
   setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
   setUserPasswords: React.Dispatch<React.SetStateAction<Record<string, string>>>
 ): Promise<{success: boolean, message?: string}> => {
-  const { users: currentUsers, passwords: currentPasswords } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
-  
-  // 自分自身は削除できない
-  if (currentUser && userId === currentUser.id) {
-    return {success: false, message: '自分自身を削除することはできません'};
-  }
-  
-  // 削除対象のユーザーを取得
-  const userToDelete = currentUsers.find(u => u.id === userId);
-  if (!userToDelete) {
-    return {success: false, message: '指定されたユーザーが見つかりません'};
-  }
-  
-  // 管理者ユーザーの場合、他に管理者がいるか確認
-  if (userToDelete.role === '管理者') {
-    const companyId = userToDelete.companyId;
-    const companyUsers = currentUsers.filter(u => u.companyId === companyId);
-    const adminCount = companyUsers.filter(u => u.role === '管理者').length;
+  try {
+    if (!currentUser) {
+      return {success: false, message: '認証されていません'};
+    }
     
-    if (adminCount <= 1) {
-      // 他の管理者がいない場合、マネージャーまたは一般ユーザーを管理者に昇格させる
-      const managers = companyUsers.filter(u => u.role === 'マネージャー' && u.id !== userId);
-      const regularUsers = companyUsers.filter(u => u.role !== '管理者' && u.role !== 'マネージャー' && u.id !== userId);
+    // 自分自身は削除できない
+    if (userId === currentUser.id) {
+      return {success: false, message: '自分自身を削除することはできません'};
+    }
+    
+    const client = supabase();
+    
+    // app_usersテーブルからユーザー情報を取得
+    const { data: userData, error: userError } = await client
+      .from('app_users')
+      .select('*')
+      .eq('auth_uid', userId)
+      .single();
+    
+    if (userError) {
+      console.error('[Supabase] Error getting user:', userError);
       
-      if (managers.length === 0 && regularUsers.length === 0) {
-        return {success: false, message: '最後のユーザーは削除できません'};
+      // ローカルストレージのユーザー情報を使用
+      const { users: currentUsers, passwords: currentPasswords } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
+      
+      // 削除対象のユーザーを取得
+      const userToDelete = currentUsers.find(u => u.id === userId);
+      if (!userToDelete) {
+        return {success: false, message: '指定されたユーザーが見つかりません'};
       }
       
-      // 昇格させるユーザーを選択
-      const userToPromote = managers.length > 0 ? managers[0] : regularUsers[0];
-      console.log(`[deleteUser] Promoting user ${userToPromote.email} to admin role`);
-      
-      // ユーザーを昇格
-      const updatedUsersList = currentUsers.map(u => {
-        if (u.id === userToPromote.id) {
-          return { ...u, role: '管理者' };
+      // 管理者ユーザーの場合、他に管理者がいるか確認
+      if (userToDelete.role === '管理者') {
+        const companyId = userToDelete.companyId;
+        const companyUsers = currentUsers.filter(u => u.companyId === companyId);
+        const adminCount = companyUsers.filter(u => u.role === '管理者' && u.id !== userId).length;
+        
+        if (adminCount === 0) {
+          // 他の管理者がいない場合、マネージャーまたは一般ユーザーを管理者に昇格させる
+          const managers = companyUsers.filter(u => u.role === 'マネージャー' && u.id !== userId);
+          const regularUsers = companyUsers.filter(u => u.role !== '管理者' && u.role !== 'マネージャー' && u.id !== userId);
+          
+          if (managers.length === 0 && regularUsers.length === 0) {
+            return {success: false, message: '最後のユーザーは削除できません'};
+          }
+          
+          // 昇格させるユーザーを選択
+          const userToPromote = managers.length > 0 ? managers[0] : regularUsers[0];
+          console.log(`[deleteUser] Promoting user ${userToPromote.email} to admin role`);
+          
+          // ユーザーを昇格
+          const updatedUsersList = currentUsers.map(u => {
+            if (u.id === userToPromote.id) {
+              return { ...u, role: '管理者' };
+            }
+            return u;
+          }).filter(u => u.id !== userId);
+          
+          const updatedPasswordsMap = { ...currentPasswords };
+          delete updatedPasswordsMap[userId];
+          
+          setUsers(updatedUsersList);
+          setUserPasswords(updatedPasswordsMap);
+          
+          if (typeof window !== 'undefined') {
+            const usersToSave = updatedUsersList.map(u => ({
+              user: u,
+              password: updatedPasswordsMap[u.id] || ''
+            }));
+            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+            console.log(`[deleteUser] User ${userId} deleted and ${userToPromote.email} promoted to admin.`);
+          }
+          return {success: true, message: `ユーザーを削除しました。${userToPromote.email}が新しい管理者に設定されました。`};
         }
-        return u;
-      }).filter(u => u.id !== userId);
+      }
       
+      // 通常のユーザー削除処理
+      const updatedUsersList = currentUsers.filter(u => u.id !== userId);
       const updatedPasswordsMap = { ...currentPasswords };
       delete updatedPasswordsMap[userId];
       
@@ -213,28 +252,109 @@ export const deleteUser = async (
           password: updatedPasswordsMap[u.id] || ''
         }));
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        console.log(`[deleteUser] User ${userId} deleted and ${userToPromote.email} promoted to admin.`);
+        console.log(`[deleteUser] User ${userId} deleted.`);
       }
-      return {success: true, message: `ユーザーを削除しました。${userToPromote.email}が新しい管理者に設定されました。`};
+      return {success: true, message: 'ユーザーを削除しました'};
     }
+    
+    // データベースからユーザー情報を取得できた場合
+    const userToDelete = userData as unknown as {
+      id: string;
+      auth_uid: string;
+      email: string;
+      full_name: string;
+      role: string;
+      status: string;
+      company_id: string;
+    };
+    
+    // 管理者ユーザーの場合、他に管理者がいるか確認
+    if (userToDelete.role === '管理者') {
+      const { data: adminCount, error: countError } = await client
+        .from('app_users')
+        .select('id', { count: 'exact' })
+        .eq('company_id', userToDelete.company_id)
+        .eq('role', '管理者')
+        .neq('auth_uid', userId);
+      
+      if (countError) {
+        console.error('[Supabase] Error counting admins:', countError);
+        return {success: false, message: '管理者数の確認に失敗しました'};
+      }
+      
+      if (adminCount.length === 0) {
+        // 他の管理者がいない場合、マネージャーまたは一般ユーザーを管理者に昇格させる
+        const { data: otherUsers, error: otherUsersError } = await client
+          .from('app_users')
+          .select('*')
+          .eq('company_id', userToDelete.company_id)
+          .neq('auth_uid', userId)
+          .order('role', { ascending: false })
+          .limit(1);
+        
+        if (otherUsersError || otherUsers.length === 0) {
+          console.error('[Supabase] Error getting other users:', otherUsersError);
+          return {success: false, message: '最後のユーザーは削除できません'};
+        }
+        
+        // 昇格させるユーザーを選択
+        const userToPromote = otherUsers[0] as unknown as {
+          id: string;
+          auth_uid: string;
+          email: string;
+          full_name: string;
+          role: string;
+        };
+        
+        // ユーザーを昇格
+        const { error: updateError } = await client
+          .from('app_users')
+          .update({ role: '管理者' })
+          .eq('id', userToPromote.id);
+        
+        if (updateError) {
+          console.error('[Supabase] Error promoting user:', updateError);
+          return {success: false, message: 'ユーザーの昇格に失敗しました'};
+        }
+        
+        console.log(`[deleteUser] Promoting user ${userToPromote.email} to admin role`);
+      }
+    }
+    
+    // app_usersテーブルからユーザーを削除（または会社IDの紐づけを解除）
+    const { error: deleteError } = await client
+      .from('app_users')
+      .update({ company_id: null, status: '削除済み' })
+      .eq('auth_uid', userId);
+    
+    if (deleteError) {
+      console.error('[Supabase] Error deleting user:', deleteError);
+      return {success: false, message: 'ユーザーの削除に失敗しました'};
+    }
+    
+    // ローカルストレージのユーザーリストも更新
+    const { users: currentUsers, passwords: currentPasswords } = loadUserDataFromLocalStorage(setUsers, setUserPasswords);
+    
+    const updatedUsersList = currentUsers.filter(u => u.id !== userId);
+    const updatedPasswordsMap = { ...currentPasswords };
+    delete updatedPasswordsMap[userId];
+    
+    setUsers(updatedUsersList);
+    setUserPasswords(updatedPasswordsMap);
+    
+    if (typeof window !== 'undefined') {
+      const usersToSave = updatedUsersList.map(u => ({
+        user: u,
+        password: updatedPasswordsMap[u.id] || ''
+      }));
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+    }
+    
+    return {success: true, message: 'ユーザーを削除しました'};
+  } catch (error) {
+    console.error('[Supabase] Exception deleting user:', error);
+    return {success: false, message: 'ユーザー削除中にエラーが発生しました'};
   }
-
-  const updatedUsersList = currentUsers.filter(u => u.id !== userId);
-  const updatedPasswordsMap = { ...currentPasswords };
-  delete updatedPasswordsMap[userId];
-
-  setUsers(updatedUsersList);
-  setUserPasswords(updatedPasswordsMap);
-
-  if (typeof window !== 'undefined') {
-    const usersToSave = updatedUsersList.map(u => ({
-      user: u,
-      password: updatedPasswordsMap[u.id] || ''
-    }));
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-    console.log(`[deleteUser] User ${userId} deleted.`);
-  }
-  return {success: true};
 };
 
 // パスワード変更処理

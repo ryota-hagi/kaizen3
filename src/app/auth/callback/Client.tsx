@@ -3,13 +3,19 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
-import { supabase, createAppUsersTable, saveUserToDatabase, getUserFromDatabase } from '@/lib/supabaseClient'
+import { 
+  supabase, 
+  createAppUsersTable, 
+  createInvitationsTable,
+  saveUserToDatabase, 
+  getUserFromDatabase 
+} from '@/lib/supabaseClient'
 import { createCompaniesTable } from '@/lib/createCompaniesTable'
 
 export default function CallbackClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { loginWithGoogle } = useUser()
+  const { loginWithGoogle, verifyInviteToken, updateUserAfterGoogleSignIn } = useUser()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   
@@ -63,8 +69,56 @@ export default function CallbackClient() {
           } else {
             console.log('[DEBUG] Companies table check/creation completed successfully')
           }
+          
+          // invitationsテーブルの作成
+          const { success: invitationsTableSuccess, error: invitationsTableError } = await createInvitationsTable()
+          if (!invitationsTableSuccess) {
+            console.error('[DEBUG] Error creating invitations table:', invitationsTableError)
+          } else {
+            console.log('[DEBUG] Invitations table check/creation completed successfully')
+          }
         } catch (tableError) {
           console.error('[DEBUG] Exception creating tables:', tableError)
+        }
+        
+        // 招待トークンの確認
+        const inviteToken = sessionStorage.getItem('invite_token')
+        
+        if (inviteToken) {
+          console.log('[DEBUG] Found invite token in session storage:', inviteToken)
+          
+          // 招待トークンの検証
+          const { valid, user: invitedUser, error: verifyError } = await verifyInviteToken(inviteToken)
+          
+          if (valid && invitedUser) {
+            console.log('[DEBUG] Valid invitation found for company:', invitedUser.companyId)
+            
+            // 招待が有効な場合、ユーザー情報を更新して招待を完了
+            const updateSuccess = await updateUserAfterGoogleSignIn({
+              companyId: invitedUser.companyId,
+              role: invitedUser.role || '一般ユーザー',
+              inviteToken
+            })
+            
+            if (updateSuccess) {
+              // 招待トークンをクリア
+              sessionStorage.removeItem('invite_token')
+              
+              // ダッシュボードにリダイレクト
+              console.log('[DEBUG] Redirecting invited user to dashboard')
+              router.push('/dashboard')
+              return
+            } else {
+              console.error('[DEBUG] Failed to update user after invitation')
+              setError('招待の処理中にエラーが発生しました')
+              setLoading(false)
+              return
+            }
+          } else {
+            console.error('[DEBUG] Invalid invitation token:', verifyError)
+            // 無効な招待トークンの場合は通常のログインフローに進む
+            sessionStorage.removeItem('invite_token')
+          }
         }
         
         // 通常のログイン
@@ -112,15 +166,15 @@ export default function CallbackClient() {
             // データベースエラーがあっても認証フローを続行
           }
           
-        if (companyIdFromMetadata) {
-          // 会社IDがある場合はダッシュボードへ
-          console.log('[DEBUG] Redirecting to dashboard with company ID:', companyIdFromMetadata)
-          router.push('/dashboard')
-        } else {
-          // 会社IDがない場合は会社登録ページへ
-          console.log('[DEBUG] Redirecting to company registration page')
-          router.push('/auth/register/company')
-        }
+          if (companyIdFromMetadata) {
+            // 会社IDがある場合はダッシュボードへ
+            console.log('[DEBUG] Redirecting to dashboard with company ID:', companyIdFromMetadata)
+            router.push('/dashboard')
+          } else {
+            // 会社IDがない場合は会社登録ページへ
+            console.log('[DEBUG] Redirecting to company registration page')
+            router.push('/auth/register/company')
+          }
         } else {
           setError('ログインに失敗しました')
         }
@@ -133,7 +187,7 @@ export default function CallbackClient() {
     }
     
     handleCallback()
-  }, [router, searchParams, loginWithGoogle])
+  }, [router, searchParams, loginWithGoogle, verifyInviteToken, updateUserAfterGoogleSignIn])
   
   if (error) {
     return (

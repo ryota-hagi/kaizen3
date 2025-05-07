@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -11,8 +11,19 @@ interface LoginFormProps {
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // URLからinvite_tokenパラメータを取得
+  useEffect(() => {
+    const inviteToken = searchParams.get('token')
+    if (inviteToken) {
+      // セッションストレージに招待トークンを保存
+      sessionStorage.setItem('invite_token', inviteToken)
+      console.log('招待トークンを保存しました:', inviteToken)
+    }
+  }, [searchParams])
   
   const handleGoogleLogin = async () => {
     try {
@@ -20,6 +31,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       setError(null)
       
       const client = supabase()
+      
+      // 招待トークンがURLに含まれている場合は保存
+      const inviteToken = searchParams.get('token')
+      
+      if (inviteToken) {
+        // セッションストレージに招待トークンを保存
+        sessionStorage.setItem('invite_token', inviteToken)
+        console.log('招待トークンを保存しました:', inviteToken)
+      }
       
       const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
