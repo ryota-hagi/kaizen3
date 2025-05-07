@@ -57,7 +57,8 @@ export const saveUserToDatabase = async (userId: string, userData: any) => {
           last_login: new Date().toISOString()
         },
         { onConflict: 'auth_uid' }
-      );
+      )
+      .select();
     
     if (error) {
       console.error('[Supabase] Error saving user to database:', error);
