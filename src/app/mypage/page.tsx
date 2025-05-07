@@ -20,10 +20,10 @@ interface Template {
   content: string
 }
 
-// ローカルストレージのキー
-const COMPANY_INFO_STORAGE_KEY = 'kaizen_company_info'
-const EMPLOYEES_STORAGE_KEY = 'kaizen_employees'
-const TEMPLATES_STORAGE_KEY = 'kaizen_templates'
+// ユーティリティ関数のインポート
+import { fetchEmployees, addEmployee, updateEmployee, deleteEmployee, syncEmployeesToSupabase } from '@/utils/employeeUtils'
+import { fetchTemplates, addTemplate, updateTemplate, deleteTemplate, syncTemplatesToSupabase } from '@/utils/templateUtils'
+import { getSupabaseClient } from '@/lib/supabaseClient'
 
 export default function MyPage() {
   // 認証状態とユーザー情報
@@ -107,76 +107,63 @@ export default function MyPage() {
   const [employees, setEmployees] = useState<Employee[]>(defaultEmployees)
   const [templates, setTemplates] = useState<Template[]>(defaultTemplates)
   
-  // コンポーネントのマウント時にローカルストレージから情報を読み込む
+  // コンポーネントのマウント時にSupabaseから情報を読み込む
   useEffect(() => {
-    console.log('=== Loading Data from LocalStorage ===');
+    console.log('=== Loading Data from Supabase ===');
     
-    // ブラウザ環境でのみ実行
-    if (typeof window !== 'undefined') {
-      // 会社情報の読み込み
-      const savedCompanyInfo = localStorage.getItem(COMPANY_INFO_STORAGE_KEY)
-      console.log('Raw Company Info from LocalStorage:', savedCompanyInfo);
+    // 認証済みかつ会社IDがある場合のみデータを取得
+    if (isAuthenticated && currentUser && currentUser.companyId) {
+      // 会社IDを大文字に変換
+      const companyId = currentUser.companyId.toUpperCase();
+      console.log('Original Company ID:', currentUser.companyId);
+      console.log('Normalized Company ID:', companyId);
       
-      if (savedCompanyInfo) {
+      // 会社情報を確認
+      const checkCompany = async () => {
         try {
-          const parsedCompanyInfo = JSON.parse(savedCompanyInfo);
-          console.log('Parsed Company Info:', parsedCompanyInfo);
+          const supabase = getSupabaseClient();
+          const { data, error } = await supabase
+            .from('companies')
+            .select('*')
+            .eq('id', companyId);
           
-          // 会社IDがない場合は生成して追加
-          if (!parsedCompanyInfo.id) {
-            parsedCompanyInfo.id = generateCompanyId();
-            console.log('Generated new company ID:', parsedCompanyInfo.id);
-            
-            // 更新した会社情報をローカルストレージに保存
-            localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(parsedCompanyInfo));
+          console.log('Company data:', data, 'Error:', error);
+          
+          if (!data || data.length === 0) {
+            console.error('Company not found in database!');
           }
-          
-          setCompanyInfo(parsedCompanyInfo)
-        } catch (error) {
-          console.error('Failed to parse company info from localStorage:', error)
+        } catch (e) {
+          console.error('Error checking company:', e);
         }
-      } else {
-        console.log('No company info found in localStorage, using default');
-        
-        // デフォルトの会社情報をローカルストレージに保存
-        localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(defaultCompanyInfo));
-      }
+      };
       
-      // 従業員情報の読み込み
-      const savedEmployees = localStorage.getItem(EMPLOYEES_STORAGE_KEY)
-      console.log('Raw Employees from LocalStorage:', savedEmployees);
+      checkCompany();
       
-      if (savedEmployees) {
-        try {
-          const parsedEmployees = JSON.parse(savedEmployees);
-          console.log('Parsed Employees:', parsedEmployees);
-          setEmployees(parsedEmployees)
-        } catch (error) {
-          console.error('Failed to parse employees from localStorage:', error)
+      // 従業員情報の取得
+      fetchEmployees(companyId).then(data => {
+        console.log('Fetched Employees:', data);
+        if (data.length > 0) {
+          setEmployees(data);
+        } else {
+          console.log('No employees found in Supabase, using default');
+          // ローカルストレージの従業員情報をSupabaseに同期
+          syncEmployeesToSupabase(companyId);
         }
-      } else {
-        console.log('No employees found in localStorage, using default');
-      }
+      });
       
-      // テンプレート情報の読み込み
-      const savedTemplates = localStorage.getItem(TEMPLATES_STORAGE_KEY)
-      console.log('Raw Templates from LocalStorage:', savedTemplates);
-      
-      if (savedTemplates) {
-        try {
-          const parsedTemplates = JSON.parse(savedTemplates);
-          console.log('Parsed Templates:', parsedTemplates);
-          setTemplates(parsedTemplates)
-        } catch (error) {
-          console.error('Failed to parse templates from localStorage:', error)
+      // テンプレート情報の取得
+      fetchTemplates(companyId).then(data => {
+        console.log('Fetched Templates:', data);
+        if (data.length > 0) {
+          setTemplates(data);
+        } else {
+          console.log('No templates found in Supabase, using default');
+          // ローカルストレージのテンプレート情報をSupabaseに同期
+          syncTemplatesToSupabase(companyId);
         }
-      } else {
-        console.log('No templates found in localStorage, using default');
-        // デフォルトのテンプレートをローカルストレージに保存
-        localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(defaultTemplates))
-      }
+      });
     }
-  }, [])
+  }, [isAuthenticated, currentUser])
   
   // 保存成功メッセージを5秒後に非表示にする
   useEffect(() => {
@@ -205,7 +192,7 @@ export default function MyPage() {
     
     // ローカルストレージに保存
     if (typeof window !== 'undefined') {
-      localStorage.setItem(COMPANY_INFO_STORAGE_KEY, JSON.stringify(updatedInfo))
+      localStorage.setItem('kaizen_company_info', JSON.stringify(updatedInfo))
     }
     
     try {
@@ -241,103 +228,121 @@ export default function MyPage() {
   }
   
   // 従業員の追加ハンドラ
-  const handleAddEmployee = (employee: Omit<Employee, 'id'>) => {
-    const newEmployee: Employee = {
-      id: Date.now().toString(),
-      ...employee
+  const handleAddEmployee = async (employee: Omit<Employee, 'id'>) => {
+    if (!currentUser || !currentUser.companyId) {
+      console.error('Company ID is missing, cannot add employee');
+      return;
     }
     
-    const updatedEmployees = [...employees, newEmployee]
-    setEmployees(updatedEmployees)
+    const { success, data, error } = await addEmployee(employee, currentUser.companyId);
     
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(updatedEmployees))
+    if (success && data) {
+      setEmployees([...employees, data]);
+      // 保存成功メッセージを表示
+      setSaveSuccess(true);
+    } else {
+      console.error('Failed to add employee:', error);
     }
-    
-    // 保存成功メッセージを表示
-    setSaveSuccess(true)
   }
   
   // 従業員の編集ハンドラ
-  const handleEditEmployee = (employee: Employee) => {
-    const updatedEmployees = employees.map(emp => 
-      emp.id === employee.id ? employee : emp
-    )
-    
-    setEmployees(updatedEmployees)
-    
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(updatedEmployees))
+  const handleEditEmployee = async (employee: Employee) => {
+    if (!currentUser || !currentUser.companyId) {
+      console.error('Company ID is missing, cannot edit employee');
+      return;
     }
     
-    // 保存成功メッセージを表示
-    setSaveSuccess(true)
+    const { success, data, error } = await updateEmployee(employee, currentUser.companyId);
+    
+    if (success) {
+      const updatedEmployees = employees.map(emp => 
+        emp.id === employee.id ? (data || employee) : emp
+      );
+      
+      setEmployees(updatedEmployees);
+      // 保存成功メッセージを表示
+      setSaveSuccess(true);
+    } else {
+      console.error('Failed to update employee:', error);
+    }
   }
   
   // 従業員の削除ハンドラ
-  const handleDeleteEmployee = (id: string) => {
-    const updatedEmployees = employees.filter(emp => emp.id !== id)
-    setEmployees(updatedEmployees)
-    
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(updatedEmployees))
+  const handleDeleteEmployee = async (id: string) => {
+    if (!currentUser || !currentUser.companyId) {
+      console.error('Company ID is missing, cannot delete employee');
+      return;
     }
     
-    // 保存成功メッセージを表示
-    setSaveSuccess(true)
+    const { success, error } = await deleteEmployee(id, currentUser.companyId);
+    
+    if (success) {
+      const updatedEmployees = employees.filter(emp => emp.id !== id);
+      setEmployees(updatedEmployees);
+      // 保存成功メッセージを表示
+      setSaveSuccess(true);
+    } else {
+      console.error('Failed to delete employee:', error);
+    }
   }
   
   // テンプレートの追加ハンドラ
-  const handleAddTemplate = (template: Omit<Template, 'id'>) => {
-    const newTemplate: Template = {
-      id: Date.now().toString(),
-      ...template
+  const handleAddTemplate = async (template: Omit<Template, 'id'>) => {
+    if (!currentUser || !currentUser.companyId) {
+      console.error('Company ID is missing, cannot add template');
+      return;
     }
     
-    const updatedTemplates = [...templates, newTemplate]
-    setTemplates(updatedTemplates)
+    const { success, data, error } = await addTemplate(template, currentUser.companyId);
     
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
+    if (success && data) {
+      setTemplates([...templates, data]);
+      // 保存成功メッセージを表示
+      setSaveSuccess(true);
+    } else {
+      console.error('Failed to add template:', error);
     }
-    
-    // 保存成功メッセージを表示
-    setSaveSuccess(true)
   }
   
   // テンプレートの編集ハンドラ
-  const handleEditTemplate = (template: Template) => {
-    const updatedTemplates = templates.map(temp => 
-      temp.id === template.id ? template : temp
-    )
-    
-    setTemplates(updatedTemplates)
-    
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
+  const handleEditTemplate = async (template: Template) => {
+    if (!currentUser || !currentUser.companyId) {
+      console.error('Company ID is missing, cannot edit template');
+      return;
     }
     
-    // 保存成功メッセージを表示
-    setSaveSuccess(true)
+    const { success, data, error } = await updateTemplate(template, currentUser.companyId);
+    
+    if (success) {
+      const updatedTemplates = templates.map(temp => 
+        temp.id === template.id ? (data || template) : temp
+      );
+      
+      setTemplates(updatedTemplates);
+      // 保存成功メッセージを表示
+      setSaveSuccess(true);
+    } else {
+      console.error('Failed to update template:', error);
+    }
   }
   
   // テンプレートの削除ハンドラ
-  const handleDeleteTemplate = (id: string) => {
-    const updatedTemplates = templates.filter(temp => temp.id !== id)
-    setTemplates(updatedTemplates)
-    
-    // ローカルストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(updatedTemplates))
+  const handleDeleteTemplate = async (id: string) => {
+    if (!currentUser || !currentUser.companyId) {
+      console.error('Company ID is missing, cannot delete template');
+      return;
     }
     
-    // 保存成功メッセージを表示
-    setSaveSuccess(true)
+    const { success, error } = await deleteTemplate(id, currentUser.companyId);
+    
+    if (success) {
+      const updatedTemplates = templates.filter(temp => temp.id !== id);
+      setTemplates(updatedTemplates);
+      // 保存成功メッセージを表示
+      setSaveSuccess(true);
+    } else {
+      console.error('Failed to delete template:', error);
+    }
   }
   
   // 認証モードの切り替え
