@@ -11,7 +11,7 @@ import { UserProfile } from '@/components/auth/UserProfile'
 import { CompanyInfo } from '@/components/mypage/CompanyInfo'
 import { EmployeeList } from '@/components/mypage/EmployeeList'
 import { TemplateList } from '@/components/mypage/TemplateList'
-import { updateCompanyInfo } from '@/utils/companyInfo'
+import { updateCompanyInfo, fetchAndCacheCompanyInfo } from '@/utils/companyInfo'
 
 // テンプレートのインターフェース
 interface Template {
@@ -23,7 +23,6 @@ interface Template {
 // ユーティリティ関数のインポート
 import { fetchEmployees, addEmployee, updateEmployee, deleteEmployee, syncEmployeesToSupabase } from '@/utils/employeeUtils'
 import { fetchTemplates, addTemplate, updateTemplate, deleteTemplate, syncTemplatesToSupabase } from '@/utils/templateUtils'
-import { getSupabaseClient } from '@/lib/supabaseClient'
 
 export default function MyPage() {
   // 認証状態とユーザー情報
@@ -113,57 +112,51 @@ export default function MyPage() {
     
     // 認証済みかつ会社IDがある場合のみデータを取得
     if (isAuthenticated && currentUser && currentUser.companyId) {
-      // 会社IDを大文字に変換
-      const companyId = currentUser.companyId.toUpperCase();
-      console.log('Original Company ID:', currentUser.companyId);
-      console.log('Normalized Company ID:', companyId);
+      const companyId = currentUser.companyId;
       
-      // 会社情報を確認
-      const checkCompany = async () => {
-        try {
-          const supabase = getSupabaseClient();
-          const { data, error } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', companyId);
+      // 会社情報を取得（見つからない場合は会社情報登録フォームに遷移）
+      fetchAndCacheCompanyInfo(companyId, router).then(companyData => {
+        if (companyData) {
+          console.log('Fetched Company Info:', companyData);
           
-          console.log('Company data:', data, 'Error:', error);
+          // 会社情報が取得できた場合は状態を更新
+          setCompanyInfo({
+            ...companyData,
+            // ユーザー数をカウント（必要に応じて）
+            userCounts: users && users.length > 0 ? countUsersByRole(users, companyData.id) : { admin: 0, manager: 0, user: 0 }
+          });
           
-          if (!data || data.length === 0) {
-            console.error('Company not found in database!');
-          }
-        } catch (e) {
-          console.error('Error checking company:', e);
+          // 会社情報が取得できた場合のみ、従業員情報とテンプレート情報を取得
+          // 従業員情報の取得
+          fetchEmployees(companyId).then(data => {
+            console.log('Fetched Employees:', data);
+            if (data.length > 0) {
+              setEmployees(data);
+            } else {
+              console.log('No employees found in Supabase, using default');
+              // ローカルストレージの従業員情報をSupabaseに同期
+              syncEmployeesToSupabase(companyId);
+            }
+          });
+          
+          // テンプレート情報の取得
+          fetchTemplates(companyId).then(data => {
+            console.log('Fetched Templates:', data);
+            if (data.length > 0) {
+              setTemplates(data);
+            } else {
+              console.log('No templates found in Supabase, using default');
+              // ローカルストレージのテンプレート情報をSupabaseに同期
+              syncTemplatesToSupabase(companyId);
+            }
+          });
         }
-      };
-      
-      checkCompany();
-      
-      // 従業員情報の取得
-      fetchEmployees(companyId).then(data => {
-        console.log('Fetched Employees:', data);
-        if (data.length > 0) {
-          setEmployees(data);
-        } else {
-          console.log('No employees found in Supabase, using default');
-          // ローカルストレージの従業員情報をSupabaseに同期
-          syncEmployeesToSupabase(companyId);
-        }
-      });
-      
-      // テンプレート情報の取得
-      fetchTemplates(companyId).then(data => {
-        console.log('Fetched Templates:', data);
-        if (data.length > 0) {
-          setTemplates(data);
-        } else {
-          console.log('No templates found in Supabase, using default');
-          // ローカルストレージのテンプレート情報をSupabaseに同期
-          syncTemplatesToSupabase(companyId);
-        }
+        // 会社情報が取得できなかった場合は、fetchAndCacheCompanyInfo内で会社情報登録フォームに遷移
+      }).catch(error => {
+        console.error('Error fetching company info:', error);
       });
     }
-  }, [isAuthenticated, currentUser])
+  }, [isAuthenticated, currentUser, router])
   
   // 保存成功メッセージを5秒後に非表示にする
   useEffect(() => {

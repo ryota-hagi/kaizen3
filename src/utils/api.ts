@@ -26,9 +26,9 @@ export interface UserInfo {
 export interface CompanyInfo {
   id?: string; // ユニークな会社ID（新規追加）
   name: string;
-  industry: string;
-  size: string;
-  address: string;
+  industry?: string; // オプショナルに変更
+  size?: string; // オプショナルに変更
+  address?: string; // オプショナルに変更
   businessDescription?: string; // 事業内容
   foundedYear?: string; // 設立年
   website?: string; // Webサイト

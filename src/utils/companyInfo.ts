@@ -107,13 +107,24 @@ export async function updateCompanyInfo(companyInfo: CompanyInfo): Promise<{ suc
  * companyId から Supabase の companies テーブルを検索し、
  * 取得したデータを localStorage(`kaizen_company_info`) にキャッシュして返す。
  *
- * 会社情報が取得できなかった場合は null を返す。
+ * 会社情報が取得できなかった場合は null を返し、オプションで会社情報登録フォームに遷移する。
+ * 
+ * @param companyId 会社ID
+ * @param router Next.jsのrouterオブジェクト（省略可能）
+ * @param redirectPath 会社情報が見つからない場合のリダイレクト先（デフォルトは'/auth/register/company'）
+ * @returns 会社情報またはnull
  */
 export async function fetchAndCacheCompanyInfo(
-  companyId: string | undefined | null
+  companyId: string | undefined | null,
+  router?: any,
+  redirectPath: string = '/auth/register/company'
 ): Promise<CompanyInfo | null> {
   if (!companyId) {
     console.warn('[companyInfo] companyId is null, skip fetch')
+    if (router) {
+      console.log(`[companyInfo] Redirecting to ${redirectPath} due to missing companyId`)
+      router.push(redirectPath)
+    }
     return null
   }
 
@@ -127,6 +138,10 @@ export async function fetchAndCacheCompanyInfo(
 
     if (error || !data) {
       console.error('[companyInfo] Failed to fetch company info:', error)
+      if (router) {
+        console.log(`[companyInfo] Redirecting to ${redirectPath} due to missing company data`)
+        router.push(redirectPath)
+      }
       return null
     }
 
@@ -141,6 +156,10 @@ export async function fetchAndCacheCompanyInfo(
     return data as CompanyInfo
   } catch (e) {
     console.error('[companyInfo] Unexpected error:', e)
+    if (router) {
+      console.log(`[companyInfo] Redirecting to ${redirectPath} due to error`)
+      router.push(redirectPath)
+    }
     return null
   }
 }
