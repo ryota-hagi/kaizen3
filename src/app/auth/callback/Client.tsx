@@ -159,39 +159,53 @@ export default function CallbackClient() {
           
           // 招待トークンの検証
           addDebugInfo('招待トークンを検証中...')
-          const { valid, user: invitedUser, error: verifyError } = await verifyInviteToken(inviteToken)
           
-          if (valid && invitedUser) {
-            addDebugInfo(`会社IDの有効な招待を検出: ${invitedUser.companyId}`)
+          try {
+            const verifyResult = await verifyInviteToken(inviteToken)
             
-            // 招待が有効な場合、ユーザー情報を更新して招待を完了
-            addDebugInfo('Google認証後にユーザー情報を更新中...')
-            const updateSuccess = await updateUserAfterGoogleSignIn({
-              companyId: invitedUser.companyId,
-              role: invitedUser.role || '一般ユーザー',
-              inviteToken
-            })
+            // 招待トークンの検証結果を処理
+            const isValidInvite = verifyResult.valid && verifyResult.user;
             
-            if (updateSuccess) {
-              // 招待トークンをクリア
-              sessionStorage.removeItem('invite_token')
-              addDebugInfo('招待トークンをクリアしました')
+            if (isValidInvite) {
+              const invitedUser = verifyResult.user!
+              addDebugInfo(`会社IDの有効な招待を検出: ${invitedUser.companyId}`)
               
-              // ダッシュボードにリダイレクト
-              addDebugInfo('招待されたユーザーをダッシュボードにリダイレクトします')
-              router.push('/dashboard')
-              return
+              // 招待が有効な場合、ユーザー情報を更新して招待を完了
+              addDebugInfo('Google認証後にユーザー情報を更新中...')
+              const updateSuccess = await updateUserAfterGoogleSignIn({
+                companyId: invitedUser.companyId,
+                role: invitedUser.role || '一般ユーザー',
+                inviteToken
+              })
+              
+              if (updateSuccess) {
+                // 招待トークンをクリア
+                sessionStorage.removeItem('invite_token')
+                addDebugInfo('招待トークンをクリアしました')
+                
+                // ダッシュボードにリダイレクト
+                addDebugInfo('招待されたユーザーをダッシュボードにリダイレクトします')
+                router.push('/dashboard')
+                return
+              } else {
+                addDebugInfo('招待後のユーザー更新に失敗しました')
+                setError('招待の処理中にエラーが発生しました')
+                setLoading(false)
+                return
+              }
             } else {
-              addDebugInfo('招待後のユーザー更新に失敗しました')
-              setError('招待の処理中にエラーが発生しました')
-              setLoading(false)
-              return
+              addDebugInfo('無効な招待トークン')
+              addDebugInfo('招待トークンが無効か期限切れです')
+              
+              // 無効な招待トークンの場合は通常のログインフローに進む
+              sessionStorage.removeItem('invite_token')
+              addDebugInfo('無効な招待トークンをクリアしました')
             }
-          } else {
-            addDebugInfo(`無効な招待トークン: ${verifyError}`)
-            // 無効な招待トークンの場合は通常のログインフローに進む
+          } catch (inviteError) {
+            addDebugInfo(`招待トークン検証中の例外: ${inviteError}`)
+            // エラーがあっても通常のログインフローに進む
             sessionStorage.removeItem('invite_token')
-            addDebugInfo('無効な招待トークンをクリアしました')
+            addDebugInfo('招待トークンをクリアしました（エラー後）')
           }
         }
         
@@ -218,6 +232,7 @@ export default function CallbackClient() {
           addDebugInfo(`メタデータから会社ID: ${companyIdFromMetadata || 'なし'}`)
           
           // app_usersテーブルにユーザー情報が存在するか確認
+          let companyIdFromDatabase = '';
           try {
             addDebugInfo('データベースからユーザー情報を取得中...')
             const result = await getUserFromDatabase(refreshedUser.id)
@@ -243,19 +258,50 @@ export default function CallbackClient() {
               }
             } else {
               addDebugInfo(`ユーザーがデータベースに見つかりました: ${result.data.email}`)
+              
+              // データベースから会社IDを取得
+              companyIdFromDatabase = result.data.company_id || '';
+              addDebugInfo(`データベースから会社ID: ${companyIdFromDatabase || 'なし'}`)
+              
+              // データベースに会社IDがあるが、メタデータにない場合は、メタデータを更新
+              if (companyIdFromDatabase && !companyIdFromMetadata) {
+                addDebugInfo(`メタデータに会社IDがないため、データベースの会社ID ${companyIdFromDatabase} で更新します`)
+                
+                try {
+                  // Supabaseのユーザーメタデータを更新
+                  const { error } = await client.auth.updateUser({
+                    data: {
+                      company_id: companyIdFromDatabase,
+                      role: result.data.role || '一般ユーザー',
+                      status: 'アクティブ'
+                    }
+                  });
+                  
+                  if (error) {
+                    addDebugInfo(`メタデータ更新エラー: ${error.message}`)
+                  } else {
+                    addDebugInfo('メタデータを正常に更新しました')
+                  }
+                } catch (metaError) {
+                  addDebugInfo(`メタデータ更新例外: ${metaError}`)
+                }
+              }
             }
           } catch (dbError) {
             addDebugInfo(`データベース操作エラー: ${dbError}`)
             // データベースエラーがあっても認証フローを続行
           }
           
-          if (companyIdFromMetadata) {
+          // 会社IDの優先順位: メタデータ > データベース
+          const effectiveCompanyId = companyIdFromMetadata || companyIdFromDatabase;
+          
+          if (effectiveCompanyId) {
             // 会社IDがある場合はダッシュボードへ
-            addDebugInfo(`会社ID ${companyIdFromMetadata} でダッシュボードにリダイレクトします`)
+            addDebugInfo(`有効な会社ID ${effectiveCompanyId} でダッシュボードにリダイレクトします`)
             router.push('/dashboard')
           } else {
             // 会社IDがない場合は会社登録ページへ
-            addDebugInfo('会社登録ページにリダイレクトします')
+            addDebugInfo('会社IDが見つからないため、会社登録ページにリダイレクトします')
             router.push('/auth/register/company')
           }
         } else {

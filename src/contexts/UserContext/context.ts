@@ -18,7 +18,7 @@ export interface UserContextType {
   deleteUser: (userId: string) => Promise<{success: boolean, message?: string}>;
   deleteCompanyAccount: () => Promise<{success: boolean, message?: string}>; // 会社アカウント削除関数
   inviteUser: (inviteData: {email: string; role: string; companyId: string}) => Promise<{success: boolean, message?: string, inviteToken?: string}>; // ユーザー招待関数
-  verifyInviteToken: (token: string) => Promise<{valid: boolean; user?: UserInfo; error?: string}>; // 招待トークン検証関数（非同期に変更）
+  verifyInviteToken: (token: string) => Promise<{valid: boolean; user?: UserInfo; error?: any}>; // 招待トークン検証関数（非同期に変更）
   completeInvitation: (token: string, userData: {fullName: string; companyId?: string}) => Promise<boolean>; // 招待完了関数
   getEmployees: () => Employee[]; // 従業員一覧を取得する関数
 }

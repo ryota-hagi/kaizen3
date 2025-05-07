@@ -113,7 +113,7 @@ export const verifyInviteToken = async (
   users: UserInfo[],
   setUsers: Dispatch<SetStateAction<UserInfo[]>>,
   setCompanyId: Dispatch<SetStateAction<string>>
-): Promise<{valid: boolean; user?: UserInfo; error?: string}> => {
+): Promise<{valid: boolean; user?: UserInfo; error?: any}> => {
   try {
     const client = supabase();
     
