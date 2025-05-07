@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/contexts/UserContext/context'
 import { 
   supabase, 
-  createAppUsersTable, 
-  createInvitationsTable,
+  checkAppUsersTable, 
+  checkInvitationsTable,
   saveUserToDatabase, 
   getUserFromDatabase 
 } from '@/lib/supabaseClient'
@@ -54,31 +54,35 @@ export default function CallbackClient() {
         
         console.log('[DEBUG] Authenticated user email:', user.email)
         
-        // 必要なテーブルが存在するか確認し、なければ作成
+        // 必要なテーブルが存在するか確認
         try {
-          // app_usersテーブルの作成
-          const { success: userTableSuccess, error: userTableError } = await createAppUsersTable()
+          // app_usersテーブルの確認
+          const { success: userTableSuccess, exists: userTableExists, error: userTableError } = await checkAppUsersTable()
           if (!userTableSuccess) {
-            console.error('[DEBUG] Error creating app_users table:', userTableError)
+            console.error('[DEBUG] Error checking app_users table:', userTableError)
+          } else if (!userTableExists) {
+            console.warn('[DEBUG] app_users table does not exist. Please create it in the Supabase dashboard.')
           }
           
-          // companiesテーブルの作成
+          // companiesテーブルの確認
           const { success: companyTableSuccess, error: companyTableError } = await createCompaniesTable()
           if (!companyTableSuccess) {
-            console.error('[DEBUG] Error creating companies table:', companyTableError)
+            console.error('[DEBUG] Error checking companies table:', companyTableError)
           } else {
-            console.log('[DEBUG] Companies table check/creation completed successfully')
+            console.log('[DEBUG] Companies table check completed successfully')
           }
           
-          // invitationsテーブルの作成
-          const { success: invitationsTableSuccess, error: invitationsTableError } = await createInvitationsTable()
+          // invitationsテーブルの確認
+          const { success: invitationsTableSuccess, exists: invitationsTableExists, error: invitationsTableError } = await checkInvitationsTable()
           if (!invitationsTableSuccess) {
-            console.error('[DEBUG] Error creating invitations table:', invitationsTableError)
+            console.error('[DEBUG] Error checking invitations table:', invitationsTableError)
+          } else if (!invitationsTableExists) {
+            console.warn('[DEBUG] invitations table does not exist. Please create it in the Supabase dashboard.')
           } else {
-            console.log('[DEBUG] Invitations table check/creation completed successfully')
+            console.log('[DEBUG] Invitations table check completed successfully')
           }
         } catch (tableError) {
-          console.error('[DEBUG] Exception creating tables:', tableError)
+          console.error('[DEBUG] Exception checking tables:', tableError)
         }
         
         // 招待トークンの確認
