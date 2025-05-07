@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
 
 // シングルトンパターンを使用して確実に1つのインスタンスのみを使用する
 let _client: ReturnType<typeof createClient> | undefined;
