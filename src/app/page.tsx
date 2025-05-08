@@ -180,6 +180,9 @@ export default function Home() {
       // 最新順にソート
       const sortedWorkflows = formattedWorkflows
         .sort((a: Workflow, b: Workflow) => b.updatedAt.getTime() - a.updatedAt.getTime());
+      
+      // ローカルストレージにも保存（詳細ページでの表示用）
+      localStorage.setItem('workflows', JSON.stringify(sortedWorkflows));
         
       setWorkflows(sortedWorkflows);
     } catch (error) {
