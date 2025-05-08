@@ -19,24 +19,6 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     );
     
-    // invitationsテーブルを更新
-    const { error: updateError } = await supabaseAdmin
-      .from('invitations')
-      .update({
-        accepted_at: new Date().toISOString(),
-        status: 'completed'
-      })
-      .or(`token.eq.${token},invite_token.eq.${token}`);
-    
-    if (updateError) {
-      console.error('[Supabase] Error updating invitation:', updateError);
-      return NextResponse.json({ 
-        success: false, 
-        message: '招待の更新に失敗しました',
-        error: updateError.message
-      }, { status: 500 });
-    }
-    
     // 招待情報を取得（tokenまたはinvite_tokenで検索）
     const { data, error: getError } = await supabaseAdmin
       .from('invitations')
@@ -78,6 +60,20 @@ export async function POST(req: NextRequest) {
         message: 'ユーザー情報の保存に失敗しました',
         error: userError.message
       }, { status: 500 });
+    }
+    
+    // invitationsテーブルから該当レコードを削除
+    const { error: deleteError } = await supabaseAdmin
+      .from('invitations')
+      .delete()
+      .or(`token.eq.${token},invite_token.eq.${token}`);
+    
+    if (deleteError) {
+      console.error('[Supabase] Error deleting invitation:', deleteError);
+      // 削除に失敗しても処理は続行する（ユーザー登録は完了しているため）
+      console.log('招待の削除に失敗しましたが、ユーザー登録は完了しています');
+    } else {
+      console.log('招待を正常に削除しました');
     }
     
     return NextResponse.json({ 
