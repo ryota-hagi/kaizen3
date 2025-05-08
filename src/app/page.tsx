@@ -135,17 +135,44 @@ export default function Home() {
   // Supabaseからワークフローを取得
   const loadWorkflows = async () => {
     try {
-      // APIを呼び出してワークフローを取得
-      const response = await fetch('/api/workflows');
+      // MCPを使用してワークフローを取得
+      const response = await fetch('/api/workflows/supabase-mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operation: 'execute_sql',
+          params: {
+            projectId: 'czuedairowlwfgbjmfbg',
+            query: `
+              SELECT w.*,
+                (
+                  SELECT json_agg(c.*)
+                  FROM workflow_collaborators c
+                  WHERE c.workflow_id = w.id
+                ) as collaborators
+              FROM workflows w
+              ORDER BY w.updated_at DESC
+            `
+          }
+        }),
+      });
+      
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
       
-      const data = await response.json();
-      console.log('Fetched workflows from Supabase:', data);
+      const result = await response.json();
+      console.log('Fetched workflows from Supabase MCP:', result);
+      
+      if (!result || !Array.isArray(result)) {
+        console.error('Invalid response format:', result);
+        return;
+      }
       
       // Supabaseのカラム名をアプリケーションの命名規則に合わせて変換
-      const formattedWorkflows: Workflow[] = data.map((wf: any) => ({
+      const formattedWorkflows: Workflow[] = result.map((wf: any) => ({
         id: wf.id,
         name: wf.name,
         description: wf.description,
@@ -192,14 +219,27 @@ export default function Home() {
   // ワークフローを削除
   const handleDeleteWorkflow = async (id: string) => {
     try {
-      // APIを呼び出して削除
-      const response = await fetch(`/api/workflows?id=${id}`, {
-        method: 'DELETE'
+      // MCPを使用して削除
+      const response = await fetch('/api/workflows/supabase-mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operation: 'execute_sql',
+          params: {
+            projectId: 'czuedairowlwfgbjmfbg',
+            query: `DELETE FROM workflows WHERE id = '${id}' RETURNING id`
+          }
+        }),
       });
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
+      
+      const result = await response.json();
+      console.log('Deleted workflow:', result);
       
       // 状態を更新
       setWorkflows(workflows.filter(wf => wf.id !== id));
@@ -458,28 +498,37 @@ export default function Home() {
                                     // ワークフローの完了状態を切り替える
                                     try {
                                       const isCompleted = !displayWorkflow.isCompleted;
+                                      const completedAt = isCompleted ? new Date().toISOString() : null;
                                       
-                                      // APIを呼び出して更新
-                                      const response = await fetch('/api/workflows', {
-                                        method: 'PUT',
+                                      // MCPを使用して更新
+                                      const response = await fetch('/api/workflows/supabase-mcp', {
+                                        method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
                                         },
                                         body: JSON.stringify({
-                                          id: displayWorkflow.id,
-                                          isCompleted: isCompleted,
-                                          // 他の必要なフィールド
-                                          name: displayWorkflow.name,
-                                          description: displayWorkflow.description,
-                                          steps: displayWorkflow.steps,
-                                          isImproved: displayWorkflow.isImproved,
-                                          originalId: displayWorkflow.originalId
+                                          operation: 'execute_sql',
+                                          params: {
+                                            projectId: 'czuedairowlwfgbjmfbg',
+                                            query: `
+                                              UPDATE workflows 
+                                              SET 
+                                                is_completed = ${isCompleted}, 
+                                                completed_at = ${isCompleted ? `'${completedAt}'` : 'NULL'},
+                                                updated_at = NOW()
+                                              WHERE id = '${displayWorkflow.id}'
+                                              RETURNING *
+                                            `
+                                          }
                                         }),
                                       });
                                       
                                       if (!response.ok) {
                                         throw new Error(`API error: ${response.status}`);
                                       }
+                                      
+                                      const result = await response.json();
+                                      console.log('Updated workflow completion status:', result);
                                       
                                       // 状態を更新
                                       loadWorkflows();
