@@ -44,54 +44,76 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
       return
     }
     
+    // 招待処理開始
     setIsSubmitting(true)
     setErrorMessage('')
     setSuccessMessage('')
     setInviteLink('')
     
+    // 招待データを準備
+    const inviteData = {
+      email,
+      role,
+      companyId: currentUser.companyId
+    };
+    
+    // 招待処理のタイムアウト設定（10秒）
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('招待処理がタイムアウトしました')), 10000);
+    });
+    
     try {
-      // 招待処理を実行
-      const result = await inviteUser({
-        email,
-        role,
-        companyId: currentUser.companyId
-      })
+      // 招待処理を実行（タイムアウト付き）
+      const result = await Promise.race([
+        inviteUser(inviteData),
+        timeoutPromise
+      ]) as {success: boolean, message?: string, inviteToken?: string};
       
+      // 招待処理の結果を処理
       if (result.success) {
-        setSuccessMessage(result.message || 'ユーザーを招待しました')
-        
-        // 招待リンクを生成して表示
+        // 招待リンクを生成して表示（即時）
         if (result.inviteToken) {
           const baseUrl = window.location.origin;
           const inviteUrl = `${baseUrl}/auth/accept-invite?token=${result.inviteToken}`;
           setInviteLink(inviteUrl);
-        }
-        
-        setEmail('')
-        setRole('一般ユーザー')
-        
-        // 成功コールバックがあれば実行
-        if (onSuccess) {
-          onSuccess(result.message || 'ユーザーを招待しました')
+          
+          // フォームをリセット
+          setEmail('')
+          setRole('一般ユーザー')
+          
+          // 成功メッセージを表示
+          setSuccessMessage(result.message || 'ユーザーを招待しました');
+          
+          // モーダルは閉じずに招待リンクを表示したままにする
+          // 成功コールバックは呼び出さない
+        } else {
+          // トークンがない場合はエラー
+          throw new Error('招待トークンが生成されませんでした');
         }
       } else {
-        setErrorMessage(result.message || '招待処理に失敗しました')
+        // エラーメッセージを表示
+        setErrorMessage(result.message || '招待処理に失敗しました');
         
         // エラーコールバックがあれば実行
         if (onError) {
-          onError(result.message || '招待処理に失敗しました')
+          onError(result.message || '招待処理に失敗しました');
         }
       }
     } catch (error) {
-      console.error('招待処理中にエラーが発生しました:', error)
-      setErrorMessage('招待処理中にエラーが発生しました')
+      // エラーハンドリング
+      console.error('招待処理中にエラーが発生しました:', error);
+      
+      // エラーメッセージを表示
+      const errorMsg = error instanceof Error ? error.message : '招待処理中にエラーが発生しました';
+      setErrorMessage(errorMsg);
       
       // エラーコールバックがあれば実行
       if (onError) {
-        onError('招待処理中にエラーが発生しました')
+        onError(errorMsg);
       }
     } finally {
-      setIsSubmitting(false)
+      // 処理完了
+      setIsSubmitting(false);
     }
   }
   

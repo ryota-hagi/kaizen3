@@ -52,13 +52,20 @@ export const UserInviteModal: React.FC<UserInviteModalProps> = ({
                 <div className="mt-4">
                   <UserInviteForm 
                     onClose={onClose} 
-                    onSuccess={(message) => {
-                      if (onSuccess) {
-                        onSuccess(message);
-                      }
+                    onError={(message) => {
+                      // エラー時のみモーダルを閉じる
                       onClose();
                     }}
                   />
+                </div>
+                
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
+                  >
+                    閉じる
+                  </button>
                 </div>
               </Dialog.Panel>
             </Transition.Child>
