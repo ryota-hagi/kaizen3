@@ -68,8 +68,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
                 : 'text-secondary-700 hover:bg-secondary-50'
             }`}
           >
-            <span className={sidebarCollapsed ? 'hidden' : 'block'}>ダッシュボード</span>
-            <span className={sidebarCollapsed ? 'block' : 'hidden'}>D</span>
+            <span className={sidebarCollapsed ? 'hidden' : 'block'}>ホーム</span>
+            <span className={sidebarCollapsed ? 'block' : 'hidden'}>H</span>
           </Link>
           
           <Link 

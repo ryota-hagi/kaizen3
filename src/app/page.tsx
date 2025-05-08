@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { DashboardLayout } from '../components/layouts/DashboardLayout'
 import { WorkflowEditor } from '../components/workflow/WorkflowEditor'
 import { ChatInterface } from '../components/chat/ChatInterface'
-import { useUser } from '@/contexts/UserContext/context' // パスを更新
+import { useUser } from '@/contexts/UserContext'
 
 interface WorkflowStep {
   id: string
@@ -22,16 +23,15 @@ interface Workflow {
   description: string
   createdAt: Date
   updatedAt: Date
-  stepCount: number
   steps: WorkflowStep[]
   isImproved?: boolean
   originalId?: string
   isCompleted?: boolean
   completedAt?: Date
+  createdBy?: string // 作成者のユーザーID
 }
 
 export default function Home() {
-  // チャットの開閉状態を管理
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null)
   const [workflows, setWorkflows] = useState<Workflow[]>([])
@@ -41,20 +41,16 @@ export default function Home() {
   const [companyInfo, setCompanyInfo] = useState<any>(null)
   const [employees, setEmployees] = useState<any[]>([])
   const router = useRouter()
-  const { getUserById } = useUser()
+  const { users, getUserById, currentUser } = useUser()
   
   // 会社情報と従業員情報を取得
   useEffect(() => {
     // ローカルストレージから会社情報を取得
     const savedCompanyInfo = localStorage.getItem('kaizen_company_info')
-    console.log('Raw Company Info from localStorage:', savedCompanyInfo)
     
     if (savedCompanyInfo) {
       try {
         const parsedCompanyInfo = JSON.parse(savedCompanyInfo)
-        console.log('Parsed Company Info Type:', typeof parsedCompanyInfo)
-        console.log('Parsed Company Info Keys:', Object.keys(parsedCompanyInfo))
-        console.log('Parsed Company Info Values:', JSON.stringify(parsedCompanyInfo, null, 2))
         
         // 会社情報の検証
         if (typeof parsedCompanyInfo !== 'object' || parsedCompanyInfo === null) {
@@ -63,7 +59,6 @@ export default function Home() {
         
         setCompanyInfo(parsedCompanyInfo)
         setCompanyName(parsedCompanyInfo.name || '株式会社サンプル')
-        console.log('Loaded Company Info:', parsedCompanyInfo)
       } catch (error) {
         console.error('会社情報の解析エラー:', error)
         // デフォルトの会社情報を設定
@@ -75,7 +70,6 @@ export default function Home() {
           businessDescription: 'ビジネスプロセス改善ソリューションの提供'
         }
         setCompanyInfo(defaultCompanyInfo)
-        console.log('Using Default Company Info:', defaultCompanyInfo)
       }
     } else {
       // 会社情報がない場合はデフォルト値を設定
@@ -87,7 +81,6 @@ export default function Home() {
         businessDescription: 'ビジネスプロセス改善ソリューションの提供'
       }
       setCompanyInfo(defaultCompanyInfo)
-      console.log('No Company Info Found. Using Default:', defaultCompanyInfo)
     }
     
     // ローカルストレージから従業員情報を取得
@@ -96,7 +89,6 @@ export default function Home() {
       try {
         const parsedEmployees = JSON.parse(savedEmployees)
         setEmployees(parsedEmployees)
-        console.log('Loaded Employees:', parsedEmployees)
       } catch (error) {
         console.error('従業員情報の解析エラー:', error)
         // デフォルトの従業員情報を設定
@@ -110,7 +102,6 @@ export default function Home() {
           }
         ]
         setEmployees(defaultEmployees)
-        console.log('Using Default Employees:', defaultEmployees)
       }
     } else {
       // 従業員情報がない場合はデフォルト値を設定
@@ -124,7 +115,6 @@ export default function Home() {
         }
       ]
       setEmployees(defaultEmployees)
-      console.log('No Employees Found. Using Default:', defaultEmployees)
     }
   }, [])
 
@@ -142,7 +132,7 @@ export default function Home() {
     }
   }, [router])
 
-  // ワークフローを取得（実際のアプリではAPIから取得）
+  // ワークフローを取得
   const loadWorkflows = () => {
     // ローカルストレージからワークフローを取得
     const storedWorkflows = localStorage.getItem('workflows');
@@ -156,8 +146,28 @@ export default function Home() {
           updatedAt: new Date(wf.updatedAt)
         }));
         
+        // 作成者情報が設定されていないワークフローに、デフォルトの作成者情報を設定
+        const workflowsWithCreator = workflowsWithDates.map((wf: Workflow) => {
+          if (!wf.createdBy && users.length > 0) {
+            return {
+              ...wf,
+              createdBy: users[0].id // 最初のユーザーを作成者として設定
+            }
+          }
+          return wf
+        })
+        
+        // 作成者情報が更新されたワークフローをローカルストレージに保存
+        const hasUpdates = workflowsWithCreator.some((wf: Workflow, index: number) => 
+          !parsedWorkflows[index].createdBy && wf.createdBy
+        )
+        
+        if (hasUpdates) {
+          localStorage.setItem('workflows', JSON.stringify(workflowsWithCreator))
+        }
+        
         // 最新順にソート
-        const sortedWorkflows = workflowsWithDates
+        const sortedWorkflows = workflowsWithCreator
           .sort((a: Workflow, b: Workflow) => b.updatedAt.getTime() - a.updatedAt.getTime());
           
         setWorkflows(sortedWorkflows);
@@ -170,7 +180,7 @@ export default function Home() {
   // 初回レンダリング時とアクティブワークフローが変更されたときにワークフローリストを更新
   useEffect(() => {
     loadWorkflows();
-  }, [activeWorkflow]);
+  }, [activeWorkflow, users]);
 
   // ローカルストレージの変更を監視
   useEffect(() => {
@@ -220,6 +230,43 @@ export default function Home() {
     return matchesSearch && matchesCompletionStatus;
   });
 
+  // ワークフローをグループ化する関数
+  const groupWorkflows = () => {
+    const workflowGroups = new Map()
+    
+    // 改善後のワークフローを元のワークフローIDでグループ化
+    filteredWorkflows.forEach(workflow => {
+      if (workflow.isImproved && workflow.originalId) {
+        if (!workflowGroups.has(workflow.originalId)) {
+          workflowGroups.set(workflow.originalId, {
+            original: null,
+            improved: workflow
+          })
+        } else {
+          workflowGroups.get(workflow.originalId).improved = workflow
+        }
+      }
+    })
+    
+    // 元のワークフローを追加
+    filteredWorkflows.forEach(workflow => {
+      if (!workflow.isImproved) {
+        if (!workflowGroups.has(workflow.id)) {
+          workflowGroups.set(workflow.id, {
+            original: workflow,
+            improved: null
+          })
+        } else {
+          workflowGroups.get(workflow.id).original = workflow
+        }
+      }
+    })
+    
+    return Array.from(workflowGroups.entries())
+  }
+  
+  const workflowGroups = groupWorkflows()
+
   return (
     <DashboardLayout companyName={companyName}>
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
@@ -227,7 +274,7 @@ export default function Home() {
         <div className={`flex-1 flex ${isChatOpen ? 'pr-96' : ''} transition-all duration-300 ease-in-out`}>
           <div className="flex-1 overflow-auto p-8">
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-secondary-900">ダッシュボード</h1>
+              <h1 className="text-2xl font-bold text-secondary-900">ホーム</h1>
               <p className="text-secondary-600">業務フローの改善を始めましょう</p>
             </div>
 
@@ -267,8 +314,8 @@ export default function Home() {
                   </button>
                 </div>
                 
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                  <table className="min-w-full divide-y divide-secondary-200">
+                <div className="bg-white rounded-lg shadow overflow-x-auto">
+                  <table className="min-w-full divide-y divide-secondary-200 table-fixed">
                     <thead className="bg-blue-50 border-b-2 border-blue-200">
                       <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
@@ -283,86 +330,54 @@ export default function Home() {
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                           最終更新日
                         </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
-                  作成者
-                </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                          作成者
+                        </th>
                         <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
                           操作
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-secondary-200">
-                      {filteredWorkflows.length > 0 ? (
-                        // ワークフローをグループ化して表示
-                        (() => {
-                          // 改善前のワークフローと改善後のワークフローをマッピング
-                          const workflowGroups = new Map();
+                      {workflowGroups.length > 0 ? (
+                        workflowGroups.map(([groupId, group]) => {
+                          const { original, improved } = group
                           
-                          // 改善後のワークフローを元のワークフローIDでグループ化
-                          filteredWorkflows.forEach(workflow => {
-                            if (workflow.isImproved && workflow.originalId) {
-                              if (!workflowGroups.has(workflow.originalId)) {
-                                workflowGroups.set(workflow.originalId, {
-                                  original: null,
-                                  improved: workflow
-                                });
-                              } else {
-                                workflowGroups.get(workflow.originalId).improved = workflow;
-                              }
-                            }
-                          });
+                          // 表示するワークフロー（元のワークフローを優先）
+                          const displayWorkflow = original || improved
+                          if (!displayWorkflow) return null
                           
-                          // 元のワークフローを追加
-                          filteredWorkflows.forEach(workflow => {
-                            if (!workflow.isImproved) {
-                              if (!workflowGroups.has(workflow.id)) {
-                                workflowGroups.set(workflow.id, {
-                                  original: workflow,
-                                  improved: null
-                                });
-                              } else {
-                                workflowGroups.get(workflow.id).original = workflow;
-                              }
-                            }
-                          });
-                          
-                          // グループ化されたワークフローを表示
-                          return Array.from(workflowGroups.entries()).map(([groupId, group]) => {
-                            const { original, improved } = group;
-                            
-                            // 表示するワークフロー（元のワークフローを優先）
-                            const displayWorkflow = original || improved;
-                            if (!displayWorkflow) return null;
-                            
-                            return (
-                              <tr key={groupId} className="hover:bg-secondary-50">
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div 
-                                    className="text-sm font-medium text-secondary-900 cursor-pointer hover:text-primary-600"
-                                    onClick={() => setActiveWorkflow(displayWorkflow.id)}
-                                  >
-                                    {displayWorkflow.name}
-                                    {improved && (
-                                      <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                                        改善案あり
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div className="text-sm text-secondary-500 line-clamp-2">{displayWorkflow.description}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-secondary-500">{displayWorkflow.steps?.length || 0}ステップ</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-secondary-500">
-                                    {displayWorkflow.updatedAt.toLocaleDateString('ja-JP')}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  {displayWorkflow.createdBy && getUserById ? getUserById(displayWorkflow.createdBy) ? (
-                                    <div className="flex items-center">
+                          return (
+                            <tr key={groupId} className="hover:bg-secondary-50">
+                              <td className="px-6 py-4 whitespace-nowrap bg-blue-50">
+                                <Link 
+                                  href={`/workflows/${displayWorkflow.id}`}
+                                  className="text-sm font-medium text-secondary-900 hover:text-primary-600"
+                                >
+                                  {displayWorkflow.name}
+                                  {improved && (
+                                    <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                      改善案あり
+                                    </span>
+                                  )}
+                                </Link>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-secondary-500 line-clamp-2">{displayWorkflow.description}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap bg-blue-50">
+                                <div className="text-sm text-secondary-500">{displayWorkflow.steps?.length || 0}ステップ</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-secondary-500">
+                                  {displayWorkflow.updatedAt.toLocaleDateString('ja-JP')}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex flex-col">
+                                  {/* 作成者 */}
+                                  {displayWorkflow.createdBy && getUserById && getUserById(displayWorkflow.createdBy) ? (
+                                    <div className="flex items-center mb-2">
                                       <div className="flex-shrink-0 h-8 w-8">
                                         {getUserById(displayWorkflow.createdBy)?.profileImage ? (
                                           <img
@@ -380,62 +395,132 @@ export default function Home() {
                                         <div className="text-sm font-medium text-secondary-900">
                                           {getUserById(displayWorkflow.createdBy)?.fullName}
                                         </div>
+                                        <div className="text-xs text-secondary-500">作成者</div>
                                       </div>
                                     </div>
                                   ) : (
-                                    <div className="text-sm text-secondary-500">未設定</div>
-                                  ) : (
-                                    <div className="text-sm text-secondary-500">未設定</div>
+                                    <div className="text-sm text-secondary-500 mb-2">作成者: 未設定</div>
                                   )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                  <button
-                                    onClick={() => {
-                                      // ワークフローの完了状態を切り替える
-                                      const storedWorkflows = localStorage.getItem('workflows');
-                                      if (storedWorkflows) {
-                                        try {
-                                          const parsedWorkflows = JSON.parse(storedWorkflows);
-                                          const index = parsedWorkflows.findIndex((wf: any) => wf.id === displayWorkflow.id);
-                                          if (index !== -1) {
-                                            const isCompleted = !parsedWorkflows[index].isCompleted;
-                                            parsedWorkflows[index].isCompleted = isCompleted;
-                                            parsedWorkflows[index].completedAt = isCompleted ? new Date() : undefined;
-                                            localStorage.setItem('workflows', JSON.stringify(parsedWorkflows));
+                                  
+                                  {/* 共同編集者 */}
+                                  {(() => {
+                                    // 共同編集者情報を取得
+                                    const storedCollaborators = localStorage.getItem(`workflow_collaborators_${displayWorkflow.id}`);
+                                    const collaborators = storedCollaborators ? JSON.parse(storedCollaborators) : [];
+                                    
+                                    if (collaborators.length > 0) {
+                                      // 最大2人まで表示
+                                      const displayCollaborators = collaborators.slice(0, 2);
+                                      const remainingCount = collaborators.length - 2;
+                                      
+                                      return (
+                                        <div>
+                                          {displayCollaborators.map((collab: any) => {
+                                            const user = getUserById && getUserById(collab.userId);
+                                            if (!user) return null;
                                             
-                                            // 状態を更新
-                                            loadWorkflows();
-                                          }
-                                        } catch (error) {
-                                          console.error('ワークフローの更新エラー:', error);
+                                            return (
+                                              <div key={collab.id} className="flex items-center mb-1">
+                                                <div className="flex-shrink-0 h-6 w-6">
+                                                  {user.profileImage ? (
+                                                    <img
+                                                      className="h-6 w-6 rounded-full"
+                                                      src={user.profileImage}
+                                                      alt={`${user.fullName}のプロフィール画像`}
+                                                    />
+                                                  ) : (
+                                                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
+                                                      {user.fullName.charAt(0)}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                <div className="ml-2">
+                                                  <div className="text-xs font-medium text-secondary-900">
+                                                    {user.fullName}
+                                                  </div>
+                                                  <div className="text-xs text-secondary-500">
+                                                    {collab.permissionType === 'edit' ? '編集者' : '閲覧者'}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                          
+                                          {remainingCount > 0 && (
+                                            <div className="text-xs text-secondary-500 mt-1">
+                                              他 {remainingCount} 名の共同編集者
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    return (
+                                      <div className="text-xs text-secondary-500">
+                                        <button 
+                                          onClick={() => router.push(`/workflows/${displayWorkflow.id}`)}
+                                          className="text-primary-600 hover:text-primary-800"
+                                        >
+                                          + 共同編集者を追加
+                                        </button>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={() => {
+                                    // ワークフローの完了状態を切り替える
+                                    const storedWorkflows = localStorage.getItem('workflows');
+                                    if (storedWorkflows) {
+                                      try {
+                                        const parsedWorkflows = JSON.parse(storedWorkflows);
+                                        const index = parsedWorkflows.findIndex((wf: any) => wf.id === displayWorkflow.id);
+                                        if (index !== -1) {
+                                          const isCompleted = !parsedWorkflows[index].isCompleted;
+                                          parsedWorkflows[index].isCompleted = isCompleted;
+                                          parsedWorkflows[index].completedAt = isCompleted ? new Date() : undefined;
+                                          localStorage.setItem('workflows', JSON.stringify(parsedWorkflows));
+                                          
+                                          // 状態を更新
+                                          loadWorkflows();
                                         }
+                                      } catch (error) {
+                                        console.error('ワークフローの更新エラー:', error);
                                       }
-                                    }}
-                                    className={`${
-                                      displayWorkflow.isCompleted 
-                                        ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                    } px-3 py-1 text-sm rounded transition-colors mr-2`}
-                                  >
-                                    {displayWorkflow.isCompleted ? '完了済み' : '完了'}
-                                  </button>
-                                  <button
-                                    onClick={() => setActiveWorkflow(displayWorkflow.id)}
-                                    className="text-primary-600 hover:text-primary-900 mr-2"
-                                  >
-                                    編集
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteWorkflow(displayWorkflow.id)}
-                                    className="text-red-600 hover:text-red-900"
-                                  >
-                                    削除
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          });
-                        })()
+                                    }
+                                  }}
+                                  className={`${
+                                    displayWorkflow.isCompleted 
+                                      ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                  } px-3 py-1 text-sm rounded transition-colors mr-2`}
+                                >
+                                  {displayWorkflow.isCompleted ? '完了済み' : '完了'}
+                                </button>
+                                <Link
+                                  href={`/workflows/${displayWorkflow.id}`}
+                                  className="text-primary-600 hover:text-primary-900 mr-2"
+                                >
+                                  詳細
+                                </Link>
+                                <button
+                                  onClick={() => setActiveWorkflow(displayWorkflow.id)}
+                                  className="text-primary-600 hover:text-primary-900 mr-2"
+                                >
+                                  編集
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteWorkflow(displayWorkflow.id)}
+                                  className="text-red-600 hover:text-red-900"
+                                >
+                                  削除
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })
                       ) : (
                         <tr>
                           <td colSpan={6} className="px-6 py-10 text-center text-sm text-secondary-500">
@@ -497,9 +582,6 @@ export default function Home() {
                 w => w.originalId === currentWorkflow.id && w.isImproved
               );
             }
-            
-            console.log('Current Workflow:', currentWorkflow);
-            console.log('Related Workflow:', relatedWorkflow);
             
             return {
               id: currentWorkflow.id,
