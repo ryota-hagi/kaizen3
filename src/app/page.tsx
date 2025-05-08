@@ -460,12 +460,9 @@ export default function Home() {
                                                   </div>
                                                 </div>
                                                 <div className="ml-2">
-                                                  <div className="text-xs font-medium text-secondary-900">
-                                                    {user?.fullName || '不明なユーザー'}
-                                                  </div>
-                                                  <div className="text-xs text-secondary-500">
-                                                    {collab.permission_type === 'edit' ? '編集者' : '閲覧者'}
-                                                  </div>
+                                                <div className="text-xs text-secondary-500">
+                                                  {collab.permission_type === 'edit' ? '編集者' : '閲覧者'}
+                                                </div>
                                                 </div>
                                               </div>
                                             );
@@ -473,7 +470,7 @@ export default function Home() {
                                           
                                           {remainingCount > 0 && (
                                             <div className="text-xs text-secondary-500 mt-1">
-                                              他 {remainingCount} 名の共同編集者
+                                              +{remainingCount}
                                             </div>
                                           )}
                                         </div>
