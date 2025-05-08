@@ -15,46 +15,33 @@ export const inviteUser = async (
       return { success: false, message: '認証されていません' };
     }
     
-    // サービスロールキーを使用してRLSをバイパス
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    );
-    
-    // 招待トークンの生成
-    const token = crypto.randomUUID();
-    
-    // 有効期限を設定（7日後）
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-    
-    // invitationsテーブルに招待情報を保存
-    const { data, error } = await supabaseAdmin
-      .from('invitations')
-      .insert({
+    // サーバーサイドAPIを使用して招待を作成
+    const response = await fetch('/api/invitations/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         email: inviteData.email,
-        full_name: inviteData.fullName || '', // 名前を保存
-        company_id: inviteData.companyId,
+        fullName: inviteData.fullName || '',
         role: inviteData.role,
-        token: token,
-        invite_token: token, // 互換性のために両方のカラムに保存
-        invited_by: currentUser.id,
-        expires_at: expiresAt.toISOString(),
-        status: 'pending' // statusは'pending'、'completed'、'expired'のいずれかである必要がある
-      })
-      .select();
+        companyId: inviteData.companyId,
+        invitedBy: currentUser.id
+      }),
+    });
     
-    if (error) {
-      console.error('[Supabase] Error creating invitation:', error);
-      
-      // 既に招待されている場合
-      if (error.code === '23505') {
-        return { success: false, message: 'このメールアドレスは既に招待されています' };
-      }
-      
-      return { success: false, message: '招待の作成に失敗しました' };
+    const result = await response.json();
+    
+    if (!response.ok || !result.success) {
+      console.error('[API] Error creating invitation:', result);
+      return { 
+        success: false, 
+        message: result.message || '招待の作成に失敗しました' 
+      };
     }
+    
+    // 招待トークンを取得
+    const token = result.inviteToken;
     
     // 招待メールの送信（実際のプロジェクトではメール送信APIを使用）
     // ここではダミー処理
@@ -124,55 +111,41 @@ export const verifyInviteToken = async (
   setCompanyId: Dispatch<SetStateAction<string>>
 ): Promise<{valid: boolean; user?: UserInfo; error?: any}> => {
   try {
-    // サービスロールキーを使用してRLSをバイパス
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    );
+    // サーバーサイドAPIを使用して招待を検証
+    const response = await fetch(`/api/invitations/verify?token=${encodeURIComponent(token)}`);
+    const result = await response.json();
     
-    // invitationsテーブルからトークンを検索（tokenまたはinvite_tokenで検索）
-    const { data, error } = await supabaseAdmin
-      .from('invitations')
-      .select('*')
-      .or(`token.eq.${token},invite_token.eq.${token}`)
-      .is('accepted_at', null)
-      .single();
-    
-    if (error || !data) {
-      console.error('[Supabase] Error verifying invite token:', error);
-      return { valid: false, error: '無効な招待トークンです' };
+    if (!response.ok || !result.valid) {
+      console.error('[API] Error verifying invite token:', result);
+      return { 
+        valid: false, 
+        error: result.error || '無効な招待トークンです' 
+      };
     }
     
-    // データを適切な型にキャスト
-    const invitationData = data as unknown as InvitationData;
-    
-    // 有効期限のチェック
-    if (invitationData.expires_at && new Date(invitationData.expires_at) < new Date()) {
-      return { valid: false, error: '招待の有効期限が切れています' };
-    }
+    const invitation = result.invitation;
     
     // 会社IDを設定
-    setCompanyId(invitationData.company_id);
+    setCompanyId(invitation.company_id);
     
     // 招待情報からユーザー情報を作成
     const invitedUser: UserInfo = {
       id: '', // 実際のIDはログイン後に設定される
-      username: invitationData.email.split('@')[0],
-      email: invitationData.email,
-      fullName: invitationData.full_name || '',
-      role: invitationData.role,
+      username: invitation.email.split('@')[0],
+      email: invitation.email,
+      fullName: invitation.full_name || '',
+      role: invitation.role,
       status: '招待中',
       createdAt: new Date().toISOString(),
       lastLogin: '',
       isInvited: true,
       inviteToken: token,
-      companyId: invitationData.company_id
+      companyId: invitation.company_id
     };
     
     return { valid: true, user: invitedUser };
   } catch (error) {
-    console.error('[Supabase] Exception verifying invite token:', error);
+    console.error('[API] Exception verifying invite token:', error);
     return { valid: false, error: '招待の検証中にエラーが発生しました' };
   }
 };
@@ -187,13 +160,6 @@ export const completeInvitation = async (
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>
 ): Promise<boolean> => {
   try {
-    // サービスロールキーを使用してRLSをバイパス
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    );
-    
     const client = supabase();
     
     // 現在のユーザー情報を取得
@@ -204,42 +170,33 @@ export const completeInvitation = async (
       return false;
     }
     
-    // invitationsテーブルを更新
-    const { error: updateError } = await supabaseAdmin
-      .from('invitations')
-      .update({
-        accepted_at: new Date().toISOString(),
-        status: 'completed'
-      })
-      .or(`token.eq.${token},invite_token.eq.${token}`);
+    // サーバーサイドAPIを使用して招待を完了
+    const response = await fetch('/api/invitations/complete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        token,
+        userData,
+        userId: user.id
+      }),
+    });
     
-    if (updateError) {
-      console.error('[Supabase] Error updating invitation:', updateError);
+    const result = await response.json();
+    
+    if (!response.ok || !result.success) {
+      console.error('[API] Error completing invitation:', result);
       return false;
     }
-    
-    // 招待情報を取得（tokenまたはinvite_tokenで検索）
-    const { data, error: getError } = await supabaseAdmin
-      .from('invitations')
-      .select('*')
-      .or(`token.eq.${token},invite_token.eq.${token}`)
-      .single();
-    
-    if (getError || !data) {
-      console.error('[Supabase] Error getting invitation data:', getError);
-      return false;
-    }
-    
-    // データを適切な型にキャスト
-    const invitationData = data as unknown as InvitationData;
     
     // ユーザー情報を更新
     const updatedUserData: Partial<UserInfo> = {
       fullName: userData.fullName,
-      companyId: userData.companyId || invitationData.company_id,
+      companyId: userData.companyId || result.userData.companyId,
       status: 'アクティブ',
       isInvited: false,
-      role: invitationData.role || '一般ユーザー'
+      role: result.userData.role || '一般ユーザー'
     };
     
     // ユーザーメタデータを更新
@@ -249,19 +206,6 @@ export const completeInvitation = async (
         company_id: updatedUserData.companyId,
         role: updatedUserData.role
       }
-    });
-    
-    // app_usersテーブルにユーザー情報を保存
-    const { saveUserToDatabase } = await import('@/lib/supabaseClient');
-    await saveUserToDatabase(user.id, {
-      email: user.email || '',
-      fullName: userData.fullName,
-      role: updatedUserData.role,
-      status: 'アクティブ',
-      companyId: updatedUserData.companyId || '',
-      createdAt: user.created_at,
-      invited_by: invitationData.invited_by,
-      invitation_accepted_at: new Date().toISOString()
     });
     
     // ローカルストレージのユーザー情報を更新
