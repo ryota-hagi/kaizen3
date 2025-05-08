@@ -22,6 +22,7 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [inviteLink, setInviteLink] = useState('')
   
   // 招待処理
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,6 +47,7 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
     setIsSubmitting(true)
     setErrorMessage('')
     setSuccessMessage('')
+    setInviteLink('')
     
     try {
       // 招待処理を実行
@@ -57,6 +59,14 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
       
       if (result.success) {
         setSuccessMessage(result.message || 'ユーザーを招待しました')
+        
+        // 招待リンクを生成して表示
+        if (result.inviteToken) {
+          const baseUrl = window.location.origin;
+          const inviteUrl = `${baseUrl}/auth/accept-invite?token=${result.inviteToken}`;
+          setInviteLink(inviteUrl);
+        }
+        
         setEmail('')
         setRole('一般ユーザー')
         
@@ -100,6 +110,37 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
       {successMessage && (
         <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
           {successMessage}
+        </div>
+      )}
+      
+      {/* 招待リンク */}
+      {inviteLink && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <h3 className="text-sm font-medium text-blue-800 mb-2">招待リンク</h3>
+          <div className="flex items-center">
+            <input
+              type="text"
+              value={inviteLink}
+              readOnly
+              className="flex-1 p-2 text-sm bg-white border border-blue-300 rounded-md"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(inviteLink);
+                alert('招待リンクをクリップボードにコピーしました');
+              }}
+              className="ml-2 p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-blue-600">
+            このリンクを招待したいユーザーに共有してください。リンクは7日間有効です。
+          </p>
         </div>
       )}
       

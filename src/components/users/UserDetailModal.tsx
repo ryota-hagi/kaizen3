@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { UserInfo, Employee } from '@/utils/api'
 
 interface UserDetailModalProps {
@@ -28,7 +28,21 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
   onUpdate,
   generateInviteLink
 }) => {
+  const [copySuccess, setCopySuccess] = useState(false);
+  
   if (!isOpen || !user) return null
+  
+  // 招待リンクを生成
+  const inviteLink = generateInviteLink(user);
+  
+  // クリップボードにコピーする関数
+  const copyToClipboard = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-secondary-500 bg-opacity-75 flex items-center justify-center z-50">
@@ -50,13 +64,52 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         <div className="px-6 py-4">
           <div className="flex items-center mb-6">
             <div className="h-16 w-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-2xl">
-              {user.fullName.charAt(0)}
+              {user.fullName.charAt(0) || user.email.charAt(0)}
             </div>
             <div className="ml-4">
-              <h4 className="text-xl font-medium text-secondary-900">{user.fullName}</h4>
+              <h4 className="text-xl font-medium text-secondary-900">{user.fullName || user.email}</h4>
               <p className="text-secondary-500">{user.email}</p>
+              {user.status === '招待中' && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  招待中
+                </span>
+              )}
             </div>
           </div>
+          
+          {/* 招待リンク表示（招待中のユーザーのみ） */}
+          {user.isInvited && inviteLink && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <h3 className="text-sm font-medium text-blue-800 mb-2">招待リンク</h3>
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  value={inviteLink}
+                  readOnly
+                  className="flex-1 p-2 text-sm bg-white border border-blue-300 rounded-md"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  type="button"
+                  onClick={copyToClipboard}
+                  className="ml-2 p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  {copySuccess ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-blue-600">
+                このリンクを招待したいユーザーに共有してください。リンクは7日間有効です。
+              </p>
+            </div>
+          )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>

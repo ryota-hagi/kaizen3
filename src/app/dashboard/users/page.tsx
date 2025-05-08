@@ -174,8 +174,12 @@ export default function UsersPage() {
     })
   }
   
-  // ダミーの関数（互換性のため）
+  // 招待リンクを生成する関数
   const generateInviteLink = (user: UserInfo) => {
+    if (user.isInvited && user.inviteToken) {
+      const baseUrl = window.location.origin;
+      return `${baseUrl}/auth/accept-invite?token=${user.inviteToken}`;
+    }
     return '';
   }
   
