@@ -32,6 +32,7 @@ export const inviteUser = async (
         company_id: inviteData.companyId,
         role: inviteData.role,
         token: token,
+        invite_token: token, // 互換性のために両方のカラムに保存
         invited_by: currentUser.id,
         expires_at: expiresAt.toISOString()
       })
@@ -117,11 +118,11 @@ export const verifyInviteToken = async (
   try {
     const client = supabase();
     
-    // invitationsテーブルからトークンを検索
+    // invitationsテーブルからトークンを検索（tokenまたはinvite_tokenで検索）
     const { data, error } = await client
       .from('invitations')
       .select('*')
-      .eq('token', token)
+      .or(`token.eq.${token},invite_token.eq.${token}`)
       .is('accepted_at', null)
       .single();
     
@@ -196,11 +197,11 @@ export const completeInvitation = async (
       return false;
     }
     
-    // 招待情報を取得
+    // 招待情報を取得（tokenまたはinvite_tokenで検索）
     const { data, error: getError } = await client
       .from('invitations')
       .select('*')
-      .eq('token', token)
+      .or(`token.eq.${token},invite_token.eq.${token}`)
       .single();
     
     if (getError || !data) {
