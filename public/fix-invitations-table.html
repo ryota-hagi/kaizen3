@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>invitationsテーブルの修正</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .container {
+      background-color: #f9f9f9;
+      border-radius: 5px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .summary {
+      background-color: #f0f0f0;
+      border-left: 4px solid #333;
+      padding: 10px 15px;
+      margin-bottom: 20px;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 5px;
+      display: none;
+    }
+    .success {
+      background-color: #dff0d8;
+      border: 1px solid #d6e9c6;
+      color: #3c763d;
+    }
+    .error {
+      background-color: #f2dede;
+      border: 1px solid #ebccd1;
+      color: #a94442;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>invitationsテーブルの修正</h1>
+  
+  <div class="container">
+    <div class="summary">
+      <p>このツールは、invitationsテーブルに不足しているカラムを追加し、カラム名の不一致を修正します。</p>
+    </div>
+    
+    <h2>修正内容</h2>
+    <ul>
+      <li>invited_byカラムの追加（招待者のUUID）</li>
+      <li>expires_atカラムの追加（有効期限）</li>
+      <li>accepted_atカラムの追加（承認日時）</li>
+      <li>tokenカラムの追加（invite_tokenと同期）</li>
+      <li>既存のinvite_tokenの値をtokenにコピー</li>
+      <li>tokenにUNIQUE制約を追加</li>
+      <li>必要なインデックスの追加</li>
+    </ul>
+    
+    <button id="fixButton">invitationsテーブルを修正</button>
+    
+    <div id="resultContainer" class="result">
+      <h3 id="resultTitle">処理結果</h3>
+      <p id="resultMessage"></p>
+      <pre id="resultDetails"></pre>
+    </div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const fixButton = document.getElementById('fixButton');
+      const resultContainer = document.getElementById('resultContainer');
+      const resultTitle = document.getElementById('resultTitle');
+      const resultMessage = document.getElementById('resultMessage');
+      const resultDetails = document.getElementById('resultDetails');
+      
+      fixButton.addEventListener('click', async function() {
+        fixButton.disabled = true;
+        fixButton.textContent = '処理中...';
+        
+        try {
+          // SQLファイルを読み込む
+          const response = await fetch('/api/fix-invitations-table');
+          const data = await response.json();
+          
+          resultContainer.style.display = 'block';
+          
+          if (data.success) {
+            resultContainer.className = 'result success';
+            resultTitle.textContent = '成功';
+            resultMessage.textContent = data.message || 'invitationsテーブルが正常に修正されました。';
+            if (data.details) {
+              resultDetails.textContent = JSON.stringify(data.details, null, 2);
+            }
+          } else {
+            resultContainer.className = 'result error';
+            resultTitle.textContent = 'エラー';
+            resultMessage.textContent = data.message || 'invitationsテーブルの修正中にエラーが発生しました。';
+            if (data.error) {
+              resultDetails.textContent = JSON.stringify(data.error, null, 2);
+            }
+          }
+        } catch (error) {
+          resultContainer.style.display = 'block';
+          resultContainer.className = 'result error';
+          resultTitle.textContent = 'エラー';
+          resultMessage.textContent = '処理中にエラーが発生しました。';
+          resultDetails.textContent = error.toString();
+        } finally {
+          fixButton.disabled = false;
+          fixButton.textContent = 'invitationsテーブルを修正';
+        }
+      });
+    });
+  </script>
+</body>
+</html>
