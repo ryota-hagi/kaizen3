@@ -81,7 +81,15 @@ export async function POST(request: Request) {
                 access_level: "user",
                 is_public: false,
                 version: 1,
-                collaborators: null
+                collaborators: [
+                  {
+                    id: "collab-001",
+                    user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
+                    permission_type: "edit",
+                    added_at: "2025-05-08 13:52:34.999092+00",
+                    added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
+                  }
+                ]
               },
               {
                 id: "00000000-0000-0000-0000-000000000002",
@@ -99,7 +107,15 @@ export async function POST(request: Request) {
                 access_level: "company",
                 is_public: true,
                 version: 1,
-                collaborators: null
+                collaborators: [
+                  {
+                    id: "collab-002",
+                    user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
+                    permission_type: "view",
+                    added_at: "2025-05-08 13:52:34.999092+00",
+                    added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
+                  }
+                ]
               }
             ];
           }
