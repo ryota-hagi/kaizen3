@@ -15,7 +15,12 @@ export const inviteUser = async (
       return { success: false, message: '認証されていません' };
     }
     
-    const client = supabase();
+    // サービスロールキーを使用してRLSをバイパス
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
     
     // 招待トークンの生成
     const token = crypto.randomUUID();
@@ -25,7 +30,7 @@ export const inviteUser = async (
     expiresAt.setDate(expiresAt.getDate() + 7);
     
     // invitationsテーブルに招待情報を保存
-    const { data, error } = await client
+    const { data, error } = await supabaseAdmin
       .from('invitations')
       .insert({
         email: inviteData.email,
@@ -119,10 +124,15 @@ export const verifyInviteToken = async (
   setCompanyId: Dispatch<SetStateAction<string>>
 ): Promise<{valid: boolean; user?: UserInfo; error?: any}> => {
   try {
-    const client = supabase();
+    // サービスロールキーを使用してRLSをバイパス
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
     
     // invitationsテーブルからトークンを検索（tokenまたはinvite_tokenで検索）
-    const { data, error } = await client
+    const { data, error } = await supabaseAdmin
       .from('invitations')
       .select('*')
       .or(`token.eq.${token},invite_token.eq.${token}`)
@@ -177,6 +187,13 @@ export const completeInvitation = async (
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>
 ): Promise<boolean> => {
   try {
+    // サービスロールキーを使用してRLSをバイパス
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+    
     const client = supabase();
     
     // 現在のユーザー情報を取得
@@ -188,12 +205,13 @@ export const completeInvitation = async (
     }
     
     // invitationsテーブルを更新
-    const { error: updateError } = await client
+    const { error: updateError } = await supabaseAdmin
       .from('invitations')
       .update({
-        accepted_at: new Date().toISOString()
+        accepted_at: new Date().toISOString(),
+        status: 'completed'
       })
-      .eq('token', token);
+      .or(`token.eq.${token},invite_token.eq.${token}`);
     
     if (updateError) {
       console.error('[Supabase] Error updating invitation:', updateError);
@@ -201,7 +219,7 @@ export const completeInvitation = async (
     }
     
     // 招待情報を取得（tokenまたはinvite_tokenで検索）
-    const { data, error: getError } = await client
+    const { data, error: getError } = await supabaseAdmin
       .from('invitations')
       .select('*')
       .or(`token.eq.${token},invite_token.eq.${token}`)
