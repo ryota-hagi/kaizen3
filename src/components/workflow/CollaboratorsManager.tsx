@@ -164,27 +164,38 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
         <h3 className="font-medium mb-2">現在の共同編集者</h3>
         {collaborators.length > 0 ? (
           <ul className="divide-y">
-            {collaborators.map(collab => (
-              <li key={collab.id} className="py-2 flex justify-between items-center">
-                <div>
-                  <span className="font-medium">{collab.user?.fullName || '不明なユーザー'}</span>
-                  <span className="ml-2 text-sm text-gray-500">{collab.user?.email}</span>
-                  <span className={`ml-2 px-2 py-0.5 text-xs rounded ${
-                    collab.permissionType === 'edit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                  }`}>
-                    {collab.permissionType === 'edit' ? '編集可能' : '閲覧のみ'}
-                  </span>
-                </div>
-                {(isCreator || currentUser?.role === '管理者') && (
-                  <button
-                    onClick={() => onRemoveCollaborator(collab.id)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    削除
-                  </button>
-                )}
-              </li>
-            ))}
+            {collaborators.map(collab => {
+              // app_usersテーブルからユーザー情報を取得
+              const collaboratorUser = appUsers.find(user => user.id === collab.userId);
+              
+              return (
+                <li key={collab.id} className="py-2 flex justify-between items-center">
+                  <div>
+                    <span className="font-medium">
+                      {collaboratorUser ? 
+                        (collaboratorUser.full_name || collaboratorUser.username) : 
+                        '不明なユーザー'}
+                    </span>
+                    <span className="ml-2 text-sm text-gray-500">
+                      {collaboratorUser?.email}
+                    </span>
+                    <span className={`ml-2 px-2 py-0.5 text-xs rounded ${
+                      collab.permissionType === 'edit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {collab.permissionType === 'edit' ? '編集可能' : '閲覧のみ'}
+                    </span>
+                  </div>
+                  {(isCreator || currentUser?.role === '管理者') && (
+                    <button
+                      onClick={() => onRemoveCollaborator(collab.id)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      削除
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-gray-500">共同編集者はまだいません</p>

@@ -86,69 +86,47 @@ export default function WorkflowsPage() {
     }
   }, [])
   
-  // ワークフローを取得（実際のアプリではAPIから取得）
-  const loadWorkflows = () => {
-    // ローカルストレージからワークフローを取得
-    const storedWorkflows = localStorage.getItem('workflows')
-    if (storedWorkflows) {
-      try {
-        const parsedWorkflows = JSON.parse(storedWorkflows)
-        // 日付文字列をDateオブジェクトに変換
-        const workflowsWithDates = parsedWorkflows.map((wf: any) => ({
-          ...wf,
-          createdAt: new Date(wf.createdAt),
-          updatedAt: new Date(wf.updatedAt)
-        }))
-        
-        // 作成者情報が設定されていないワークフローに、デフォルトの作成者情報を設定
-        const workflowsWithCreator = workflowsWithDates.map((wf: Workflow) => {
-          if (!wf.createdBy && users.length > 0) {
-            return {
-              ...wf,
-              createdBy: users[0].id // 最初のユーザーを作成者として設定
-            }
-          }
-          return wf
-        })
-        
-        // 作成者情報が更新されたワークフローをローカルストレージに保存
-        const hasUpdates = workflowsWithCreator.some((wf: Workflow, index: number) => 
-          !parsedWorkflows[index].createdBy && wf.createdBy
-        )
-        
-        if (hasUpdates) {
-          localStorage.setItem('workflows', JSON.stringify(workflowsWithCreator))
-        }
-        
-        // 最新順にソート
-        const sortedWorkflows = workflowsWithCreator
-          .sort((a: Workflow, b: Workflow) => b.updatedAt.getTime() - a.updatedAt.getTime())
-          
-        setWorkflows(sortedWorkflows)
-      } catch (error) {
-        console.error('ワークフローの解析エラー:', error)
+  // Supabaseからワークフローを取得
+  const loadWorkflows = async () => {
+    try {
+      // APIを呼び出してワークフローを取得
+      const response = await fetch('/api/workflows');
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
+      
+      const data = await response.json();
+      console.log('Fetched workflows from Supabase:', data);
+      
+      // Supabaseのカラム名をアプリケーションの命名規則に合わせて変換
+      const formattedWorkflows: Workflow[] = data.map((wf: any) => ({
+        id: wf.id,
+        name: wf.name,
+        description: wf.description,
+        steps: wf.steps || [],
+        createdAt: new Date(wf.created_at),
+        updatedAt: new Date(wf.updated_at),
+        isImproved: wf.is_improved || false,
+        originalId: wf.original_id || undefined,
+        isCompleted: wf.is_completed || false,
+        completedAt: wf.completed_at ? new Date(wf.completed_at) : undefined,
+        createdBy: wf.created_by
+      }));
+      
+      // 最新順にソート
+      const sortedWorkflows = formattedWorkflows
+        .sort((a: Workflow, b: Workflow) => b.updatedAt.getTime() - a.updatedAt.getTime());
+        
+      setWorkflows(sortedWorkflows);
+    } catch (error) {
+      console.error('ワークフローの取得エラー:', error);
     }
-  }
+  };
 
   // 初回レンダリング時とユーザーデータが変更されたときにワークフローリストを更新
   useEffect(() => {
-    loadWorkflows()
-  }, [users]) // usersが変更されたときにも再実行
-
-  // ローカルストレージの変更を監視
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'workflows') {
-        loadWorkflows()
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-    }
-  }, [])
+    loadWorkflows();
+  }, [currentUser]); // currentUserが変更されたときにも再実行
 
   // 検索条件と完了状態に一致するワークフローをフィルタリング
   const filteredWorkflows = workflows.filter(workflow => {
@@ -303,24 +281,16 @@ export default function WorkflowsPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-col">
                           {/* 作成者 */}
-                          {displayWorkflow.createdBy && getUserById(displayWorkflow.createdBy) ? (
+                          {displayWorkflow.createdBy ? (
                             <div className="flex items-center mb-2">
                               <div className="flex-shrink-0 h-8 w-8">
-                                {getUserById(displayWorkflow.createdBy)?.profileImage ? (
-                                  <img
-                                    className="h-8 w-8 rounded-full"
-                                    src={getUserById(displayWorkflow.createdBy)?.profileImage}
-                                    alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
-                                  />
-                                ) : (
-                                  <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-800">
-                                    {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
-                                  </div>
-                                )}
+                                <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-800">
+                                  {getUserById(displayWorkflow.createdBy)?.fullName?.charAt(0) || '?'}
+                                </div>
                               </div>
                               <div className="ml-2">
                                 <div className="text-sm font-medium text-secondary-900">
-                                  {getUserById(displayWorkflow.createdBy)?.fullName}
+                                  {getUserById(displayWorkflow.createdBy)?.fullName || '不明なユーザー'}
                                 </div>
                                 <div className="text-xs text-secondary-500">作成者</div>
                               </div>
@@ -332,8 +302,7 @@ export default function WorkflowsPage() {
                           {/* 共同編集者 */}
                           {(() => {
                             // 共同編集者情報を取得
-                            const storedCollaborators = localStorage.getItem(`workflow_collaborators_${displayWorkflow.id}`);
-                            const collaborators = storedCollaborators ? JSON.parse(storedCollaborators) : [];
+                            const collaborators = displayWorkflow.collaborators || [];
                             
                             if (collaborators.length > 0) {
                               // 最大2人まで表示
@@ -342,36 +311,23 @@ export default function WorkflowsPage() {
                               
                               return (
                                 <div>
-                                  {displayCollaborators.map((collab: any) => {
-                                    const user = getUserById(collab.userId);
-                                    if (!user) return null;
-                                    
-                                    return (
-                                      <div key={collab.id} className="flex items-center mb-1">
-                                        <div className="flex-shrink-0 h-6 w-6">
-                                          {user.profileImage ? (
-                                            <img
-                                              className="h-6 w-6 rounded-full"
-                                              src={user.profileImage}
-                                              alt={`${user.fullName}のプロフィール画像`}
-                                            />
-                                          ) : (
-                                            <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
-                                              {user.fullName.charAt(0)}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="ml-2">
-                                          <div className="text-xs font-medium text-secondary-900">
-                                            {user.fullName}
-                                          </div>
-                                          <div className="text-xs text-secondary-500">
-                                            {collab.permissionType === 'edit' ? '編集者' : '閲覧者'}
-                                          </div>
+                                  {displayCollaborators.map((collab: any) => (
+                                    <div key={collab.id} className="flex items-center mb-1">
+                                      <div className="flex-shrink-0 h-6 w-6">
+                                        <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
+                                          {getUserById(collab.user_id)?.fullName?.charAt(0) || '?'}
                                         </div>
                                       </div>
-                                    );
-                                  })}
+                                      <div className="ml-2">
+                                        <div className="text-xs font-medium text-secondary-900">
+                                          {getUserById(collab.user_id)?.fullName || '不明なユーザー'}
+                                        </div>
+                                        <div className="text-xs text-secondary-500">
+                                          {collab.permission_type === 'edit' ? '編集者' : '閲覧者'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
                                   
                                   {remainingCount > 0 && (
                                     <div className="text-xs text-secondary-500 mt-1">
@@ -397,25 +353,38 @@ export default function WorkflowsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             // ワークフローの完了状態を切り替える
-                            const storedWorkflows = localStorage.getItem('workflows');
-                            if (storedWorkflows) {
-                              try {
-                                const parsedWorkflows = JSON.parse(storedWorkflows);
-                                const index = parsedWorkflows.findIndex((wf: any) => wf.id === displayWorkflow.id);
-                                if (index !== -1) {
-                                  const isCompleted = !parsedWorkflows[index].isCompleted;
-                                  parsedWorkflows[index].isCompleted = isCompleted;
-                                  parsedWorkflows[index].completedAt = isCompleted ? new Date() : undefined;
-                                  localStorage.setItem('workflows', JSON.stringify(parsedWorkflows));
-                                  
-                                  // 状態を更新
-                                  loadWorkflows();
-                                }
-                              } catch (error) {
-                                console.error('ワークフローの更新エラー:', error);
+                            try {
+                              const isCompleted = !displayWorkflow.isCompleted;
+                              
+                              // APIを呼び出して更新
+                              const response = await fetch('/api/workflows', {
+                                method: 'PUT',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                  id: displayWorkflow.id,
+                                  isCompleted: isCompleted,
+                                  // 他の必要なフィールド
+                                  name: displayWorkflow.name,
+                                  description: displayWorkflow.description,
+                                  steps: displayWorkflow.steps,
+                                  isImproved: displayWorkflow.isImproved,
+                                  originalId: displayWorkflow.originalId
+                                }),
+                              });
+                              
+                              if (!response.ok) {
+                                throw new Error(`API error: ${response.status}`);
                               }
+                              
+                              // 状態を更新
+                              loadWorkflows();
+                            } catch (error) {
+                              console.error('ワークフローの更新エラー:', error);
+                              alert('ワークフローの更新に失敗しました');
                             }
                           }}
                           className={`${
