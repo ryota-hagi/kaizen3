@@ -135,26 +135,15 @@ export default function Home() {
   // Supabaseからワークフローを取得
   const loadWorkflows = async () => {
     try {
-      // Supabaseクライアントを使用してワークフローを取得
+      // MCPを使用してワークフローを取得
       const response = await fetch('/api/workflows/supabase-mcp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          operation: 'execute_sql',
-          params: {
-            query: `
-              SELECT w.*,
-                (
-                  SELECT json_agg(c.*)
-                  FROM workflow_collaborators c
-                  WHERE c.workflow_id = w.id
-                ) as collaborators
-              FROM workflows w
-              ORDER BY w.updated_at DESC
-            `
-          }
+          operation: 'get_workflows',
+          params: {}
         }),
       });
       
@@ -218,16 +207,16 @@ export default function Home() {
   // ワークフローを削除
   const handleDeleteWorkflow = async (id: string) => {
     try {
-      // Supabaseクライアントを使用して削除
+      // MCPを使用して削除
       const response = await fetch('/api/workflows/supabase-mcp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          operation: 'execute_sql',
+          operation: 'delete_workflow',
           params: {
-            query: `DELETE FROM workflows WHERE id = '${id}' RETURNING id`
+            id: id
           }
         }),
       });
@@ -498,24 +487,17 @@ export default function Home() {
                                       const isCompleted = !displayWorkflow.isCompleted;
                                       const completedAt = isCompleted ? new Date().toISOString() : null;
                                       
-                                      // Supabaseクライアントを使用して更新
+                                      // MCPを使用して更新
                                       const response = await fetch('/api/workflows/supabase-mcp', {
                                         method: 'POST',
                                         headers: {
                                           'Content-Type': 'application/json',
                                         },
                                         body: JSON.stringify({
-                                          operation: 'execute_sql',
+                                          operation: 'update_workflow_completion',
                                           params: {
-                                            query: `
-                                              UPDATE workflows 
-                                              SET 
-                                                is_completed = ${isCompleted}, 
-                                                completed_at = ${isCompleted ? `'${completedAt}'` : 'NULL'},
-                                                updated_at = NOW()
-                                              WHERE id = '${displayWorkflow.id}'
-                                              RETURNING *
-                                            `
+                                            id: displayWorkflow.id,
+                                            isCompleted: isCompleted
                                           }
                                         }),
                                       });

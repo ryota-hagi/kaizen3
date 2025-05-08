@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
 
 export async function POST(request: Request) {
   try {
@@ -10,85 +9,75 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '操作タイプが指定されていません' }, { status: 400 });
     }
     
-    const client = supabase();
     let result;
     
     switch (operation) {
       case 'execute_sql':
-        // SQLクエリを実行
-        if (params.query.toLowerCase().includes('select')) {
-          // SELECTクエリの場合
-          const { data, error } = await client.rpc('execute_sql', { 
-            sql_query: params.query 
-          });
-          
-          if (error) {
-            throw new Error(`SQL実行エラー: ${error.message}`);
+        // MCPを使用してSupabaseにアクセス
+        result = await use_mcp_tool({
+          server_name: 'github.com/supabase-community/supabase-mcp',
+          tool_name: 'execute_sql',
+          arguments: {
+            project_id: 'czuedairowlwfgbjmfbg',
+            query: params.query
           }
-          
-          result = data;
-        } else if (params.query.toLowerCase().includes('update')) {
-          // UPDATEクエリの場合
-          // ワークフローの更新
-          if (params.query.toLowerCase().includes('workflows')) {
-            const matches = params.query.match(/id\s*=\s*'([^']+)'/i);
-            const isCompletedMatch = params.query.match(/is_completed\s*=\s*(true|false)/i);
-            
-            if (matches && matches[1] && isCompletedMatch && isCompletedMatch[1]) {
-              const id = matches[1];
-              const isCompleted = isCompletedMatch[1] === 'true';
-              const completedAt = isCompleted ? new Date().toISOString() : null;
-              
-              const { data, error } = await client
-                .from('workflows')
-                .update({
-                  is_completed: isCompleted,
-                  completed_at: completedAt,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', id)
-                .select();
-                
-              if (error) {
-                throw new Error(`ワークフロー更新エラー: ${error.message}`);
-              }
-              
-              result = data;
-            } else {
-              throw new Error('ワークフローIDまたは完了状態が見つかりません');
-            }
-          } else {
-            throw new Error('サポートされていないUPDATEクエリです');
+        });
+        break;
+        
+      case 'get_workflows':
+        // ワークフロー一覧を取得
+        result = await use_mcp_tool({
+          server_name: 'github.com/supabase-community/supabase-mcp',
+          tool_name: 'execute_sql',
+          arguments: {
+            project_id: 'czuedairowlwfgbjmfbg',
+            query: `
+              SELECT w.*,
+                (
+                  SELECT json_agg(c.*)
+                  FROM workflow_collaborators c
+                  WHERE c.workflow_id = w.id
+                ) as collaborators
+              FROM workflows w
+              ORDER BY w.updated_at DESC
+            `
           }
-        } else if (params.query.toLowerCase().includes('delete')) {
-          // DELETEクエリの場合
-          // ワークフローの削除
-          if (params.query.toLowerCase().includes('workflows')) {
-            const matches = params.query.match(/id\s*=\s*'([^']+)'/i);
-            
-            if (matches && matches[1]) {
-              const id = matches[1];
-              
-              const { data, error } = await client
-                .from('workflows')
-                .delete()
-                .eq('id', id)
-                .select();
-                
-              if (error) {
-                throw new Error(`ワークフロー削除エラー: ${error.message}`);
-              }
-              
-              result = data;
-            } else {
-              throw new Error('ワークフローIDが見つかりません');
-            }
-          } else {
-            throw new Error('サポートされていないDELETEクエリです');
+        });
+        break;
+        
+      case 'update_workflow_completion':
+        // ワークフローの完了状態を更新
+        const { id, isCompleted } = params;
+        const completedAt = isCompleted ? new Date().toISOString() : null;
+        
+        result = await use_mcp_tool({
+          server_name: 'github.com/supabase-community/supabase-mcp',
+          tool_name: 'execute_sql',
+          arguments: {
+            project_id: 'czuedairowlwfgbjmfbg',
+            query: `
+              UPDATE workflows 
+              SET 
+                is_completed = ${isCompleted}, 
+                completed_at = ${isCompleted ? `'${completedAt}'` : 'NULL'},
+                updated_at = NOW()
+              WHERE id = '${id}'
+              RETURNING *
+            `
           }
-        } else {
-          throw new Error('サポートされていないSQLクエリです');
-        }
+        });
+        break;
+        
+      case 'delete_workflow':
+        // ワークフローを削除
+        result = await use_mcp_tool({
+          server_name: 'github.com/supabase-community/supabase-mcp',
+          tool_name: 'execute_sql',
+          arguments: {
+            project_id: 'czuedairowlwfgbjmfbg',
+            query: `DELETE FROM workflows WHERE id = '${params.id}' RETURNING id`
+          }
+        });
         break;
         
       default:
@@ -97,9 +86,19 @@ export async function POST(request: Request) {
     
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Supabase操作エラー:', error);
+    console.error('Supabase MCP操作エラー:', error);
     return NextResponse.json({ 
-      error: `Supabase操作に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}` 
+      error: `Supabase MCP操作に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}` 
     }, { status: 500 });
   }
+}
+
+// MCPツールを使用するためのヘルパー関数
+async function use_mcp_tool({ server_name, tool_name, arguments: args }: {
+  server_name: string;
+  tool_name: string;
+  arguments: any;
+}) {
+  // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
+  return await global.use_mcp_tool(server_name, tool_name, args);
 }
