@@ -301,30 +301,99 @@ export default function WorkflowsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {displayWorkflow.createdBy && getUserById(displayWorkflow.createdBy) ? (
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-8 w-8">
-                              {getUserById(displayWorkflow.createdBy)?.profileImage ? (
-                                <img
-                                  className="h-8 w-8 rounded-full"
-                                  src={getUserById(displayWorkflow.createdBy)?.profileImage}
-                                  alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
-                                />
-                              ) : (
-                                <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-800">
-                                  {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
+                        <div className="flex flex-col">
+                          {/* 作成者 */}
+                          {displayWorkflow.createdBy && getUserById(displayWorkflow.createdBy) ? (
+                            <div className="flex items-center mb-2">
+                              <div className="flex-shrink-0 h-8 w-8">
+                                {getUserById(displayWorkflow.createdBy)?.profileImage ? (
+                                  <img
+                                    className="h-8 w-8 rounded-full"
+                                    src={getUserById(displayWorkflow.createdBy)?.profileImage}
+                                    alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
+                                  />
+                                ) : (
+                                  <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-800">
+                                    {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="ml-2">
+                                <div className="text-sm font-medium text-secondary-900">
+                                  {getUserById(displayWorkflow.createdBy)?.fullName}
                                 </div>
-                              )}
-                            </div>
-                            <div className="ml-2">
-                              <div className="text-sm font-medium text-secondary-900">
-                                {getUserById(displayWorkflow.createdBy)?.fullName}
+                                <div className="text-xs text-secondary-500">作成者</div>
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="text-sm text-secondary-500">未設定</div>
-                        )}
+                          ) : (
+                            <div className="text-sm text-secondary-500 mb-2">作成者: 未設定</div>
+                          )}
+                          
+                          {/* 共同編集者 */}
+                          {(() => {
+                            // 共同編集者情報を取得
+                            const storedCollaborators = localStorage.getItem(`workflow_collaborators_${displayWorkflow.id}`);
+                            const collaborators = storedCollaborators ? JSON.parse(storedCollaborators) : [];
+                            
+                            if (collaborators.length > 0) {
+                              // 最大2人まで表示
+                              const displayCollaborators = collaborators.slice(0, 2);
+                              const remainingCount = collaborators.length - 2;
+                              
+                              return (
+                                <div>
+                                  {displayCollaborators.map((collab: any) => {
+                                    const user = getUserById(collab.userId);
+                                    if (!user) return null;
+                                    
+                                    return (
+                                      <div key={collab.id} className="flex items-center mb-1">
+                                        <div className="flex-shrink-0 h-6 w-6">
+                                          {user.profileImage ? (
+                                            <img
+                                              className="h-6 w-6 rounded-full"
+                                              src={user.profileImage}
+                                              alt={`${user.fullName}のプロフィール画像`}
+                                            />
+                                          ) : (
+                                            <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
+                                              {user.fullName.charAt(0)}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="ml-2">
+                                          <div className="text-xs font-medium text-secondary-900">
+                                            {user.fullName}
+                                          </div>
+                                          <div className="text-xs text-secondary-500">
+                                            {collab.permissionType === 'edit' ? '編集者' : '閲覧者'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  
+                                  {remainingCount > 0 && (
+                                    <div className="text-xs text-secondary-500 mt-1">
+                                      他 {remainingCount} 名の共同編集者
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div className="text-xs text-secondary-500">
+                                <button 
+                                  onClick={() => router.push(`/workflows/${displayWorkflow.id}`)}
+                                  className="text-primary-600 hover:text-primary-800"
+                                >
+                                  + 共同編集者を追加
+                                </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button

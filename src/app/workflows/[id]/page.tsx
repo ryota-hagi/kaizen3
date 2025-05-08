@@ -21,6 +21,7 @@ const Draggable = dynamic(
 import { DashboardLayout } from '../../../components/layouts/DashboardLayout'
 import { WorkflowEditor } from '../../../components/workflow/WorkflowEditor'
 import { ChatInterface } from '../../../components/chat/ChatInterface'
+import { CollaboratorsManager } from '../../../components/workflow/CollaboratorsManager'
 import { WorkflowContext, WorkflowContextProvider } from '../../../contexts/WorkflowContext'
 
 interface WorkflowStep {
@@ -44,6 +45,9 @@ interface Workflow {
   originalId?: string
   isCompleted?: boolean
   completedAt?: Date
+  createdBy?: string
+  accessLevel?: string
+  is_public?: boolean
 }
 
 export default function WorkflowDetailPage() {
@@ -254,7 +258,86 @@ export default function WorkflowDetailPage() {
               <p className="text-secondary-600">{workflow.description}</p>
             </div>
             
-            <div className="bg-white rounded-lg shadow p-6">
+            {/* 共同編集者管理セクション */}
+            <CollaboratorsManager
+              workflowId={workflow.id}
+              createdBy={workflow.createdBy || ''}
+              accessLevel={workflow.accessLevel || 'user'}
+              onAccessLevelChange={async (newLevel) => {
+                try {
+                  // ローカルストレージからワークフローを取得
+                  const storedWorkflows = localStorage.getItem('workflows');
+                  if (storedWorkflows) {
+                    const parsedWorkflows = JSON.parse(storedWorkflows);
+                    const index = parsedWorkflows.findIndex((wf: any) => wf.id === workflow.id);
+                    if (index !== -1) {
+                      parsedWorkflows[index].accessLevel = newLevel;
+                      localStorage.setItem('workflows', JSON.stringify(parsedWorkflows));
+                      
+                      // 状態を更新
+                      setWorkflow({
+                        ...workflow,
+                        accessLevel: newLevel
+                      });
+                      return true;
+                    }
+                  }
+                  return false;
+                } catch (error) {
+                  console.error('アクセスレベル更新エラー:', error);
+                  return false;
+                }
+              }}
+              onAddCollaborator={async (userId, permissionType) => {
+                try {
+                  // 共同編集者を追加する処理
+                  // 実際のアプリではAPIを呼び出す
+                  const collaboratorId = `collab-${Date.now()}`;
+                  const newCollaborator = {
+                    id: collaboratorId,
+                    workflowId: workflow.id,
+                    userId,
+                    permissionType,
+                    addedAt: new Date(),
+                    addedBy: workflow.createdBy
+                  };
+                  
+                  // ローカルストレージに保存
+                  const storedCollaborators = localStorage.getItem(`workflow_collaborators_${workflow.id}`);
+                  let collaborators = storedCollaborators ? JSON.parse(storedCollaborators) : [];
+                  collaborators.push(newCollaborator);
+                  localStorage.setItem(`workflow_collaborators_${workflow.id}`, JSON.stringify(collaborators));
+                  
+                  return true;
+                } catch (error) {
+                  console.error('共同編集者追加エラー:', error);
+                  return false;
+                }
+              }}
+              onRemoveCollaborator={async (collaboratorId) => {
+                try {
+                  // 共同編集者を削除する処理
+                  const storedCollaborators = localStorage.getItem(`workflow_collaborators_${workflow.id}`);
+                  if (storedCollaborators) {
+                    let collaborators = JSON.parse(storedCollaborators);
+                    collaborators = collaborators.filter((c: any) => c.id !== collaboratorId);
+                    localStorage.setItem(`workflow_collaborators_${workflow.id}`, JSON.stringify(collaborators));
+                    return true;
+                  }
+                  return false;
+                } catch (error) {
+                  console.error('共同編集者削除エラー:', error);
+                  return false;
+                }
+              }}
+              collaborators={(() => {
+                // 共同編集者情報を取得
+                const storedCollaborators = localStorage.getItem(`workflow_collaborators_${workflow.id}`);
+                return storedCollaborators ? JSON.parse(storedCollaborators) : [];
+              })()}
+            />
+            
+            <div className="bg-white rounded-lg shadow p-6 mt-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-secondary-900">
                   業務フロー詳細
