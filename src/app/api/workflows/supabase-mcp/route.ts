@@ -36,90 +36,30 @@ export async function POST(request: Request) {
         
       case 'get_workflows':
         try {
-          // 認証情報がある場合は直接Supabaseクライアントを使用
-          if (user) {
-            console.log('認証情報を使用してワークフローを取得します');
-            const { data: workflows, error: workflowsError } = await supabaseClient
-              .from('workflows')
-              .select(`
-                *,
-                collaborators:workflow_collaborators(
-                  id,
-                  user_id,
-                  permission_type,
-                  added_at,
-                  added_by
-                )
-              `)
-              .order('updated_at', { ascending: false });
-              
-            if (workflowsError) {
-              console.error('ワークフロー取得エラー:', workflowsError);
-              // テンプレートリテラルではなく文字列連結を使用
-              throw new Error('ワークフロー取得エラー: ' + workflowsError.message);
-            }
+          // 認証状態に関わらずSupabaseクライアントを使用してワークフローを取得
+          // RLSポリシーによってアクセス制御が行われる
+          console.log('Supabaseクライアントを使用してワークフローを取得します');
+          const { data: workflows, error: workflowsError } = await supabaseClient
+            .from('workflows')
+            .select(`
+              *,
+              collaborators:workflow_collaborators(
+                id,
+                user_id,
+                permission_type,
+                added_at,
+                added_by
+              )
+            `)
+            .order('updated_at', { ascending: false });
             
-            result = workflows;
-          } else {
-            // 認証情報がない場合はRLSを無効化してデータを取得
-            console.log('RLSを無効化してデータを取得します');
-            
-            // サンプルデータを返す
-            result = [
-              {
-                id: "00000000-0000-0000-0000-000000000001",
-                name: "サンプル業務フロー1",
-                description: "これはサンプル業務フローです",
-                steps: [{"title":"ステップ1","description":"最初のステップです"}],
-                is_improved: false,
-                original_id: null,
-                is_completed: false,
-                completed_at: null,
-                created_at: "2025-05-08 13:52:34.999092+00",
-                updated_at: "2025-05-08 13:52:34.999092+00",
-                created_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                company_id: "KZ-6PIFLNW",
-                access_level: "user",
-                is_public: false,
-                version: 1,
-                collaborators: [
-                  {
-                    id: "collab-001",
-                    user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                    permission_type: "edit",
-                    added_at: "2025-05-08 13:52:34.999092+00",
-                    added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
-                  }
-                ]
-              },
-              {
-                id: "00000000-0000-0000-0000-000000000002",
-                name: "サンプル公開業務フロー",
-                description: "これは公開サンプル業務フローです",
-                steps: [{"title":"ステップ1","description":"最初のステップです"}],
-                is_improved: false,
-                original_id: null,
-                is_completed: false,
-                completed_at: null,
-                created_at: "2025-05-08 13:52:34.999092+00",
-                updated_at: "2025-05-08 13:52:34.999092+00",
-                created_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                company_id: "KZ-6PIFLNW",
-                access_level: "company",
-                is_public: true,
-                version: 1,
-                collaborators: [
-                  {
-                    id: "collab-002",
-                    user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                    permission_type: "view",
-                    added_at: "2025-05-08 13:52:34.999092+00",
-                    added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
-                  }
-                ]
-              }
-            ];
+          if (workflowsError) {
+            console.error('ワークフロー取得エラー:', workflowsError);
+            // テンプレートリテラルではなく文字列連結を使用
+            throw new Error('ワークフロー取得エラー: ' + workflowsError.message);
           }
+          
+          result = workflows;
         } catch (error) {
           console.error('ワークフロー取得中にエラーが発生しました:', error);
           return NextResponse.json({ 
