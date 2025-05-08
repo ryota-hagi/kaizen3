@@ -135,7 +135,7 @@ export default function Home() {
   // Supabaseからワークフローを取得
   const loadWorkflows = async () => {
     try {
-      // MCPを使用してワークフローを取得
+      // Supabaseクライアントを使用してワークフローを取得
       const response = await fetch('/api/workflows/supabase-mcp', {
         method: 'POST',
         headers: {
@@ -144,7 +144,6 @@ export default function Home() {
         body: JSON.stringify({
           operation: 'execute_sql',
           params: {
-            projectId: 'czuedairowlwfgbjmfbg',
             query: `
               SELECT w.*,
                 (
@@ -219,7 +218,7 @@ export default function Home() {
   // ワークフローを削除
   const handleDeleteWorkflow = async (id: string) => {
     try {
-      // MCPを使用して削除
+      // Supabaseクライアントを使用して削除
       const response = await fetch('/api/workflows/supabase-mcp', {
         method: 'POST',
         headers: {
@@ -228,7 +227,6 @@ export default function Home() {
         body: JSON.stringify({
           operation: 'execute_sql',
           params: {
-            projectId: 'czuedairowlwfgbjmfbg',
             query: `DELETE FROM workflows WHERE id = '${id}' RETURNING id`
           }
         }),
@@ -500,7 +498,7 @@ export default function Home() {
                                       const isCompleted = !displayWorkflow.isCompleted;
                                       const completedAt = isCompleted ? new Date().toISOString() : null;
                                       
-                                      // MCPを使用して更新
+                                      // Supabaseクライアントを使用して更新
                                       const response = await fetch('/api/workflows/supabase-mcp', {
                                         method: 'POST',
                                         headers: {
@@ -509,7 +507,6 @@ export default function Home() {
                                         body: JSON.stringify({
                                           operation: 'execute_sql',
                                           params: {
-                                            projectId: 'czuedairowlwfgbjmfbg',
                                             query: `
                                               UPDATE workflows 
                                               SET 
