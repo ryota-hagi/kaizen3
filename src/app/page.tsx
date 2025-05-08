@@ -135,7 +135,7 @@ export default function Home() {
   // Supabaseからワークフローを取得
   const loadWorkflows = async () => {
     try {
-      // MCPを使用してワークフローを取得
+      // 直接Supabaseクライアントを使用してワークフローを取得
       const response = await fetch('/api/workflows/supabase-mcp', {
         method: 'POST',
         headers: {
@@ -148,11 +148,13 @@ export default function Home() {
       });
       
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        const errorData = await response.json();
+        console.error('API response error:', errorData);
+        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
       }
       
       const result = await response.json();
-      console.log('Fetched workflows from Supabase MCP:', result);
+      console.log('Fetched workflows from Supabase:', result);
       
       if (!result || !Array.isArray(result)) {
         console.error('Invalid response format:', result);
@@ -182,6 +184,7 @@ export default function Home() {
       setWorkflows(sortedWorkflows);
     } catch (error) {
       console.error('ワークフローの取得エラー:', error);
+      alert(`ワークフローの取得に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
     }
   };
 
@@ -207,7 +210,12 @@ export default function Home() {
   // ワークフローを削除
   const handleDeleteWorkflow = async (id: string) => {
     try {
-      // MCPを使用して削除
+      // 削除前に確認
+      if (!confirm('このワークフローを削除してもよろしいですか？この操作は元に戻せません。')) {
+        return;
+      }
+      
+      // 直接Supabaseクライアントを使用して削除
       const response = await fetch('/api/workflows/supabase-mcp', {
         method: 'POST',
         headers: {
@@ -222,7 +230,9 @@ export default function Home() {
       });
       
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        const errorData = await response.json();
+        console.error('API response error:', errorData);
+        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
       }
       
       const result = await response.json();
@@ -230,9 +240,10 @@ export default function Home() {
       
       // 状態を更新
       setWorkflows(workflows.filter(wf => wf.id !== id));
+      alert('ワークフローを削除しました');
     } catch (error) {
       console.error('ワークフローの削除エラー:', error);
-      alert('ワークフローの削除に失敗しました');
+      alert(`ワークフローの削除に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
     }
   };
 
@@ -485,9 +496,8 @@ export default function Home() {
                                     // ワークフローの完了状態を切り替える
                                     try {
                                       const isCompleted = !displayWorkflow.isCompleted;
-                                      const completedAt = isCompleted ? new Date().toISOString() : null;
                                       
-                                      // MCPを使用して更新
+                                      // 直接Supabaseクライアントを使用して更新
                                       const response = await fetch('/api/workflows/supabase-mcp', {
                                         method: 'POST',
                                         headers: {
@@ -503,7 +513,9 @@ export default function Home() {
                                       });
                                       
                                       if (!response.ok) {
-                                        throw new Error(`API error: ${response.status}`);
+                                        const errorData = await response.json();
+                                        console.error('API response error:', errorData);
+                                        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
                                       }
                                       
                                       const result = await response.json();
@@ -511,9 +523,12 @@ export default function Home() {
                                       
                                       // 状態を更新
                                       loadWorkflows();
+                                      
+                                      // 完了状態の変更を通知
+                                      alert(isCompleted ? 'ワークフローを完了済みに設定しました' : 'ワークフローを未完了に設定しました');
                                     } catch (error) {
                                       console.error('ワークフローの更新エラー:', error);
-                                      alert('ワークフローの更新に失敗しました');
+                                      alert(`ワークフローの更新に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
                                     }
                                   }}
                                   className={`${

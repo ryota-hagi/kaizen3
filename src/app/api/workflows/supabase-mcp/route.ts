@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabaseClient';
 
 export async function POST(request: Request) {
   try {
@@ -7,6 +8,22 @@ export async function POST(request: Request) {
     
     if (!operation) {
       return NextResponse.json({ error: '操作タイプが指定されていません' }, { status: 400 });
+    }
+    
+    // ユーザー認証情報を取得
+    const supabaseClient = supabase();
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json({ error: '認証エラー: ユーザーが認証されていません' }, { status: 401 });
+    }
+    
+    // ユーザーのJWTトークンを取得
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const accessToken = session?.access_token;
+    
+    if (!accessToken) {
+      return NextResponse.json({ error: '認証エラー: アクセストークンが取得できません' }, { status: 401 });
     }
     
     let result;
@@ -19,30 +36,35 @@ export async function POST(request: Request) {
           tool_name: 'execute_sql',
           arguments: {
             project_id: 'czuedairowlwfgbjmfbg',
-            query: params.query
+            query: params.query,
+            auth_token: accessToken // JWTトークンを渡す
           }
         });
         break;
         
       case 'get_workflows':
         // ワークフロー一覧を取得
-        result = await use_mcp_tool({
-          server_name: 'github.com/supabase-community/supabase-mcp',
-          tool_name: 'execute_sql',
-          arguments: {
-            project_id: 'czuedairowlwfgbjmfbg',
-            query: `
-              SELECT w.*,
-                (
-                  SELECT json_agg(c.*)
-                  FROM workflow_collaborators c
-                  WHERE c.workflow_id = w.id
-                ) as collaborators
-              FROM workflows w
-              ORDER BY w.updated_at DESC
-            `
-          }
-        });
+        // 直接Supabaseクライアントを使用してRLSを適切に処理
+        const { data: workflows, error: workflowsError } = await supabaseClient
+          .from('workflows')
+          .select(`
+            *,
+            collaborators:workflow_collaborators(
+              id,
+              user_id,
+              permission_type,
+              added_at,
+              added_by
+            )
+          `)
+          .order('updated_at', { ascending: false });
+          
+        if (workflowsError) {
+          console.error('ワークフロー取得エラー:', workflowsError);
+          return NextResponse.json({ error: `ワークフロー取得エラー: ${workflowsError.message}` }, { status: 500 });
+        }
+        
+        result = workflows;
         break;
         
       case 'update_workflow_completion':
@@ -50,34 +72,39 @@ export async function POST(request: Request) {
         const { id, isCompleted } = params;
         const completedAt = isCompleted ? new Date().toISOString() : null;
         
-        result = await use_mcp_tool({
-          server_name: 'github.com/supabase-community/supabase-mcp',
-          tool_name: 'execute_sql',
-          arguments: {
-            project_id: 'czuedairowlwfgbjmfbg',
-            query: `
-              UPDATE workflows 
-              SET 
-                is_completed = ${isCompleted}, 
-                completed_at = ${isCompleted ? `'${completedAt}'` : 'NULL'},
-                updated_at = NOW()
-              WHERE id = '${id}'
-              RETURNING *
-            `
-          }
-        });
+        // 直接Supabaseクライアントを使用
+        const { data: updatedWorkflow, error: updateError } = await supabaseClient
+          .from('workflows')
+          .update({
+            is_completed: isCompleted,
+            completed_at: completedAt,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .select();
+          
+        if (updateError) {
+          console.error('ワークフロー更新エラー:', updateError);
+          return NextResponse.json({ error: `ワークフロー更新エラー: ${updateError.message}` }, { status: 500 });
+        }
+        
+        result = updatedWorkflow;
         break;
         
       case 'delete_workflow':
         // ワークフローを削除
-        result = await use_mcp_tool({
-          server_name: 'github.com/supabase-community/supabase-mcp',
-          tool_name: 'execute_sql',
-          arguments: {
-            project_id: 'czuedairowlwfgbjmfbg',
-            query: `DELETE FROM workflows WHERE id = '${params.id}' RETURNING id`
-          }
-        });
+        const { data: deletedWorkflow, error: deleteError } = await supabaseClient
+          .from('workflows')
+          .delete()
+          .eq('id', params.id)
+          .select();
+          
+        if (deleteError) {
+          console.error('ワークフロー削除エラー:', deleteError);
+          return NextResponse.json({ error: `ワークフロー削除エラー: ${deleteError.message}` }, { status: 500 });
+        }
+        
+        result = deletedWorkflow;
         break;
         
       default:
