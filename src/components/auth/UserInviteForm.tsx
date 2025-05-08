@@ -18,6 +18,7 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
   
   // フォームの状態
   const [email, setEmail] = useState('')
+  const [fullName, setFullName] = useState('')
   const [role, setRole] = useState('一般ユーザー')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -53,13 +54,14 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
     // 招待データを準備
     const inviteData = {
       email,
+      fullName,
       role,
       companyId: currentUser.companyId
     };
     
-    // 招待処理のタイムアウト設定（10秒）
+    // 招待処理のタイムアウト設定（30秒）
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('招待処理がタイムアウトしました')), 10000);
+      setTimeout(() => reject(new Error('招待処理がタイムアウトしました')), 30000);
     });
     
     try {
@@ -79,6 +81,7 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
           
           // フォームをリセット
           setEmail('')
+          setFullName('')
           setRole('一般ユーザー')
           
           // 成功メッセージを表示
@@ -179,6 +182,22 @@ export const UserInviteForm: React.FC<UserInviteFormProps> = ({
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
             placeholder="招待するユーザーのメールアドレス"
+            required
+          />
+        </div>
+        
+        {/* 名前入力 */}
+        <div className="mb-4">
+          <label htmlFor="fullName" className="block text-sm font-medium text-secondary-700 mb-1">
+            名前
+          </label>
+          <input
+            type="text"
+            id="fullName"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="招待するユーザーの名前"
             required
           />
         </div>

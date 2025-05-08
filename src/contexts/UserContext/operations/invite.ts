@@ -5,7 +5,7 @@ import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } fro
 
 // ユーザー招待関数
 export const inviteUser = async (
-  inviteData: {email: string; role: string; companyId: string},
+  inviteData: {email: string; fullName?: string; role: string; companyId: string},
   currentUser: UserInfo | null,
   setUsers: Dispatch<SetStateAction<UserInfo[]>>,
   setUserPasswords: Dispatch<SetStateAction<Record<string, string>>>
@@ -29,12 +29,14 @@ export const inviteUser = async (
       .from('invitations')
       .insert({
         email: inviteData.email,
+        full_name: inviteData.fullName || '', // 名前を保存
         company_id: inviteData.companyId,
         role: inviteData.role,
         token: token,
         invite_token: token, // 互換性のために両方のカラムに保存
         invited_by: currentUser.id,
-        expires_at: expiresAt.toISOString()
+        expires_at: expiresAt.toISOString(),
+        status: 'pending' // statusは'pending'、'completed'、'expired'のいずれかである必要がある
       })
       .select();
     
@@ -61,7 +63,7 @@ export const inviteUser = async (
       id: `invited_${token}`, // 仮のID
       username: inviteData.email.split('@')[0],
       email: inviteData.email,
-      fullName: '',
+      fullName: inviteData.fullName || '',
       role: inviteData.role,
       status: '招待中',
       createdAt: new Date().toISOString(),
@@ -106,6 +108,7 @@ interface InvitationData {
   created_at: string;
   expires_at: string | null;
   accepted_at: string | null;
+  full_name?: string;
 }
 
 // 招待トークン検証関数
@@ -147,7 +150,7 @@ export const verifyInviteToken = async (
       id: '', // 実際のIDはログイン後に設定される
       username: invitationData.email.split('@')[0],
       email: invitationData.email,
-      fullName: '',
+      fullName: invitationData.full_name || '',
       role: invitationData.role,
       status: '招待中',
       createdAt: new Date().toISOString(),
