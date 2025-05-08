@@ -29,31 +29,36 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [departments, setDepartments] = useState<string[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [appUsers, setAppUsers] = useState<any[]>([]);
   
-  // 部署一覧を取得
+  // app_usersテーブルからユーザー一覧と部署一覧を取得
   useEffect(() => {
-    const fetchDepartments = async () => {
+    const fetchUsersAndDepartments = async () => {
       if (!currentUser?.companyId) return;
       
       const client = supabase();
       const { data, error } = await client
         .from('app_users')
-        .select('department')
-        .eq('company_id', currentUser.companyId)
-        .not('department', 'is', null);
+        .select('*')
+        .eq('company_id', currentUser.companyId);
         
       if (error) {
-        console.error('部署一覧の取得エラー:', error);
+        console.error('ユーザー一覧の取得エラー:', error);
         return;
       }
       
-      // 重複を除去
-      const departmentValues = data.map(user => user.department);
+      // ユーザー一覧を設定
+      setAppUsers(data);
+      
+      // 部署一覧を取得（重複を除去）
+      const departmentValues = data
+        .filter(user => user.department)
+        .map(user => user.department);
       const uniqueDepartments = Array.from(new Set(departmentValues));
       setDepartments(uniqueDepartments as string[]);
     };
     
-    fetchDepartments();
+    fetchUsersAndDepartments();
   }, [currentUser]);
   
   // 個別ユーザーの招待
@@ -127,11 +132,11 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
             className="flex-1 p-2 border rounded"
           >
             <option value="">ユーザーを選択...</option>
-            {users
+            {appUsers
               .filter(user => user.id !== currentUser?.id && !collaborators.some(c => c.userId === user.id))
               .map(user => (
                 <option key={user.id} value={user.id}>
-                  {user.fullName} ({user.email})
+                  {user.full_name || user.username} ({user.email})
                 </option>
               ))
             }

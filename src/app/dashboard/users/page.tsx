@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layouts/DashboardLayout'
 import { useUser } from '@/contexts/UserContext'
 import Link from 'next/link'
 import { UserInfo } from '@/utils/api'
+import { supabase } from '@/lib/supabaseClient'
 import { UserRoleAlert } from './UserRoleAlert'
 import { UserList } from '@/components/users/UserList'
 import { UserDetailModal } from '@/components/users/UserDetailModal'
@@ -31,7 +32,48 @@ export default function UsersPage() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [editedUser, setEditedUser] = useState<Partial<UserInfo>>({})
   const [employees, setEmployees] = useState(getEmployees())
+  const [appUsers, setAppUsers] = useState<UserInfo[]>([])
   
+  // app_usersテーブルからユーザー一覧を取得
+  useEffect(() => {
+    const fetchAppUsers = async () => {
+      if (!currentUser?.companyId) return;
+      
+      const client = supabase();
+      const { data, error } = await client
+        .from('app_users')
+        .select('*')
+        .eq('company_id', currentUser.companyId);
+        
+      if (error) {
+        console.error('ユーザー一覧の取得エラー:', error);
+        return;
+      }
+      
+      // Supabaseのカラム名をアプリケーションの命名規則に合わせて変換
+      const formattedUsers: UserInfo[] = data.map((user: any) => ({
+        id: user.id,
+        username: user.username || '',
+        email: user.email || '',
+        fullName: user.full_name || '',
+        role: user.role || '一般ユーザー',
+        department: user.department || '',
+        position: user.position || '',
+        employeeId: user.employee_id || '',
+        status: user.status || 'アクティブ',
+        createdAt: user.created_at || new Date().toISOString(),
+        lastLogin: user.last_login || new Date().toISOString(),
+        isInvited: user.is_invited || false,
+        inviteToken: user.invite_token || '',
+        companyId: user.company_id || ''
+      }));
+      
+      setAppUsers(formattedUsers);
+    };
+    
+    fetchAppUsers();
+  }, [currentUser]);
+
   // 認証状態をチェック
   useEffect(() => {
     if (!isAuthenticated) {
@@ -50,8 +92,6 @@ export default function UsersPage() {
       </div>
     )
   }
-  
-  // ユーザーリストを取得（会社IDが同一のもののみ）
   
   // ユーザー詳細モーダルを開く
   const openUserModal = (userId: string) => {
@@ -183,10 +223,8 @@ export default function UsersPage() {
     return '';
   }
   
-  // 同じ会社のユーザーのみ表示
-  const filteredUsers = users.filter(user => 
-    currentUser && user.companyId === currentUser.companyId
-  );
+  // 同じ会社のユーザーのみ表示（app_usersテーブルから取得したデータを使用）
+  const filteredUsers = appUsers;
   
   return (
     <DashboardLayout>
