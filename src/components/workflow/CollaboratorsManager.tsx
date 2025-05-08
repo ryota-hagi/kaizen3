@@ -133,7 +133,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
           >
             <option value="">ユーザーを選択...</option>
             {appUsers
-              .filter(user => user.id !== currentUser?.id && !collaborators.some(c => c.userId === user.id))
+              .filter(user => user.id !== currentUser?.id && !collaborators.some(c => c.user_id === user.id))
               .map(user => (
                 <option key={user.id} value={user.id}>
                   {user.full_name || user.username} ({user.email})
@@ -166,7 +166,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
           <ul className="divide-y">
             {collaborators.map(collab => {
               // app_usersテーブルからユーザー情報を取得
-              const collaboratorUser = appUsers.find(user => user.id === collab.userId);
+              const collaboratorUser = appUsers.find(user => user.id === collab.user_id);
               
               return (
                 <li key={collab.id} className="py-2 flex justify-between items-center">
@@ -180,9 +180,9 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                       {collaboratorUser?.email}
                     </span>
                     <span className={`ml-2 px-2 py-0.5 text-xs rounded ${
-                      collab.permissionType === 'edit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                      collab.permission_type === 'edit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                     }`}>
-                      {collab.permissionType === 'edit' ? '編集可能' : '閲覧のみ'}
+                      {collab.permission_type === 'edit' ? '編集可能' : '閲覧のみ'}
                     </span>
                   </div>
                   {(isCreator || currentUser?.role === '管理者') && (

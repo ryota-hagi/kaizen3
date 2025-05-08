@@ -460,9 +460,9 @@ export default function Home() {
                                                   </div>
                                                 </div>
                                                 <div className="ml-2">
-                                                <div className="text-xs text-secondary-500">
-                                                  {collab.permission_type === 'edit' ? '編集者' : '閲覧者'}
-                                                </div>
+                                                  <div className="text-xs text-secondary-500">
+                                                    {user?.fullName || '不明なユーザー'}
+                                                  </div>
                                                 </div>
                                               </div>
                                             );
