@@ -43,33 +43,8 @@ export default function WorkflowsPage() {
     console.log('All Users:', users)
     console.log('Workflows:', workflows)
     
-    // ユーザーデータが存在しない場合、デフォルトのユーザーデータを作成
-    if (users.length === 0) {
-      console.log('ユーザーデータが存在しません。デフォルトのユーザーデータを作成します。')
-      
-      // デフォルトユーザーを作成
-      const defaultUser: any = {
-        id: 'default-user',
-        username: 'admin',
-        email: 'admin@example.com',
-        fullName: '管理者',
-        role: '管理者',
-        companyId: 'default-company',
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        status: 'アクティブ'
-      }
-      
-      // ローカルストレージに保存
-      localStorage.setItem('kaizen_user_info', JSON.stringify(defaultUser))
-      localStorage.setItem('kaizen_users', JSON.stringify([{
-        user: defaultUser,
-        password: 'password'
-      }]))
-      
-      // ページをリロード
-      window.location.reload()
-    }
+    // 注意: ユーザーデータが存在しない場合でも、ページをリロードしないようにしました
+    // これにより無限ループを防止します
   }, [currentUser, users, workflows])
   
   // 会社情報を取得
@@ -89,6 +64,12 @@ export default function WorkflowsPage() {
   // Supabaseからワークフローを取得
   const loadWorkflows = async () => {
     try {
+      // 認証状態をチェック
+      if (!currentUser) {
+        console.log('ユーザーが認証されていません。ワークフローの取得をスキップします。');
+        return;
+      }
+      
       // APIを呼び出してワークフローを取得
       const response = await fetch('/api/workflows');
       if (!response.ok) {
@@ -110,7 +91,8 @@ export default function WorkflowsPage() {
         originalId: wf.original_id || undefined,
         isCompleted: wf.is_completed || false,
         completedAt: wf.completed_at ? new Date(wf.completed_at) : undefined,
-        createdBy: wf.created_by
+        createdBy: wf.created_by,
+        collaborators: wf.collaborators || []
       }));
       
       // 最新順にソート

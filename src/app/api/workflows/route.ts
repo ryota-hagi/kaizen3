@@ -36,7 +36,13 @@ export async function GET(request: Request) {
     .from('workflows')
     .select(`
       *,
-      collaborators:workflow_collaborators(count)
+      collaborators:workflow_collaborators(
+        id,
+        user_id,
+        permission_type,
+        added_at,
+        added_by
+      )
     `)
     .order('updated_at', { ascending: false });
     
