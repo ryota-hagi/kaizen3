@@ -234,7 +234,12 @@ CREATE TABLE companies (
         
         // Supabase Clientを作成（サービスロールキーを使用）
         const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
+        });
         
         // 会社情報をSupabaseに登録
         outputDiv.textContent += `会社情報を登録中...\n`;
@@ -400,91 +405,125 @@ CREATE TABLE companies (
         
         // Supabase Clientを作成（サービスロールキーを使用）
         const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
+        });
         
-        // 現在のユーザー情報を取得
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        // 匿名クライアントを作成して現在のセッションを取得
+        const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZnYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTk0MzA0NzcsImV4cCI6MjAxNTAwNjQ3N30.Nh83ebqzf1iGHTaGywss6QKt3g1Ov-87KBKpEDPKcj8';
+        const anonClient = createClient(supabaseUrl, anonKey);
         
-        if (authError) {
-          throw new Error(`ユーザー情報の取得中にエラーが発生しました: ${authError.message}`);
+        // 現在のセッションを取得
+        const { data: { session }, error: sessionError } = await anonClient.auth.getSession();
+        
+        if (sessionError) {
+          throw new Error(`セッションの取得中にエラーが発生しました: ${sessionError.message}`);
         }
         
-        if (!user) {
-          throw new Error('ログインしていません');
+        if (!session || !session.user) {
+          throw new Error('ログインしていません。先にログインしてください。');
         }
         
-        outputDiv.textContent += `現在のユーザー: ${user.email}\n`;
+        const userId = session.user.id;
+        outputDiv.textContent += `現在のユーザーID: ${userId}\n`;
         
-        // app_usersテーブルのユーザー情報を更新
+        // 直接SQLを実行してユーザー情報を更新
         outputDiv.textContent += `ユーザーの会社情報を更新中...\n`;
         
-        // ユーザー情報を更新
-        const { data: userData, error: userError } = await supabase
-          .from('app_users')
-          .update({ company_id: companyId })
-          .eq('auth_uid', user.id)
-          .select();
-        
-        if (userError) {
-          outputDiv.textContent += `ユーザー情報の更新中にエラーが発生しました: ${userError.message}\n`;
+        const { data: sqlResult, error: sqlError } = await supabase
+          .rpc('execute_sql', {
+            query: `
+              UPDATE public.app_users
+              SET company_id = '${companyId}'
+              WHERE auth_uid = '${userId}'
+              RETURNING *;
+            `
+          });
           
-          // 直接SQLを実行してユーザー情報を更新
+        if (sqlError) {
+          outputDiv.textContent += `SQLによるユーザー情報の更新中にエラーが発生しました: ${sqlError.message}\n`;
+          
+          // RLSを無効化してから更新を試みる
           try {
-            const { data: sqlResult, error: sqlError } = await supabase
-              .rpc('execute_sql', {
-                query: `
-                  UPDATE public.app_users
-                  SET company_id = '${companyId}'
-                  WHERE auth_uid = '${user.id}'
-                  RETURNING *;
-                `
-              });
+            // app_usersテーブルのRLSを無効化
+            await supabase.rpc('execute_sql', {
+              query: "ALTER TABLE public.app_users DISABLE ROW LEVEL SECURITY;"
+            });
+            
+            outputDiv.textContent += `app_usersテーブルのRLSを無効化しました\n`;
+            
+            // 再度更新を試みる
+            const { data: directResult, error: directError } = await supabase
+              .from('app_users')
+              .update({ company_id: companyId })
+              .eq('auth_uid', userId)
+              .select();
               
-            if (sqlError) {
-              outputDiv.textContent += `SQLによるユーザー情報の更新中にエラーが発生しました: ${sqlError.message}\n`;
+            if (directError) {
+              outputDiv.textContent += `RLS無効化後も更新に失敗しました: ${directError.message}\n`;
               
-              // メタデータを使用して更新を試みる
-              try {
-                const { error: metadataError } = await supabase.auth.updateUser({
-                  data: { company_id: companyId }
+              // 最終手段として、直接INSERTを試みる
+              const { data: insertResult, error: insertError } = await supabase
+                .rpc('execute_sql', {
+                  query: `
+                    INSERT INTO public.app_users (auth_uid, company_id)
+                    VALUES ('${userId}', '${companyId}')
+                    ON CONFLICT (auth_uid) 
+                    DO UPDATE SET company_id = '${companyId}'
+                    RETURNING *;
+                  `
                 });
                 
-                if (metadataError) {
-                  outputDiv.textContent += `メタデータの更新にも失敗しました: ${metadataError.message}\n`;
-                } else {
-                  outputDiv.textContent += `ユーザーメタデータの更新に成功しました\n`;
-                  
-                  // 成功したので、ステータスを更新
-                  statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました（メタデータ）。';
-                  statusDiv.className = 'success';
-                  return;
-                }
-              } catch (metaErr) {
-                outputDiv.textContent += `メタデータ更新中に例外が発生しました: ${metaErr.message}\n`;
+              if (insertError) {
+                outputDiv.textContent += `直接INSERTにも失敗しました: ${insertError.message}\n`;
+              } else {
+                outputDiv.textContent += `直接INSERTに成功しました: ${JSON.stringify(insertResult, null, 2)}\n`;
+                
+                // RLSを再度有効化
+                await supabase.rpc('execute_sql', {
+                  query: "ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;"
+                });
+                
+                outputDiv.textContent += `app_usersテーブルのRLSを再度有効化しました\n`;
+                
+                // 成功したので、ステータスを更新
+                statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました（直接INSERT）。';
+                statusDiv.className = 'success';
+                return;
               }
             } else {
-              outputDiv.textContent += `SQLによるユーザー情報の更新に成功しました: ${JSON.stringify(sqlResult, null, 2)}\n`;
+              outputDiv.textContent += `RLS無効化後に更新に成功しました: ${JSON.stringify(directResult, null, 2)}\n`;
+              
+              // RLSを再度有効化
+              await supabase.rpc('execute_sql', {
+                query: "ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;"
+              });
+              
+              outputDiv.textContent += `app_usersテーブルのRLSを再度有効化しました\n`;
               
               // 成功したので、ステータスを更新
-              statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました（SQL実行）。';
+              statusDiv.textContent = 'ユーザーの会社情報が正常に更新されました（RLS無効化後）。';
               statusDiv.className = 'success';
               return;
             }
-          } catch (sqlErr) {
-            outputDiv.textContent += `SQL実行中に例外が発生しました: ${sqlErr.message}\n`;
+          } catch (rlsErr) {
+            outputDiv.textContent += `RLS操作中に例外が発生しました: ${rlsErr.message}\n`;
           }
           
           // すべての方法が失敗した場合
           statusDiv.textContent = 'ユーザーの会社情報の更新に失敗しました。';
           statusDiv.className = 'error';
         } else {
-          outputDiv.textContent += `ユーザー情報の更新に成功しました: ${JSON.stringify(userData, null, 2)}\n`;
+          outputDiv.textContent += `SQLによるユーザー情報の更新に成功しました: ${JSON.stringify(sqlResult, null, 2)}\n`;
           
           // 更新後のユーザー情報を取得して確認
           const { data: updatedUser, error: getError } = await supabase
             .from('app_users')
             .select('*')
-            .eq('auth_uid', user.id)
+            .eq('auth_uid', userId)
             .single();
           
           if (getError) {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@/contexts/UserContext/context'
 import { generateCompanyId } from '@/utils/api'
+import { supabase } from '@/lib/supabaseClient'
 
 interface CompanyRegistrationFormProps {
   onSuccess?: () => void
@@ -59,6 +60,41 @@ export const CompanyRegistrationForm: React.FC<CompanyRegistrationFormProps> = (
     
     try {
       // 会社名の重複チェックは行わない（同じ会社名の登録は許容）
+      
+      // 会社情報をSupabaseに保存
+      try {
+        const client = supabase()
+        const { data, error } = await client
+          .from('companies')
+          .upsert({
+            id: companyInfo.id,
+            name: companyInfo.name,
+            industry: companyInfo.industry,
+            size: companyInfo.size,
+            address: companyInfo.address,
+            business_description: companyInfo.businessDescription,
+            founded_year: companyInfo.foundedYear,
+            website: companyInfo.website,
+            contact_email: companyInfo.contactEmail,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+
+        if (error) {
+          console.error('会社情報のSupabaseへの保存中にエラーが発生しました:', error)
+          setError('会社情報の保存中にエラーが発生しました')
+          setLoading(false)
+          return
+        }
+
+        console.log('会社情報がSupabaseに保存されました:', data)
+      } catch (err) {
+        console.error('Supabaseエラー:', err)
+        setError('会社情報の保存中にエラーが発生しました')
+        setLoading(false)
+        return
+      }
       
       // 会社情報をローカルストレージに保存
       if (typeof window !== 'undefined') {

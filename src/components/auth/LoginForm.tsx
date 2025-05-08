@@ -18,10 +18,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   // URLからinvite_tokenパラメータを取得
   useEffect(() => {
     const inviteToken = searchParams.get('token')
+    const isInvite = searchParams.get('invite') === 'true'
+    
     if (inviteToken) {
-      // セッションストレージに招待トークンを保存
-      sessionStorage.setItem('invite_token', inviteToken)
+      // ローカルストレージに招待トークンを保存
+      localStorage.setItem('invite_token', inviteToken)
       console.log('招待トークンを保存しました:', inviteToken)
+    }
+    
+    // 招待フラグがある場合は保存
+    if (isInvite) {
+      localStorage.setItem('is_invite', 'true')
+      console.log('招待フラグを保存しました')
     }
   }, [searchParams])
   
@@ -32,19 +40,31 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       
       const client = supabase()
       
-      // 招待トークンがURLに含まれている場合は保存
+      // 招待関連のパラメータを処理
       const inviteToken = searchParams.get('token')
+      const isInvite = searchParams.get('invite') === 'true'
       
       if (inviteToken) {
-        // セッションストレージに招待トークンを保存
-        sessionStorage.setItem('invite_token', inviteToken)
+        // ローカルストレージに招待トークンを保存
+        localStorage.setItem('invite_token', inviteToken)
         console.log('招待トークンを保存しました:', inviteToken)
       }
+      
+      // 招待フラグがある場合は保存
+      if (isInvite) {
+        localStorage.setItem('is_invite', 'true')
+        console.log('招待フラグを保存しました')
+      }
+      
+      // 招待からのログインかどうかでリダイレクト先を変更
+      const redirectTo = isInvite
+        ? `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/accept-invite/callback`
+        : `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/callback`;
       
       const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/callback`
+          redirectTo
         }
       })
       

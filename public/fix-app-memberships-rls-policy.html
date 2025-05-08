@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>app_membershipsテーブルのRLSポリシー修正ツール</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1, h2 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 10px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .code-block {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+    .copy-btn {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .copy-btn:hover {
+      background-color: #0056b3;
+    }
+    .step {
+      margin-bottom: 30px;
+    }
+    .note {
+      background-color: #fff3cd;
+      color: #856404;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>app_membershipsテーブルのRLSポリシー修正ツール</h1>
+  <p>このツールは、app_membershipsテーブルとその他の関連テーブルのRLSポリシーを修正し、無限再帰エラーを解決するためのSQLを提供します。</p>
+  
+  <div class="note">
+    <strong>注意：</strong>
+    <p>このツールは一時的な解決策として、すべてのテーブルに対して非常に緩いRLSポリシーを設定します。これにより、システムが正常に動作するようになりますが、セキュリティ上の懸念があります。本番環境では、より厳格なRLSポリシーを設定することをお勧めします。</p>
+  </div>
+  
+  <div class="step">
+    <h2>ステップ1: Supabaseダッシュボードにログイン</h2>
+    <p>まず、<a href="https://app.supabase.com/" target="_blank">Supabaseダッシュボード</a>にログインしてください。</p>
+  </div>
+  
+  <div class="step">
+    <h2>ステップ2: SQLエディタを開く</h2>
+    <p>左側のメニューから「SQL Editor」を選択し、新しいクエリを作成してください。</p>
+  </div>
+  
+  <div class="step">
+    <h2>ステップ3: RLSポリシーを修正する</h2>
+    <p>以下の2つの方法のいずれかを選択してください：</p>
+    
+    <h3>方法1: APIを使用して自動的に修正する（推奨）</h3>
+    <p>以下のボタンをクリックすると、APIを使用してRLSポリシーを自動的に修正します：</p>
+    <button id="fix-button" onclick="fixRlsPolicy()">RLSポリシーを修正する</button>
+    
+    <h3>方法2: SQLを手動で実行する</h3>
+    <p>Supabaseダッシュボードで以下のSQLを手動でコピーして実行してください：</p>
+    <div>
+      <button class="copy-btn" onclick="copyToClipboard('sql1')">コピー</button>
+      <pre id="sql1" class="code-block">-- app_membershipsテーブルの既存のRLSポリシーを削除
+DROP POLICY IF EXISTS "ユーザーは自分自身のメンバーシップのみを閲覧" ON public.app_memberships;
+DROP POLICY IF EXISTS "管理者は新しいメンバーシップを作成できる" ON public.app_memberships;
+DROP POLICY IF EXISTS "管理者は同じ会社のメンバーシップを閲覧できる" ON public.app_memberships;
+DROP POLICY IF EXISTS "管理者は同じ会社のメンバーシップを更新できる" ON public.app_memberships;
+DROP POLICY IF EXISTS "管理者は同じ会社のメンバーシップを削除できる" ON public.app_memberships;
+DROP POLICY IF EXISTS "ユーザーは自分自身のメンバーシップを閲覧できる" ON public.app_memberships;
+DROP POLICY IF EXISTS "ユーザーは自分の会社のメンバーシップを閲覧できる" ON public.app_memberships;
+
+-- 一時的に最も単純なRLSポリシーを設定
+-- 1. すべてのユーザーが自分自身のメンバーシップを閲覧できる
+CREATE POLICY "ユーザーは自分自身のメンバーシップを閲覧できる" ON public.app_memberships
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid()::uuid = auth_uid);
+
+-- 2. すべてのユーザーが自分の会社のメンバーシップを閲覧できる
+-- 注意: 無限再帰を避けるため、固定値を使用
+CREATE POLICY "ユーザーは自分の会社のメンバーシップを閲覧できる" ON public.app_memberships
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- 3. 管理者は新しいメンバーシップを作成できる
+CREATE POLICY "管理者は新しいメンバーシップを作成できる" ON public.app_memberships
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+-- 4. 管理者は自分の会社のメンバーシップを更新できる
+CREATE POLICY "管理者は自分の会社のメンバーシップを更新できる" ON public.app_memberships
+  FOR UPDATE
+  TO authenticated
+  USING (true);
+
+-- 5. 管理者は自分の会社のメンバーシップを削除できる
+CREATE POLICY "管理者は自分の会社のメンバーシップを削除できる" ON public.app_memberships
+  FOR DELETE
+  TO authenticated
+  USING (true);</pre>
+    </div>
+  </div>
+  
+  <div class="step">
+    <h2>ステップ4: app_usersテーブルのRLSポリシーを修正</h2>
+    <p>次に、app_usersテーブルのRLSポリシーを修正します：</p>
+    <div>
+      <button class="copy-btn" onclick="copyToClipboard('sql2')">コピー</button>
+      <pre id="sql2" class="code-block">-- app_usersテーブルの既存のRLSポリシーを削除
+DROP POLICY IF EXISTS "ユーザーは自分自身と同じ会社のユーザーを閲覧" ON public.app_users;
+DROP POLICY IF EXISTS "ユーザーは自分自身のレコードを閲覧できる" ON public.app_users;
+DROP POLICY IF EXISTS "ユーザーは同じ会社のユーザーを閲覧できる" ON public.app_users;
+DROP POLICY IF EXISTS "管理者は同じ会社のユーザーを更新できる" ON public.app_users;
+DROP POLICY IF EXISTS "管理者は同じ会社のユーザーを削除できる" ON public.app_users;
+DROP POLICY IF EXISTS "すべてのユーザーがすべてのユーザーを閲覧できる" ON public.app_users;
+DROP POLICY IF EXISTS "管理者はすべてのユーザーを更新できる" ON public.app_users;
+DROP POLICY IF EXISTS "管理者はすべてのユーザーを削除できる" ON public.app_users;
+
+-- 一時的に最も単純なRLSポリシーを設定
+-- 1. ユーザーは自分自身のレコードを閲覧できる
+CREATE POLICY "ユーザーは自分自身のレコードを閲覧できる" ON public.app_users
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid()::uuid = auth_uid);
+
+-- 2. すべてのユーザーがすべてのユーザーを閲覧できる
+CREATE POLICY "すべてのユーザーがすべてのユーザーを閲覧できる" ON public.app_users
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- 3. 管理者はすべてのユーザーを更新できる
+CREATE POLICY "管理者はすべてのユーザーを更新できる" ON public.app_users
+  FOR UPDATE
+  TO authenticated
+  USING (true);
+
+-- 4. 管理者はすべてのユーザーを削除できる
+CREATE POLICY "管理者はすべてのユーザーを削除できる" ON public.app_users
+  FOR DELETE
+  TO authenticated
+  USING (true);</pre>
+    </div>
+  </div>
+  
+  <div class="step">
+    <h2>ステップ5: companiesテーブルのRLSポリシーを修正</h2>
+    <p>次に、companiesテーブルのRLSポリシーを修正します：</p>
+    <div>
+      <button class="copy-btn" onclick="copyToClipboard('sql3')">コピー</button>
+      <pre id="sql3" class="code-block">-- companiesテーブルの既存のRLSポリシーを削除
+DROP POLICY IF EXISTS "ユーザーは自分の会社を閲覧できる" ON public.companies;
+DROP POLICY IF EXISTS "管理者は自分の会社を更新できる" ON public.companies;
+DROP POLICY IF EXISTS "すべてのユーザーがすべての会社を閲覧できる" ON public.companies;
+DROP POLICY IF EXISTS "管理者はすべての会社を更新できる" ON public.companies;
+
+-- 一時的に最も単純なRLSポリシーを設定
+-- 1. すべてのユーザーがすべての会社を閲覧できる
+CREATE POLICY "すべてのユーザーがすべての会社を閲覧できる" ON public.companies
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- 2. 管理者はすべての会社を更新できる
+CREATE POLICY "管理者はすべての会社を更新できる" ON public.companies
+  FOR UPDATE
+  TO authenticated
+  USING (true);</pre>
+    </div>
+  </div>
+  
+  <div class="step">
+    <h2>ステップ6: invitationsテーブルのRLSポリシーを修正</h2>
+    <p>最後に、invitationsテーブルのRLSポリシーを修正します：</p>
+    <div>
+      <button class="copy-btn" onclick="copyToClipboard('sql4')">コピー</button>
+      <pre id="sql4" class="code-block">-- invitationsテーブルの既存のRLSポリシーを削除
+DROP POLICY IF EXISTS "ユーザーは自分の招待を閲覧できる" ON public.invitations;
+DROP POLICY IF EXISTS "管理者は自分の会社の招待を閲覧できる" ON public.invitations;
+DROP POLICY IF EXISTS "管理者は自分の会社の招待を作成できる" ON public.invitations;
+DROP POLICY IF EXISTS "管理者は自分の会社の招待を更新できる" ON public.invitations;
+DROP POLICY IF EXISTS "管理者は自分の会社の招待を削除できる" ON public.invitations;
+DROP POLICY IF EXISTS "すべてのユーザーがすべての招待を閲覧できる" ON public.invitations;
+DROP POLICY IF EXISTS "管理者はすべての招待を作成できる" ON public.invitations;
+DROP POLICY IF EXISTS "管理者はすべての招待を更新できる" ON public.invitations;
+DROP POLICY IF EXISTS "管理者はすべての招待を削除できる" ON public.invitations;
+
+-- 一時的に最も単純なRLSポリシーを設定
+-- 1. すべてのユーザーがすべての招待を閲覧できる
+CREATE POLICY "すべてのユーザーがすべての招待を閲覧できる" ON public.invitations
+  FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- 2. 管理者はすべての招待を作成できる
+CREATE POLICY "管理者はすべての招待を作成できる" ON public.invitations
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+-- 3. 管理者はすべての招待を更新できる
+CREATE POLICY "管理者はすべての招待を更新できる" ON public.invitations
+  FOR UPDATE
+  TO authenticated
+  USING (true);
+
+-- 4. 管理者はすべての招待を削除できる
+CREATE POLICY "管理者はすべての招待を削除できる" ON public.invitations
+  FOR DELETE
+  TO authenticated
+  USING (true);</pre>
+    </div>
+  </div>
+  
+  <div id="result" class="result" style="display: none;"></div>
+  
+  <script>
+    // APIを使用してRLSポリシーを修正する関数
+    async function fixRlsPolicy() {
+      const fixButton = document.getElementById('fix-button');
+      fixButton.disabled = true;
+      fixButton.textContent = '処理中...';
+      
+      try {
+        const response = await fetch('/api/fix-app-memberships-rls-policy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          showResult('RLSポリシーの修正が完了しました。アプリケーションを再読み込みして、正常に動作するか確認してください。', true);
+        } else {
+          showResult(`RLSポリシーの修正に失敗しました: ${data.error || 'Unknown error'}`, false);
+        }
+      } catch (error) {
+        showResult(`エラーが発生しました: ${error.message}`, false);
+      } finally {
+        fixButton.disabled = false;
+        fixButton.textContent = 'RLSポリシーを修正する';
+      }
+    }
+    
+    // クリップボードにコピーする関数
+    function copyToClipboard(elementId) {
+      const element = document.getElementById(elementId);
+      const text = element.textContent;
+      
+      navigator.clipboard.writeText(text).then(
+        function() {
+          showResult('SQLをクリップボードにコピーしました。Supabaseダッシュボードに貼り付けて実行してください。', true);
+        }, 
+        function() {
+          showResult('クリップボードへのコピーに失敗しました。', false);
+        }
+      );
+    }
+    
+    // 結果表示用の関数
+    function showResult(message, isSuccess = true) {
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = `<p>${message}</p>`;
+      resultDiv.className = isSuccess ? 'result success' : 'result error';
+      resultDiv.style.display = 'block';
+      
+      // 5秒後に結果表示を消す
+      setTimeout(() => {
+        resultDiv.style.display = 'none';
+      }, 5000);
+    }
+  </script>
+</body>
+</html>

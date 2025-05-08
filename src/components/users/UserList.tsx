@@ -130,6 +130,7 @@ export const UserList: React.FC<UserListProps> = ({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                       ${user.status === 'ログアウト中' ? 'bg-gray-100 text-gray-800' : 
+                        user.status === '招待中' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-green-100 text-green-800'}`}>
                       {user.status || 'アクティブ'}
                     </span>
@@ -141,13 +142,17 @@ export const UserList: React.FC<UserListProps> = ({
                     >
                       詳細
                     </button>
-                    <button
-                      onClick={() => user.id !== currentUserId && onOpenDeleteConfirm(user.id)}
-                      className={`text-red-600 hover:text-red-900 ${user.id === currentUserId ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      disabled={user.id === currentUserId}
-                    >
-                      {user.id === currentUserId ? '削除不可' : '削除'}
-                    </button>
+                    {user.status === '招待中' ? (
+                      <span className="text-yellow-600">招待中</span>
+                    ) : (
+                      <button
+                        onClick={() => user.id !== currentUserId && onOpenDeleteConfirm(user.id)}
+                        className={`text-red-600 hover:text-red-900 ${user.id === currentUserId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={user.id === currentUserId}
+                      >
+                        {user.id === currentUserId ? '削除不可' : '削除'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))

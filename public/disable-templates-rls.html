@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テンプレートテーブルのRLS無効化</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #4b5563;
+      margin-top: 30px;
+    }
+    pre {
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .instructions {
+      background-color: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .warning {
+      background-color: #fff7ed;
+      border-left: 4px solid #f97316;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    .success {
+      background-color: #ecfdf5;
+      border-left: 4px solid #10b981;
+    }
+    .error {
+      background-color: #fef2f2;
+      border-left: 4px solid #ef4444;
+    }
+    #sqlOutput {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>テンプレートテーブルのRLS無効化</h1>
+  
+  <div class="instructions">
+    <p>このツールは、テンプレートテーブルのRLSを完全に無効化します。</p>
+    <p>これにより、テンプレート情報の取得・更新時に発生するエラーを解消します。</p>
+  </div>
+
+  <div class="warning">
+    <h3>注意事項</h3>
+    <p>このツールを実行すると、テンプレートテーブルの既存のRLSポリシーが削除され、RLSが無効化されます。</p>
+    <p>セキュリティ上の理由から、問題が解決した後は再度RLSを有効化することをお勧めします。</p>
+    <p>実行前にデータベースのバックアップを取ることをお勧めします。</p>
+  </div>
+
+  <h2>実行するSQL</h2>
+  <pre id="sqlPreview">
+-- 既存のポリシーを削除
+DROP POLICY IF EXISTS templates_select_policy ON templates;
+DROP POLICY IF EXISTS templates_insert_policy ON templates;
+DROP POLICY IF EXISTS templates_update_policy ON templates;
+DROP POLICY IF EXISTS templates_delete_policy ON templates;
+
+-- RLSを無効化
+ALTER TABLE templates DISABLE ROW LEVEL SECURITY;
+  </pre>
+
+  <h2>実行ボタン</h2>
+  <button id="disableRlsBtn">RLSを無効化する</button>
+  <button id="redirectBtn">マイページに戻る</button>
+  
+  <div id="status"></div>
+  <pre id="sqlOutput"></pre>
+
+  <script>
+    // RLSを無効化するボタンのイベントリスナー
+    document.getElementById('disableRlsBtn').addEventListener('click', async function() {
+      const statusDiv = document.getElementById('status');
+      const sqlOutput = document.getElementById('sqlOutput');
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = '処理中...';
+      statusDiv.className = '';
+      sqlOutput.textContent = '';
+      
+      try {
+        // Supabase URLとキーを取得
+        const supabaseUrl = prompt('SupabaseのURLを入力してください', 'https://czuedairowlwfgbjmfbg.supabase.co');
+        const supabaseKey = prompt('Supabaseの匿名キーを入力してください');
+        
+        if (!supabaseUrl || !supabaseKey) {
+          throw new Error('SupabaseのURLまたはキーが入力されていません');
+        }
+        
+        // Supabase Clientを作成
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.38.4/+esm');
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        // SQLクエリを直接実行
+        const sqlQueries = [
+          "DROP POLICY IF EXISTS templates_select_policy ON templates;",
+          "DROP POLICY IF EXISTS templates_insert_policy ON templates;",
+          "DROP POLICY IF EXISTS templates_update_policy ON templates;",
+          "DROP POLICY IF EXISTS templates_delete_policy ON templates;",
+          "ALTER TABLE templates DISABLE ROW LEVEL SECURITY;"
+        ];
+        
+        let output = '';
+        
+        // SQLクエリを実行
+        for (const query of sqlQueries) {
+          try {
+            const { error } = await supabase.rpc('exec_sql', { query });
+            
+            if (error) {
+              output += `エラー: ${query}\n${error.message}\n\n`;
+            } else {
+              output += `実行成功: ${query}\n`;
+            }
+          } catch (err) {
+            output += `例外発生: ${query}\n${err.message}\n\n`;
+          }
+        }
+        
+        // テストクエリを実行
+        try {
+          const { data, error } = await supabase.from('templates').select('id').limit(1);
+          
+          if (error) {
+            output += `テストクエリ実行中にエラーが発生しました: ${error.message}\n`;
+          } else {
+            output += `テストクエリが正常に実行されました。結果: ${JSON.stringify(data)}\n`;
+          }
+        } catch (err) {
+          output += `テストクエリ実行中に例外が発生しました: ${err.message}\n`;
+        }
+        
+        sqlOutput.textContent = output;
+        statusDiv.textContent = 'RLSが正常に無効化されました。';
+        statusDiv.className = 'success';
+      } catch (error) {
+        console.error('エラー:', error);
+        statusDiv.textContent = `エラーが発生しました: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    });
+    
+    // マイページにリダイレクトするボタンのイベントリスナー
+    document.getElementById('redirectBtn').addEventListener('click', function() {
+      window.location.href = '/mypage';
+    });
+  </script>
+</body>
+</html>

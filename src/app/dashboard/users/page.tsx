@@ -11,6 +11,7 @@ import { UserList } from '@/components/users/UserList'
 import { UserDetailModal } from '@/components/users/UserDetailModal'
 import { DeleteConfirmModal } from '@/components/users/DeleteConfirmModal'
 import { SuccessMessage } from '@/components/users/SuccessMessage'
+import { UserInviteModal } from '@/components/users/UserInviteModal'
 
 export default function UsersPage() {
   const { isAuthenticated, currentUser, users, getUserById, deleteUser, updateUser, getEmployees } = useUser()
@@ -22,9 +23,11 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<UserInfo | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<UserInfo | null>(null)
   const [deleteSuccess, setDeleteSuccess] = useState(false)
   const [updateSuccess, setUpdateSuccess] = useState(false)
+  const [inviteSuccess, setInviteSuccess] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [editedUser, setEditedUser] = useState<Partial<UserInfo>>({})
   const [employees, setEmployees] = useState(getEmployees())
@@ -194,7 +197,13 @@ export default function UsersPage() {
               システムユーザーの管理と権限設定を行います
             </p>
           </div>
-          <div>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setIsInviteModalOpen(true)}
+              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+            >
+              ユーザーを招待
+            </button>
             <Link
               href="/dashboard"
               className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
@@ -229,6 +238,12 @@ export default function UsersPage() {
         message="ユーザー情報が正常に更新されました" 
       />
       
+      {/* 招待成功メッセージ */}
+      <SuccessMessage 
+        show={inviteSuccess} 
+        message="ユーザーを招待しました" 
+      />
+      
       {/* ユーザー詳細モーダル */}
       {selectedUser && (
         <UserDetailModal
@@ -254,6 +269,18 @@ export default function UsersPage() {
           onDelete={handleDeleteUser}
         />
       )}
+      
+      {/* 招待モーダル */}
+      <UserInviteModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        onSuccess={(message) => {
+          setInviteSuccess(true);
+          setTimeout(() => {
+            setInviteSuccess(false);
+          }, 3000);
+        }}
+      />
     </DashboardLayout>
   )
 }

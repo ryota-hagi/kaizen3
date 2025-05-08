@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>従業員・テンプレートテーブル作成</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 0;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    button:disabled {
+      background-color: #93c5fd;
+      cursor: not-allowed;
+    }
+    pre {
+      background-color: #f1f5f9;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+    .error {
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+    .info {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+    .step {
+      margin-bottom: 30px;
+    }
+    .code-block {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 15px 0;
+      font-family: monospace;
+      white-space: pre;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>従業員・テンプレートテーブル作成ツール</h1>
+  
+  <div class="step">
+    <h2>ステップ1: Supabaseに接続</h2>
+    <p>まず、Supabaseに接続します。</p>
+    <button id="connectBtn">Supabaseに接続</button>
+    <div id="connectionStatus"></div>
+  </div>
+
+  <div class="step">
+    <h2>ステップ2: テーブル存在確認</h2>
+    <p>既存のテーブルを確認します。</p>
+    <button id="checkTablesBtn" disabled>テーブル確認</button>
+    <div id="checkStatus"></div>
+  </div>
+
+  <div class="step">
+    <h2>ステップ3: テーブル作成</h2>
+    <p>従業員テーブルとテンプレートテーブルを作成します。</p>
+    <button id="createTablesBtn" disabled>テーブル作成</button>
+    <div id="createStatus"></div>
+  </div>
+
+  <div class="step">
+    <h2>従業員テーブル (employees)</h2>
+    <div class="code-block">
+CREATE TABLE IF NOT EXISTS employees (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  position TEXT,
+  department TEXT,
+  hourly_rate INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 会社IDでインデックスを作成
+CREATE INDEX IF NOT EXISTS employees_company_id_idx ON employees(company_id);
+
+-- RLSポリシーの設定
+ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
+
+-- 同じ会社のユーザーのみが従業員情報を参照できるポリシー
+CREATE POLICY employees_select_policy ON employees
+  FOR SELECT
+  USING (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- 管理者のみが従業員情報を追加できるポリシー
+CREATE POLICY employees_insert_policy ON employees
+  FOR INSERT
+  WITH CHECK (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid() AND role = '管理者'
+    )
+  );
+
+-- 管理者のみが従業員情報を更新できるポリシー
+CREATE POLICY employees_update_policy ON employees
+  FOR UPDATE
+  USING (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid() AND role = '管理者'
+    )
+  );
+
+-- 管理者のみが従業員情報を削除できるポリシー
+CREATE POLICY employees_delete_policy ON employees
+  FOR DELETE
+  USING (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid() AND role = '管理者'
+    )
+  );
+    </div>
+  </div>
+
+  <div class="step">
+    <h2>テンプレートテーブル (templates)</h2>
+    <div class="code-block">
+CREATE TABLE IF NOT EXISTS templates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 会社IDでインデックスを作成
+CREATE INDEX IF NOT EXISTS templates_company_id_idx ON templates(company_id);
+
+-- RLSポリシーの設定
+ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
+
+-- 同じ会社のユーザーのみがテンプレート情報を参照できるポリシー
+CREATE POLICY templates_select_policy ON templates
+  FOR SELECT
+  USING (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- 同じ会社のユーザーがテンプレート情報を追加できるポリシー
+CREATE POLICY templates_insert_policy ON templates
+  FOR INSERT
+  WITH CHECK (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- 同じ会社のユーザーがテンプレート情報を更新できるポリシー
+CREATE POLICY templates_update_policy ON templates
+  FOR UPDATE
+  USING (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- 同じ会社のユーザーがテンプレート情報を削除できるポリシー
+CREATE POLICY templates_delete_policy ON templates
+  FOR DELETE
+  USING (
+    company_id IN (
+      SELECT company_id FROM app_memberships
+      WHERE user_id = auth.uid()
+    )
+  );
+    </div>
+  </div>
+
+  <div class="step">
+    <h2>ステップ4: APIエンドポイントを使用する</h2>
+    <p>作成したAPIエンドポイントを使用してテーブルを作成することもできます。</p>
+    <button id="useApiBtn">APIでテーブル作成</button>
+    <div id="apiStatus"></div>
+  </div>
+
+  <script>
+    // Supabaseに接続
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      try {
+        const connectionStatus = document.getElementById('connectionStatus');
+        connectionStatus.innerHTML = '<p class="info">接続中...</p>';
+        
+        // Supabaseクライアントを作成
+        const supabaseUrl = window.location.origin.includes('localhost') 
+          ? 'http://localhost:54321' 
+          : window.location.origin.includes('vercel.app')
+            ? 'https://kaizen-supabase.vercel.app'
+            : 'https://kaizen-supabase.vercel.app';
+            
+        const supabaseKey = window.location.origin.includes('localhost')
+          ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+          : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1cGFiYXNlLWthaXplbiIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNjgzMDAwMDAwLCJleHAiOjE5OTg2MDAwMDB9.example-key';
+            
+        window.supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        
+        // セッション確認
+        const { data: { session } } = await window.supabase.auth.getSession();
+        
+        if (!session) {
+          connectionStatus.innerHTML = '<p class="error">認証されていません。ログインしてください。</p>';
+          return;
+        }
+        
+        connectionStatus.innerHTML = '<p class="success">Supabaseに接続しました！</p>';
+        
+        // 次のステップのボタンを有効化
+        document.getElementById('checkTablesBtn').disabled = false;
+        document.getElementById('createTablesBtn').disabled = false;
+      } catch (error) {
+        console.error('接続エラー:', error);
+        document.getElementById('connectionStatus').innerHTML = `<p class="error">接続エラー: ${error.message}</p>`;
+      }
+    });
+    
+    // テーブル存在確認
+    document.getElementById('checkTablesBtn').addEventListener('click', async () => {
+      try {
+        const checkStatus = document.getElementById('checkStatus');
+        checkStatus.innerHTML = '<p class="info">テーブル確認中...</p>';
+        
+        // テーブル存在確認クエリ
+        const checkTablesQuery = `
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'employees'
+          ) as employees_exists,
+          EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'templates'
+          ) as templates_exists;
+        `;
+        
+        const { data, error } = await window.supabase.rpc('exec_sql', {
+          sql_query: checkTablesQuery
+        });
+        
+        if (error) {
+          checkStatus.innerHTML = `<p class="error">テーブル確認エラー: ${error.message}</p>`;
+          return;
+        }
+        
+        // 結果を解析
+        const result = data && Array.isArray(data) && data.length > 0 ? data[0] : null;
+        const employeesExists = result?.employees_exists === true;
+        const templatesExists = result?.templates_exists === true;
+        
+        let statusHtml = '<div class="info">';
+        statusHtml += `<p>従業員テーブル: ${employeesExists ? '存在します' : '存在しません'}</p>`;
+        statusHtml += `<p>テンプレートテーブル: ${templatesExists ? '存在します' : '存在しません'}</p>`;
+        statusHtml += '</div>';
+        
+        checkStatus.innerHTML = statusHtml;
+      } catch (error) {
+        console.error('テーブル確認エラー:', error);
+        document.getElementById('checkStatus').innerHTML = `<p class="error">テーブル確認エラー: ${error.message}</p>`;
+      }
+    });
+    
+    // テーブル作成
+    document.getElementById('createTablesBtn').addEventListener('click', async () => {
+      try {
+        const createStatus = document.getElementById('createStatus');
+        createStatus.innerHTML = '<p class="info">テーブル作成中...</p>';
+        
+        // 従業員テーブル作成
+        const employeesTableSql = document.querySelector('.step:nth-of-type(4) .code-block').textContent;
+        
+        const { error: employeesError } = await window.supabase.rpc('exec_sql', {
+          sql_query: employeesTableSql
+        });
+        
+        if (employeesError) {
+          createStatus.innerHTML = `<p class="error">従業員テーブル作成エラー: ${employeesError.message}</p>`;
+          return;
+        }
+        
+        // テンプレートテーブル作成
+        const templatesTableSql = document.querySelector('.step:nth-of-type(5) .code-block').textContent;
+        
+        const { error: templatesError } = await window.supabase.rpc('exec_sql', {
+          sql_query: templatesTableSql
+        });
+        
+        if (templatesError) {
+          createStatus.innerHTML = `<p class="error">テンプレートテーブル作成エラー: ${templatesError.message}</p>`;
+          return;
+        }
+        
+        createStatus.innerHTML = '<p class="success">テーブルが正常に作成されました！</p>';
+      } catch (error) {
+        console.error('テーブル作成エラー:', error);
+        document.getElementById('createStatus').innerHTML = `<p class="error">テーブル作成エラー: ${error.message}</p>`;
+      }
+    });
+    
+    // APIエンドポイントを使用
+    document.getElementById('useApiBtn').addEventListener('click', async () => {
+      try {
+        const apiStatus = document.getElementById('apiStatus');
+        apiStatus.innerHTML = '<p class="info">APIでテーブル作成中...</p>';
+        
+        // APIエンドポイントを呼び出し
+        const response = await fetch('/api/create-tables', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          apiStatus.innerHTML = `<p class="error">API呼び出しエラー: ${result.error}</p>`;
+          return;
+        }
+        
+        apiStatus.innerHTML = '<p class="success">APIでテーブルが正常に作成されました！</p>';
+      } catch (error) {
+        console.error('API呼び出しエラー:', error);
+        document.getElementById('apiStatus').innerHTML = `<p class="error">API呼び出しエラー: ${error.message}</p>`;
+      }
+    });
+  </script>
+</body>
+</html>
