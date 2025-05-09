@@ -69,11 +69,11 @@ export const WorkflowEditorForm: React.FC<WorkflowEditorFormProps> = ({
             className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm transition-all duration-200"
           >
             <option value="user">個人用</option>
-            <option value="company">会社内共有</option>
-            <option value="public">公開</option>
+            <option value="department">部署内共有</option>
+            <option value="company">全社共有</option>
           </select>
           <p className="mt-1 text-xs text-secondary-500">
-            個人用: 自分だけが閲覧・編集できます / 会社内共有: 同じ会社のメンバーが閲覧できます / 公開: 誰でも閲覧できます
+            個人用: 自分だけが閲覧・編集できます / 部署内共有: 同じ部署のメンバーが閲覧できます / 全社共有: 会社全体で閲覧できます
           </p>
         </div>
       )}
