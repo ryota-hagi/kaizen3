@@ -12,12 +12,13 @@ export async function POST(request: Request) {
     
     // ユーザー認証情報を取得
     const supabaseClient = supabase();
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const { data } = await supabaseClient.auth.getUser();
+    const user = data.user;
     
     // 認証情報がない場合でも処理を続行（RLSをバイパス）
     let accessToken = null;
     
-    if (user) {
+    if (user && user.id) {
       // ユーザーのJWTトークンを取得
       const { data: { session } } = await supabaseClient.auth.getSession();
       accessToken = session?.access_token;
@@ -90,8 +91,8 @@ export async function POST(request: Request) {
             const { supabaseAdmin } = await import('@/lib/supabaseClient');
             const adminClient = supabaseAdmin();
             
-            // ユーザーが認証されていない場合
-            if (!user) {
+            // 認証情報がない場合はエラーを返す
+            if (!user || !user.id) {
               console.error('未認証ユーザー: 会社IDが取得できません');
               return NextResponse.json({ 
                 error: '認証情報がありません。ログインしてください。' 
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
             const { data: userData, error: userError } = await supabaseClient
               .from('app_users')
               .select('company_id, role')
-              .eq('auth_uid', user.id)
+              .eq('auth_uid', user.id as string)
               .single();
               
             if (userError || !userData) {
