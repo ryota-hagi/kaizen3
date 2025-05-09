@@ -75,7 +75,9 @@ export async function POST(request: Request) {
     
     // ユーザー情報を取得
     const { data: { user } } = await client.auth.getUser();
-    const userId = user?.id || 'system'; // 認証されていない場合はシステムとして扱う
+    // 認証されていない場合は固定のUUIDを使用（システムユーザー用）
+    const systemUserId = '00000000-0000-0000-0000-000000000000';
+    const userId = user?.id || systemUserId;
     
     // 既に共同編集者として登録されているか確認
     const { data: existingCollaborator, error: checkError } = await client
