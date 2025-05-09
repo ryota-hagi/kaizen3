@@ -67,69 +67,58 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
     
     setIsLoading(true);
     try {
-      // 本番環境かどうかを判定
+      // 本番環境かどうかを判定（より厳密な条件）
       const isProduction = typeof window !== 'undefined' && (
         window.location.hostname.includes('vercel.app') || 
         window.location.hostname !== 'localhost'
       );
       
+      console.log('環境判定:', isProduction ? '本番環境' : 'ローカル環境');
+      console.log('ホスト名:', window.location.hostname);
+      
       if (isProduction) {
-        // 本番環境の場合は、直接MCPを使用してデータベースに挿入
+        // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
         try {
           console.log('本番環境でMCPを使用して共同編集者を追加します');
-          console.log('ホスト名:', window.location.hostname);
           
-          // まず、app_usersテーブルからユーザー情報を取得
+          // まず、app_usersテーブルにユーザーが存在するか確認
           // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
-          const userResult = await global.use_mcp_tool(
+          const userCheckResult = await global.use_mcp_tool(
             'github.com/supabase-community/supabase-mcp',
             'execute_sql',
             {
               project_id: 'czuedairowlwfgbjmfbg',
               query: `
-                SELECT full_name FROM app_users WHERE id = '${selectedUserId}';
+                SELECT * FROM app_users WHERE id = '${selectedUserId}';
               `
             }
           );
           
-          console.log('ユーザー情報取得結果:', userResult);
+          console.log('ユーザー確認結果:', userCheckResult);
           
-          // ユーザー名を取得（存在しない場合はデフォルト値を使用）
-          let userName = '';
-          if (userResult && userResult.length > 0 && userResult[0].full_name) {
-            userName = userResult[0].full_name;
-          } else {
-            // app_usersテーブルに存在しない場合は、authテーブルから取得を試みる
-            try {
-              // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
-              const authResult = await global.use_mcp_tool(
-                'github.com/supabase-community/supabase-mcp',
-                'execute_sql',
-                {
-                  project_id: 'czuedairowlwfgbjmfbg',
-                  query: `
-                    SELECT raw_user_meta_data->>'full_name' as full_name
-                    FROM auth.users
-                    WHERE id = '${selectedUserId}';
-                  `
-                }
-              );
-              
-              console.log('Auth情報取得結果:', authResult);
-              
-              if (authResult && authResult.length > 0 && authResult[0].full_name) {
-                userName = authResult[0].full_name;
-              } else {
-                // デフォルト値を設定
-                userName = 'ユーザー';
+          // ユーザーが存在しない場合は作成
+          if (!userCheckResult || userCheckResult.length === 0) {
+            console.log('ユーザーが存在しないため、app_usersテーブルに作成します');
+            
+            // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
+            const createUserResult = await global.use_mcp_tool(
+              'github.com/supabase-community/supabase-mcp',
+              'execute_sql',
+              {
+                project_id: 'czuedairowlwfgbjmfbg',
+                query: `
+                  INSERT INTO app_users (id, auth_uid, email, full_name, role, status)
+                  VALUES ('${selectedUserId}', '${selectedUserId}', '', '${selectedUserId}', '一般ユーザー', 'アクティブ')
+                  ON CONFLICT (id) DO NOTHING
+                  RETURNING *;
+                `
               }
-            } catch (authError) {
-              console.error('Auth情報取得エラー:', authError);
-              userName = 'ユーザー';
-            }
+            );
+            
+            console.log('ユーザー作成結果:', createUserResult);
           }
           
-          // workflow_collaboratorsテーブルに挿入
+          // 共同編集者を追加
           // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
           const result = await global.use_mcp_tool(
             'github.com/supabase-community/supabase-mcp',
@@ -138,15 +127,16 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
               project_id: 'czuedairowlwfgbjmfbg',
               query: `
                 INSERT INTO workflow_collaborators (workflow_id, user_id, permission_type, full_name)
-                VALUES ('${workflowId}', '${selectedUserId}', '${permissionType}', '${userName}')
+                VALUES ('${workflowId}', '${selectedUserId}', '${permissionType}', 
+                  COALESCE((SELECT full_name FROM app_users WHERE id = '${selectedUserId}'), '${selectedUserId}'))
                 ON CONFLICT (workflow_id, user_id) 
-                DO UPDATE SET permission_type = '${permissionType}', full_name = '${userName}'
+                DO UPDATE SET permission_type = '${permissionType}'
                 RETURNING *;
               `
             }
           );
           
-          console.log('共同編集者追加結果:', result);
+          console.log('MCP実行結果:', result);
           setSelectedUserId('');
           
           // 共同編集者リストを再取得
@@ -168,29 +158,8 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
             
             console.log('共同編集者リスト取得結果:', collaboratorsResult);
             
-            // 共同編集者リストを更新
-            if (collaboratorsResult && collaboratorsResult.length > 0) {
-              const formattedData = collaboratorsResult.map((collab: any) => ({
-                id: collab.id,
-                workflowId: collab.workflow_id,
-                userId: collab.user_id,
-                permissionType: collab.permission_type,
-                addedAt: collab.added_at,
-                addedBy: collab.added_by,
-                full_name: collab.full_name || collab.user_full_name || '',
-                user: {
-                  id: collab.user_id,
-                  full_name: collab.user_full_name || '',
-                  email: collab.user_email || ''
-                }
-              }));
-              
-              // 親コンポーネントのcollaboratorsステートを更新
-              // onAddCollaboratorを呼び出さずに直接更新
-              // ここでは親コンポーネントのcollaboratorsを直接更新できないため、
-              // 親コンポーネントでfetchCollaboratorsを呼び出す
-              onAddCollaborator(selectedUserId, permissionType);
-            }
+            // 親コンポーネントに通知
+            onAddCollaborator(selectedUserId, permissionType);
           } catch (fetchError) {
             console.error('共同編集者リスト取得エラー:', fetchError);
           }

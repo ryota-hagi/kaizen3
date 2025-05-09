@@ -67,12 +67,19 @@ export default function WorkflowDetailPage() {
   // 共同編集者リストを取得する関数
   const fetchCollaborators = async () => {
     try {
-      // 本番環境かどうかを判定
-      const isProduction = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+      // 本番環境かどうかを判定（より厳密な条件）
+      const isProduction = typeof window !== 'undefined' && (
+        window.location.hostname.includes('vercel.app') || 
+        window.location.hostname !== 'localhost'
+      );
+      
+      console.log('環境判定:', isProduction ? '本番環境' : 'ローカル環境');
+      console.log('ホスト名:', window.location.hostname);
       
       if (isProduction) {
         // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
         try {
+          console.log('本番環境でMCPを使用して共同編集者リストを取得します');
           // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
           const result = await global.use_mcp_tool(
             'github.com/supabase-community/supabase-mcp',
@@ -109,6 +116,7 @@ export default function WorkflowDetailPage() {
           setCollaborators(formattedData);
         } catch (mcpError) {
           console.error('MCP実行エラー:', mcpError);
+          alert(`共同編集者リストの取得に失敗しました: ${mcpError instanceof Error ? mcpError.message : '不明なエラー'}`);
         }
       } else {
         // ローカル環境の場合は、通常のAPIを使用
@@ -438,18 +446,19 @@ export default function WorkflowDetailPage() {
               }}
               onRemoveCollaborator={async (collaboratorId) => {
                 try {
-                  // 本番環境かどうかを判定
+                  // 本番環境かどうかを判定（より厳密な条件）
                   const isProduction = typeof window !== 'undefined' && (
                     window.location.hostname.includes('vercel.app') || 
                     window.location.hostname !== 'localhost'
                   );
                   
+                  console.log('環境判定:', isProduction ? '本番環境' : 'ローカル環境');
+                  console.log('ホスト名:', window.location.hostname);
+                  
                   if (isProduction) {
                     // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
                     try {
                       console.log('本番環境でMCPを使用して共同編集者を削除します');
-                      console.log('ホスト名:', window.location.hostname);
-                      
                       // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
                       const result = await global.use_mcp_tool(
                         'github.com/supabase-community/supabase-mcp',
@@ -464,7 +473,7 @@ export default function WorkflowDetailPage() {
                         }
                       );
                       
-                      console.log('共同編集者削除結果:', result);
+                      console.log('MCP実行結果:', result);
                       
                       // 共同編集者リストを再取得
                       try {
@@ -478,33 +487,30 @@ export default function WorkflowDetailPage() {
                               SELECT wc.*, au.full_name as user_full_name, au.email as user_email
                               FROM workflow_collaborators wc
                               LEFT JOIN app_users au ON wc.user_id = au.id
-                              WHERE wc.workflow_id = '${workflow.id}';
+                              WHERE wc.workflow_id = '${workflowId}';
                             `
                           }
                         );
                         
                         console.log('共同編集者リスト取得結果:', collaboratorsResult);
                         
-                        // 共同編集者リストを更新
-                        if (collaboratorsResult) {
-                          const formattedData = collaboratorsResult.map((collab: any) => ({
-                            id: collab.id,
-                            workflowId: collab.workflow_id,
-                            userId: collab.user_id,
-                            permissionType: collab.permission_type,
-                            addedAt: collab.added_at,
-                            addedBy: collab.added_by,
-                            full_name: collab.full_name || collab.user_full_name || '',
-                            user: {
-                              id: collab.user_id,
-                              full_name: collab.user_full_name || '',
-                              email: collab.user_email || ''
-                            }
-                          }));
-                          
-                          // 共同編集者リストを更新
-                          setCollaborators(formattedData);
-                        }
+                        // データを整形
+                        const formattedData = collaboratorsResult.map((collab: any) => ({
+                          id: collab.id,
+                          workflowId: collab.workflow_id,
+                          userId: collab.user_id,
+                          permissionType: collab.permission_type,
+                          addedAt: collab.added_at,
+                          addedBy: collab.added_by,
+                          full_name: collab.full_name || collab.user_full_name || '',
+                          user: {
+                            id: collab.user_id,
+                            full_name: collab.user_full_name || '',
+                            email: collab.user_email || ''
+                          }
+                        }));
+                        
+                        setCollaborators(formattedData);
                       } catch (fetchError) {
                         console.error('共同編集者リスト取得エラー:', fetchError);
                       }
