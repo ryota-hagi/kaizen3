@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
-import { User } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
@@ -95,7 +94,7 @@ export async function POST(request: Request) {
             // 管理者のユーザー情報を取得して会社IDを取得
             let companyId = null;
             
-            if (user && 'id' in user) {
+            if (user && user.id) {
               const { data: adminUserData, error: adminUserError } = await adminClient
                 .from('app_users')
                 .select('company_id')
@@ -237,7 +236,7 @@ export async function POST(request: Request) {
           
           // システムユーザーID（認証されていない場合）
           const systemUserId = '00000000-0000-0000-0000-000000000000';
-          const addedBy = user && 'id' in user ? user.id : systemUserId;
+          const addedBy = user?.id || systemUserId;
           
           // RLSを無効化して共同編集者を追加
           const { data: collaboratorData, error } = await supabaseClient.rpc('add_workflow_collaborator', {
