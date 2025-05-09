@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // シングルトンパターンを使用して確実に1つのインスタンスのみを使用する
 let _client: ReturnType<typeof createClient> | undefined;
+let _adminClient: ReturnType<typeof createClient> | undefined;
 
 export const supabase = () => {
   if (!_client) {
@@ -28,6 +29,32 @@ export const supabase = () => {
   }
   
   return _client;
+};
+
+// サーバーサイド専用の管理者権限を持つSupabaseクライアント
+export const supabaseAdmin = () => {
+  if (!_adminClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    
+    if (!url || !serviceRoleKey) {
+      console.error('Supabase URL or service role key is missing');
+      throw new Error('Supabase admin configuration is incomplete');
+    }
+    
+    console.log('► Creating Supabase admin client');
+    _adminClient = createClient(url, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+    console.log('► Created new Supabase admin client instance');
+  } else {
+    console.log('► Using existing Supabase admin client instance');
+  }
+  
+  return _adminClient;
 };
 
 // 後方互換性のために残す
@@ -101,7 +128,8 @@ export const getUserFromDatabase = async (userId: string) => {
 // ユーザーメタデータを更新する関数
 export const updateUserMetadata = async (userId: string, metadata: any) => {
   try {
-    const client = supabase();
+    // 管理者権限を持つクライアントを使用
+    const client = supabaseAdmin();
     
     // ユーザーメタデータを更新
     const { data, error } = await client.auth.admin.updateUserById(

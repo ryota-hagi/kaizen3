@@ -127,13 +127,7 @@ export async function POST(request: Request) {
       try {
         // 管理者権限を持つクライアントを使用してauthテーブルからユーザー情報を取得
         const adminClient = supabaseAdmin();
-        const { data: authData, error: authError } = await adminClient.auth.admin.getUserById(body.userId);
-        
-        // エラーが発生した場合はログに出力するが、処理は続行する
-        if (authError) {
-          console.error('Auth API呼び出しエラー:', authError);
-          console.log('Auth APIエラーが発生しましたが、処理を続行します');
-        }
+        const { data: authData } = await adminClient.auth.admin.getUserById(body.userId);
         
         // ユーザー情報を取得できた場合
         if (authData && authData.user) {
