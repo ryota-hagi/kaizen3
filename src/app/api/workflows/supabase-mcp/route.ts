@@ -90,7 +90,29 @@ export async function POST(request: Request) {
             const { supabaseAdmin } = await import('@/lib/supabaseClient');
             const adminClient = supabaseAdmin();
             
-            // 管理者権限でワークフローを取得
+            // ユーザーが認証されていない場合
+            if (!user) {
+              console.error('未認証ユーザー: 会社IDが取得できません');
+              return NextResponse.json({ 
+                error: '認証情報がありません。ログインしてください。' 
+              }, { status: 401 });
+            }
+            
+            // ユーザー情報を取得して会社IDを取得
+            const { data: userData, error: userError } = await supabaseClient
+              .from('app_users')
+              .select('company_id, role')
+              .eq('auth_uid', user.id)
+              .single();
+              
+            if (userError || !userData) {
+              console.error('ユーザー情報取得エラー:', userError);
+              return NextResponse.json({ 
+                error: `ユーザー情報取得エラー: ${userError?.message || 'ユーザー情報が見つかりません'}` 
+              }, { status: 500 });
+            }
+            
+            // 管理者権限でワークフローを取得（会社IDでフィルタリング）
             const { data: adminWorkflows, error: adminError } = await adminClient
               .from('workflows')
               .select(`
@@ -103,6 +125,7 @@ export async function POST(request: Request) {
                   added_by
                 )
               `)
+              .eq('company_id', userData.company_id)
               .order('updated_at', { ascending: false });
               
             if (adminError) {
