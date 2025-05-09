@@ -121,14 +121,40 @@ export async function POST(request: Request) {
     const { data: authData } = await client.auth.admin.getUserById(body.userId);
     console.log('Auth APIからの取得結果:', authData);
     
+    // ユーザー名を決定
+    let userFullName = "";
+    
     // app_usersテーブルからfull_nameを取得
-    if (!userData || !userData.full_name || typeof userData.full_name !== 'string') {
-      console.error('ユーザー情報が取得できないか、full_nameが存在しません');
-      return NextResponse.json({ error: 'ユーザー情報が取得できないか、full_nameが存在しません' }, { status: 404 });
+    if (userData && userData.full_name && typeof userData.full_name === 'string') {
+      userFullName = userData.full_name;
+      console.log('app_usersテーブルからfull_nameを取得:', userFullName);
+    } 
+    // authテーブルからユーザー情報を取得
+    else if (authData && authData.user) {
+      // Auth APIのuser_metadata.full_name
+      if (authData.user.user_metadata && authData.user.user_metadata.full_name) {
+        userFullName = authData.user.user_metadata.full_name;
+        console.log('Auth APIのuser_metadata.full_nameを使用:', userFullName);
+      }
+      // Auth APIのemail
+      else if (authData.user.email) {
+        userFullName = authData.user.email.split('@')[0];
+        console.log('Auth APIのemailを使用:', userFullName);
+      }
     }
     
-    const userFullName = userData.full_name;
-    console.log('app_usersテーブルからfull_nameを取得:', userFullName);
+    // それでも名前が取得できなかった場合は、デフォルト値を設定
+    if (!userFullName) {
+      // 招待するユーザーのメールアドレスがあれば、それを使用
+      if (body.email) {
+        userFullName = body.email.split('@')[0];
+        console.log('招待メールアドレスを使用:', userFullName);
+      } else {
+        // 最終手段としてユーザーIDの一部を使用
+        userFullName = `ユーザー ${body.userId.substring(0, 8)}`;
+        console.log('ユーザーIDから名前を生成:', userFullName);
+      }
+    }
     
     // 既に登録されている場合は更新
     if (existingCollaborator && existingCollaborator.id) {
