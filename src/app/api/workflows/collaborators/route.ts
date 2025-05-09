@@ -91,11 +91,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: checkError.message }, { status: 400 });
     }
     
+    // ユーザー情報を取得
+    let userFullName = "不明なユーザー";
+    const { data: userData, error: userError } = await client
+      .from('app_users')
+      .select('full_name, username, email')
+      .eq('id', body.userId)
+      .single();
+      
+    if (!userError && userData) {
+      if (userData.full_name && typeof userData.full_name === 'string') {
+        userFullName = userData.full_name;
+      } else if (userData.username && typeof userData.username === 'string') {
+        userFullName = userData.username;
+      } else if (userData.email && typeof userData.email === 'string') {
+        userFullName = userData.email.split('@')[0]; // メールアドレスのユーザー名部分を使用
+      }
+    } else {
+      console.log('ユーザー情報取得エラーまたはユーザーが存在しません:', userError);
+    }
+    
     // 既に登録されている場合は更新
     if (existingCollaborator && existingCollaborator.id) {
       // 更新データを準備
       const updateData: any = {
-        permission_type: body.permissionType || 'edit'
+        permission_type: body.permissionType || 'edit',
+        full_name: userFullName
       };
       
       // 認証されている場合のみadded_byを設定
@@ -122,7 +143,8 @@ export async function POST(request: Request) {
     const insertData: any = {
       workflow_id: body.workflowId,
       user_id: body.userId,
-      permission_type: body.permissionType || 'edit'
+      permission_type: body.permissionType || 'edit',
+      full_name: userFullName
     };
     
     // 認証されている場合のみadded_byを設定

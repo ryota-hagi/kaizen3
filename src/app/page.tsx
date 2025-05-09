@@ -456,7 +456,9 @@ export default function Home() {
                                               <div key={collab.id} className="flex items-center mb-1">
                                                 <div className="flex-shrink-0 h-6 w-6">
                                                   <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
-                                                    {user?.fullName?.charAt(0) || (collab.permission_type === 'edit' ? 'E' : 'V')}
+                                                    {collab.full_name ? collab.full_name.charAt(0) : 
+                                                      (user?.fullName?.charAt(0) || 
+                                                        (collab.permission_type === 'edit' ? 'E' : 'V'))}
                                                   </div>
                                                 </div>
                                                 {/* 編集者という表記をなくし、アイコンのみに */}

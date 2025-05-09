@@ -165,19 +165,21 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
         {collaborators.length > 0 ? (
           <ul className="divide-y">
             {collaborators.map(collab => {
-              // app_usersテーブルからユーザー情報を取得
+              // app_usersテーブルからユーザー情報を取得（補足情報として）
               const collaboratorUser = appUsers.find(user => user.id === collab.userId);
+              
+              // workflow_collaboratorsテーブルのfull_nameを優先的に使用
+              const displayName = collab.full_name || 
+                (collaboratorUser ? (collaboratorUser.full_name || collaboratorUser.username) : '不明なユーザー');
               
               return (
                 <li key={collab.id} className="py-2 flex justify-between items-center">
                   <div>
                     <span className="font-medium">
-                      {collaboratorUser ? 
-                        (collaboratorUser.full_name || collaboratorUser.username) : 
-                        '不明なユーザー'}
+                      {displayName}
                     </span>
                     <span className="ml-2 text-sm text-gray-500">
-                      {collaboratorUser?.email}
+                      {collaboratorUser?.email || ''}
                     </span>
                     <span className={`ml-2 px-2 py-0.5 text-xs rounded ${
                       collab.permissionType === 'edit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
