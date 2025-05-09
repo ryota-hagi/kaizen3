@@ -112,6 +112,23 @@ export async function POST(request: Request) {
     // エラーが発生しても処理を続行
   }
   
+  // ユーザーIDがない場合はapp_usersテーブルから最初のユーザーIDを取得
+  if (!userId) {
+    try {
+      const { data: userData } = await client
+        .from('app_users')
+        .select('id')
+        .limit(1)
+        .single();
+        
+      if (userData) {
+        userId = userData.id;
+      }
+    } catch (error) {
+      console.error('ユーザー情報の取得に失敗しました:', error);
+    }
+  }
+
   // ワークフローを作成
   const workflowData = {
     name: body.name,
@@ -119,7 +136,7 @@ export async function POST(request: Request) {
     steps: body.steps || [],
     is_improved: body.isImproved || false,
     original_id: body.originalId,
-    created_by: userId,
+    created_by: userId, // app_usersテーブルのidを使用
     company_id: companyId || (await getDefaultCompanyId(client)),
     access_level: body.accessLevel || 'user',
     version: 1
