@@ -75,9 +75,8 @@ export async function POST(request: Request) {
     
     // ユーザー情報を取得
     const { data: { user } } = await client.auth.getUser();
-    // 認証されていない場合は固定のUUIDを使用（システムユーザー用）
-    const systemUserId = '00000000-0000-0000-0000-000000000000';
-    const userId = user?.id || systemUserId;
+    // 認証されていない場合はNULLを使用
+    const userId = user?.id || null;
     
     // 既に共同編集者として登録されているか確認
     const { data: existingCollaborator, error: checkError } = await client
@@ -94,12 +93,19 @@ export async function POST(request: Request) {
     
     // 既に登録されている場合は更新
     if (existingCollaborator && existingCollaborator.id) {
+      // 更新データを準備
+      const updateData: any = {
+        permission_type: body.permissionType || 'edit'
+      };
+      
+      // 認証されている場合のみadded_byを設定
+      if (userId) {
+        updateData.added_by = userId;
+      }
+      
       const { data, error } = await client
         .from('workflow_collaborators')
-        .update({
-          permission_type: body.permissionType || 'edit',
-          added_by: userId
-        })
+        .update(updateData)
         .eq('id', existingCollaborator.id)
         .select();
         
@@ -112,14 +118,21 @@ export async function POST(request: Request) {
     }
     
     // 新規登録
+    // 登録データを準備
+    const insertData: any = {
+      workflow_id: body.workflowId,
+      user_id: body.userId,
+      permission_type: body.permissionType || 'edit'
+    };
+    
+    // 認証されている場合のみadded_byを設定
+    if (userId) {
+      insertData.added_by = userId;
+    }
+    
     const { data, error } = await client
       .from('workflow_collaborators')
-      .insert({
-        workflow_id: body.workflowId,
-        user_id: body.userId,
-        permission_type: body.permissionType || 'edit',
-        added_by: userId
-      })
+      .insert(insertData)
       .select();
       
     if (error) {
