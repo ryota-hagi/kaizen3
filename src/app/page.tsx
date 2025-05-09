@@ -434,7 +434,7 @@ export default function Home() {
                                 <div>
                                   {/* 作成者と共同編集者を横に並べる */}
                                   <div className="flex items-center">
-                                    {/* 作成者 */}
+                                    {/* 作成者 - ユーザーコンテキストから取得した作成者情報を使用 */}
                                     {displayWorkflow.createdBy && getUserById && getUserById(displayWorkflow.createdBy) ? (
                                       <div className="flex items-center group relative">
                                         <div className="flex-shrink-0 h-8 w-8 shadow-sm rounded-full border border-secondary-200 z-10">

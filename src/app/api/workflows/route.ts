@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     steps: body.steps || [],
     is_improved: body.isImproved || false,
     original_id: body.originalId,
-    created_by: userId,
+    created_by: userId || '00000000-0000-0000-0000-000000000000', // ユーザーIDがない場合はデフォルト値を設定
     company_id: companyId,
     access_level: body.accessLevel || 'user',
     version: 1

@@ -100,7 +100,8 @@ export async function POST(request: Request) {
                   permission_type,
                   added_at,
                   added_by
-                )
+                ),
+                creator:app_users!created_by(id, full_name, profile_image)
               `)
               .order('updated_at', { ascending: false });
               
