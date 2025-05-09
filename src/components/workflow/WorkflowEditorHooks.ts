@@ -23,6 +23,7 @@ export const useWorkflowData = (workflowId: string) => {
   const [showComparison, setShowComparison] = useState(false)
   const [improvedWorkflow, setImprovedWorkflow] = useState<Workflow | null>(null)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [accessLevel, setAccessLevel] = useState('user')
 
   // ワークフローデータの読み込み
   useEffect(() => {
@@ -263,6 +264,7 @@ export const useWorkflowData = (workflowId: string) => {
     showComparison,
     improvedWorkflow,
     isCompleted,
+    accessLevel,
     setWorkflow,
     setSteps,
     setIsImproved,
@@ -275,6 +277,7 @@ export const useWorkflowData = (workflowId: string) => {
     setShowComparison,
     setImprovedWorkflow,
     setIsCompleted,
+    setAccessLevel,
     updateWorkflowData,
     addStep,
     editStep,
@@ -550,6 +553,7 @@ export const useWorkflowSave = (
 ) => {
   // UserContextからユーザー情報を取得
   const { currentUser } = useUser()
+  const [accessLevel, setAccessLevel] = useState('user')
   // ワークフローの保存
   const saveWorkflow = async () => {
     if (!workflow) return
@@ -644,7 +648,7 @@ export const useWorkflowSave = (
         isImproved: updatedWorkflow.isImproved || false,
         originalId: updatedWorkflow.originalId,
         isCompleted: updatedWorkflow.isCompleted,
-        accessLevel: 'user' // デフォルトのアクセスレベル
+        accessLevel: accessLevel // アクセスレベルを設定
       }
       
       // 新規作成か更新かによってエンドポイントを変更

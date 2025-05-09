@@ -35,6 +35,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
     showComparison,
     improvedWorkflow,
     isCompleted,
+    accessLevel,
     setWorkflow,
     setSteps,
     setIsImproved,
@@ -47,6 +48,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
     setShowComparison,
     setImprovedWorkflow,
     setIsCompleted,
+    setAccessLevel,
     updateWorkflowData,
     addStep,
     editStep,
@@ -166,6 +168,8 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
         workflowDescription={workflowDescription}
         setWorkflowName={setWorkflowName}
         setWorkflowDescription={setWorkflowDescription}
+        accessLevel={accessLevel}
+        setAccessLevel={setAccessLevel}
       />
 
       {/* 改善効果の表示 */}
