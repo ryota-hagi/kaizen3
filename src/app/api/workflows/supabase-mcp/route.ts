@@ -91,43 +91,6 @@ export async function POST(request: Request) {
             const adminClient = supabaseAdmin();
             
             // 管理者権限でワークフローを取得
-            // 管理者のユーザー情報を取得して会社IDを取得
-            let companyId = null;
-            
-            if (user && user.id) {
-              const { data: adminUserData, error: adminUserError } = await adminClient
-                .from('app_users')
-                .select('company_id')
-                .eq('auth_uid', user.id)
-                .single();
-                
-              if (adminUserError) {
-                console.error('管理者ユーザー情報取得エラー:', adminUserError);
-                return NextResponse.json({ 
-                  error: `管理者ユーザー情報取得エラー: ${adminUserError.message}` 
-                }, { status: 500 });
-              }
-              
-              companyId = adminUserData.company_id;
-            } else {
-              // ユーザー情報がない場合はデフォルトの会社IDを使用
-              const { data: defaultCompany, error: defaultCompanyError } = await adminClient
-                .from('companies')
-                .select('id')
-                .limit(1)
-                .single();
-                
-              if (defaultCompanyError) {
-                console.error('デフォルト会社情報取得エラー:', defaultCompanyError);
-                return NextResponse.json({ 
-                  error: `デフォルト会社情報取得エラー: ${defaultCompanyError.message}` 
-                }, { status: 500 });
-              }
-              
-              companyId = defaultCompany.id;
-            }
-            
-            // 管理者と同じ会社IDを持つワークフローのみを取得
             const { data: adminWorkflows, error: adminError } = await adminClient
               .from('workflows')
               .select(`
@@ -140,7 +103,6 @@ export async function POST(request: Request) {
                   added_by
                 )
               `)
-              .eq('company_id', companyId)
               .order('updated_at', { ascending: false });
               
             if (adminError) {
