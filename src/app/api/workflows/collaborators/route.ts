@@ -43,6 +43,26 @@ export async function GET(request: Request) {
     // データを整形して返す
     const formattedData = data.map(collab => {
       const user = userData.find(u => u.id === collab.user_id);
+      
+      // ユーザー名の取得（優先順位: collab.full_name > user.full_name > user.username > user.email > ユーザーID）
+      let displayName = "";
+      
+      if (collab.full_name && typeof collab.full_name === 'string') {
+        displayName = collab.full_name;
+      } else if (user?.full_name && typeof user.full_name === 'string') {
+        displayName = user.full_name;
+      } else if (user?.username && typeof user.username === 'string') {
+        displayName = user.username;
+      } else if (user?.email && typeof user.email === 'string') {
+        displayName = user.email.split('@')[0];
+      } else if (collab.user_id && typeof collab.user_id === 'string') {
+        // ユーザーIDの最初の8文字を使用
+        displayName = `ユーザー ${collab.user_id.substring(0, 8)}`;
+      } else {
+        // 最終的なフォールバック
+        displayName = "ユーザー";
+      }
+      
       return {
         id: collab.id,
         workflowId: collab.workflow_id,
@@ -50,7 +70,7 @@ export async function GET(request: Request) {
         permissionType: collab.permission_type,
         addedAt: collab.added_at,
         addedBy: collab.added_by,
-        full_name: collab.full_name || (user?.full_name || user?.username || (user?.email ? user?.email.split('@')[0] : '不明なユーザー')),
+        full_name: displayName,
         user: user || null
       };
     });
@@ -93,11 +113,11 @@ export async function POST(request: Request) {
     }
     
     // ユーザー情報を取得
-    let userFullName = "不明なユーザー";
+    let userFullName = "";
     
     console.log('ユーザーID:', body.userId);
     
-    // app_usersテーブルから直接ユーザー情報を取得
+    // 1. まずapp_usersテーブルから直接ユーザー情報を取得
     const { data: userData, error: userError } = await client
       .from('app_users')
       .select('*')
@@ -107,44 +127,74 @@ export async function POST(request: Request) {
     console.log('取得したユーザーデータ:', userData);
     console.log('ユーザー取得エラー:', userError);
     
+    // 2. authテーブルからユーザー情報を取得
+    let authUser = null;
+    try {
+      const { data: authData, error: authError } = await client.auth.admin.getUserById(body.userId);
+      if (!authError && authData && authData.user) {
+        authUser = authData.user;
+        console.log('Auth APIからのユーザー情報:', authUser);
+      } else {
+        console.log('Auth APIからのユーザー取得エラー:', authError);
+      }
+    } catch (authFetchError) {
+      console.error('Auth API呼び出しエラー:', authFetchError);
+    }
+    
+    // 3. 直接メールアドレスでユーザーを検索
+    let emailUser = null;
+    if (authUser && authUser.email) {
+      const { data: emailUserData, error: emailUserError } = await client
+        .from('app_users')
+        .select('*')
+        .eq('email', authUser.email)
+        .single();
+        
+      if (!emailUserError && emailUserData) {
+        emailUser = emailUserData;
+        console.log('メールアドレスで見つかったユーザー:', emailUser);
+      }
+    }
+    
+    // 4. 優先順位に従ってユーザー名を設定
+    // app_usersテーブルのデータを優先
     if (!userError && userData) {
-      // full_nameが存在する場合
       if (userData.full_name && typeof userData.full_name === 'string') {
         userFullName = userData.full_name;
-        console.log('full_nameを使用:', userFullName);
-      } 
-      // usernameが存在する場合
-      else if (userData.username && typeof userData.username === 'string') {
+        console.log('app_usersテーブルからfull_nameを使用:', userFullName);
+      } else if (userData.username && typeof userData.username === 'string') {
         userFullName = userData.username;
-        console.log('usernameを使用:', userFullName);
-      } 
-      // emailが存在する場合
-      else if (userData.email && typeof userData.email === 'string') {
-        userFullName = userData.email.split('@')[0]; // メールアドレスのユーザー名部分を使用
-        console.log('emailを使用:', userFullName);
+        console.log('app_usersテーブルからusernameを使用:', userFullName);
+      } else if (userData.email && typeof userData.email === 'string') {
+        userFullName = userData.email.split('@')[0];
+        console.log('app_usersテーブルからemailを使用:', userFullName);
       }
-    } else {
-      console.log('ユーザー情報取得エラーまたはユーザーが存在しません:', userError);
-      
-      // authテーブルからユーザー情報を取得してみる
-      try {
-        const { data: authUser, error: authError } = await client.auth.admin.getUserById(body.userId);
-        console.log('Auth APIからのユーザー情報:', authUser);
-        
-        if (!authError && authUser && authUser.user) {
-          if (authUser.user.user_metadata && authUser.user.user_metadata.full_name) {
-            userFullName = authUser.user.user_metadata.full_name;
-            console.log('Auth APIからfull_nameを取得:', userFullName);
-          } else if (authUser.user.email) {
-            userFullName = authUser.user.email.split('@')[0];
-            console.log('Auth APIからemailを取得:', userFullName);
-          }
-        } else {
-          console.log('Auth APIからのユーザー取得エラー:', authError);
-        }
-      } catch (authFetchError) {
-        console.error('Auth API呼び出しエラー:', authFetchError);
+    }
+    // メールアドレスで見つかったユーザーデータを次に優先
+    else if (emailUser) {
+      if (emailUser.full_name && typeof emailUser.full_name === 'string') {
+        userFullName = emailUser.full_name;
+        console.log('メールアドレス検索からfull_nameを使用:', userFullName);
+      } else if (emailUser.username && typeof emailUser.username === 'string') {
+        userFullName = emailUser.username;
+        console.log('メールアドレス検索からusernameを使用:', userFullName);
       }
+    }
+    // Auth APIのデータを最後に使用
+    else if (authUser) {
+      if (authUser.user_metadata && authUser.user_metadata.full_name) {
+        userFullName = authUser.user_metadata.full_name;
+        console.log('Auth APIからfull_nameを取得:', userFullName);
+      } else if (authUser.email) {
+        userFullName = authUser.email.split('@')[0];
+        console.log('Auth APIからemailを取得:', userFullName);
+      }
+    }
+    
+    // 5. それでも名前が取得できなかった場合は、ユーザーIDの最初の8文字を使用
+    if (!userFullName) {
+      userFullName = `ユーザー ${body.userId.substring(0, 8)}`;
+      console.log('ユーザーIDから名前を生成:', userFullName);
     }
     
     // 既に登録されている場合は更新
