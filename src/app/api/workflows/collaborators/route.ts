@@ -125,34 +125,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `ユーザー情報の取得に失敗しました: ${userError.message}` }, { status: 500 });
     }
     
-    if (!userData) {
-      // ユーザー情報が取得できない場合でも処理を続行
-      console.log('app_usersテーブルからユーザー情報が取得できませんでした。空の情報で処理を続行します。');
-      
-      // 代替手段として、authテーブルからユーザー情報を取得（エラーが発生しても処理を続行）
+    // full_nameを取得
+    let userFullName = "";
+    
+    if (userData && userData.full_name && typeof userData.full_name === 'string') {
+      // app_usersテーブルからfull_nameを取得できた場合
+      userFullName = userData.full_name;
+      console.log('app_usersテーブルからfull_nameを取得:', userFullName);
+    } else {
+      // app_usersテーブルからfull_nameを取得できない場合は、authテーブルから取得を試みる
       try {
         const { data: authData } = await client.auth.admin.getUserById(body.userId);
         console.log('Auth APIからの取得結果:', authData);
         
         if (authData && authData.user) {
-          // Auth APIからユーザー情報を取得できた場合は、そのまま処理を続行
-          console.log('Auth APIからユーザー情報を取得しました');
-        } else {
-          console.log('Auth APIからもユーザー情報が取得できませんでした。空の情報で処理を続行します。');
+          // Auth APIからユーザー情報を取得できた場合
+          if (authData.user.user_metadata && authData.user.user_metadata.full_name) {
+            userFullName = authData.user.user_metadata.full_name;
+            console.log('Auth APIのuser_metadata.full_nameを使用:', userFullName);
+          } else if (authData.user.email) {
+            // emailがある場合は、@より前の部分を使用
+            userFullName = authData.user.email.split('@')[0];
+            console.log('Auth APIのemailを使用:', userFullName);
+          }
         }
       } catch (error) {
         console.log('Auth API呼び出しエラー:', error);
-        console.log('エラーが発生しましたが、空の情報で処理を続行します。');
       }
-    }
-    
-    // full_nameを取得
-    let userFullName = "";
-    if (userData && userData.full_name && typeof userData.full_name === 'string') {
-      userFullName = userData.full_name;
-    } else {
-      // full_nameが存在しない場合は空文字列を使用
-      userFullName = "";
+      
+      // それでもfull_nameが取得できない場合は、ユーザーIDを使用
+      if (!userFullName) {
+        userFullName = body.userId;
+        console.log('ユーザーIDを使用:', userFullName);
+      }
     }
     
     console.log('使用するユーザー名:', userFullName);
