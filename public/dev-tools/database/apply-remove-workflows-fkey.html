@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ワークフロー外部キー制約削除ツール</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 10px;
+    }
+    .container {
+      background-color: #f9f9f9;
+      border-radius: 5px;
+      padding: 20px;
+      margin-top: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      background-color: #f5f5f5;
+      border-left: 4px solid #3498db;
+    }
+    .error {
+      border-left-color: #e74c3c;
+    }
+    pre {
+      background-color: #f8f8f8;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .back-link {
+      display: inline-block;
+      margin-top: 20px;
+      color: #3498db;
+      text-decoration: none;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>ワークフロー外部キー制約削除ツール</h1>
+  
+  <div class="container">
+    <p>このツールは、ワークフローテーブルの外部キー制約を削除し、created_byカラムをNULL許容に変更します。</p>
+    <p>これにより、ワークフロー作成時にcreated_byがnullでも保存できるようになります。</p>
+    
+    <button id="applyButton">外部キー制約を削除する</button>
+    
+    <div id="result" class="result" style="display: none;"></div>
+  </div>
+  
+  <a href="/dev-tools/database/" class="back-link">← データベースツール一覧に戻る</a>
+
+  <script>
+    document.getElementById('applyButton').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('result');
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '処理中...';
+      resultDiv.className = 'result';
+      
+      try {
+        const response = await fetch('/api/workflows/apply-remove-fkey');
+        const data = await response.json();
+        
+        if (response.ok) {
+          resultDiv.innerHTML = `
+            <h3>成功!</h3>
+            <p>${data.message}</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        } else {
+          resultDiv.className = 'result error';
+          resultDiv.innerHTML = `
+            <h3>エラー</h3>
+            <p>${data.error || '不明なエラーが発生しました'}</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        resultDiv.className = 'result error';
+        resultDiv.innerHTML = `
+          <h3>エラー</h3>
+          <p>リクエスト中にエラーが発生しました: ${error.message}</p>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>
