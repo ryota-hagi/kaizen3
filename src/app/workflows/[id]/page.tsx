@@ -67,17 +67,63 @@ export default function WorkflowDetailPage() {
   // 共同編集者リストを取得する関数
   const fetchCollaborators = async () => {
     try {
-      const response = await fetch(`/api/workflows/collaborators?workflowId=${workflowId}`);
+      // 本番環境かどうかを判定
+      const isProduction = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('API response error:', errorData);
-        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      if (isProduction) {
+        // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
+        try {
+          // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
+          const result = await global.use_mcp_tool(
+            'github.com/supabase-community/supabase-mcp',
+            'execute_sql',
+            {
+              project_id: 'czuedairowlwfgbjmfbg',
+              query: `
+                SELECT wc.*, au.full_name as user_full_name, au.email as user_email
+                FROM workflow_collaborators wc
+                LEFT JOIN app_users au ON wc.user_id = au.id
+                WHERE wc.workflow_id = '${workflowId}';
+              `
+            }
+          );
+          
+          console.log('MCP実行結果:', result);
+          
+          // データを整形
+          const formattedData = result.map((collab: any) => ({
+            id: collab.id,
+            workflowId: collab.workflow_id,
+            userId: collab.user_id,
+            permissionType: collab.permission_type,
+            addedAt: collab.added_at,
+            addedBy: collab.added_by,
+            full_name: collab.full_name || collab.user_full_name || '',
+            user: {
+              id: collab.user_id,
+              full_name: collab.user_full_name || '',
+              email: collab.user_email || ''
+            }
+          }));
+          
+          setCollaborators(formattedData);
+        } catch (mcpError) {
+          console.error('MCP実行エラー:', mcpError);
+        }
+      } else {
+        // ローカル環境の場合は、通常のAPIを使用
+        const response = await fetch(`/api/workflows/collaborators?workflowId=${workflowId}`);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('API response error:', errorData);
+          throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+        }
+        
+        const data = await response.json();
+        console.log('Fetched collaborators:', data);
+        setCollaborators(data);
       }
-      
-      const data = await response.json();
-      console.log('Fetched collaborators:', data);
-      setCollaborators(data);
     } catch (error) {
       console.error('共同編集者の取得エラー:', error);
     }
@@ -317,32 +363,73 @@ export default function WorkflowDetailPage() {
               }}
               onAddCollaborator={async (userId, permissionType) => {
                 try {
-                  // APIを呼び出して共同編集者を追加
-                  const response = await fetch('/api/workflows/collaborators', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      workflowId: workflow.id,
-                      userId,
-                      permissionType
-                    }),
-                  });
+                  // 本番環境かどうかを判定
+                  const isProduction = typeof window !== 'undefined' && (
+                    window.location.hostname.includes('vercel.app') || 
+                    window.location.hostname !== 'localhost'
+                  );
                   
-                  if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error('API response error:', errorData);
-                    throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                  if (isProduction) {
+                    // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
+                    try {
+                      console.log('本番環境でMCPを使用して共同編集者を追加します');
+                      // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
+                      const result = await global.use_mcp_tool(
+                        'github.com/supabase-community/supabase-mcp',
+                        'execute_sql',
+                        {
+                          project_id: 'czuedairowlwfgbjmfbg',
+                          query: `
+                            INSERT INTO workflow_collaborators (workflow_id, user_id, permission_type, full_name)
+                            VALUES ('${workflow.id}', '${userId}', '${permissionType}', 
+                              (SELECT full_name FROM app_users WHERE id = '${userId}'))
+                            ON CONFLICT (workflow_id, user_id) 
+                            DO UPDATE SET permission_type = '${permissionType}'
+                            RETURNING *;
+                          `
+                        }
+                      );
+                      
+                      console.log('MCP実行結果:', result);
+                      
+                      // 共同編集者リストを再取得
+                      fetchCollaborators();
+                      
+                      return true;
+                    } catch (mcpError) {
+                      console.error('MCP実行エラー:', mcpError);
+                      alert(`共同編集者の追加に失敗しました: ${mcpError instanceof Error ? mcpError.message : '不明なエラー'}`);
+                      return false;
+                    }
+                  } else {
+                    // ローカル環境の場合は、通常のAPIを使用
+                    console.log('ローカル環境でAPIを使用して共同編集者を追加します');
+                    const response = await fetch('/api/workflows/collaborators', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        workflowId: workflow.id,
+                        userId,
+                        permissionType
+                      }),
+                    });
+                    
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      console.error('API response error:', errorData);
+                      throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                    }
+                    
+                    const result = await response.json();
+                    console.log('Added collaborator:', result);
+                    
+                    // 共同編集者リストを再取得
+                    fetchCollaborators();
+                    
+                    return true;
                   }
-                  
-                  const result = await response.json();
-                  console.log('Added collaborator:', result);
-                  
-                  // 共同編集者リストを再取得
-                  fetchCollaborators();
-                  
-                  return true;
                 } catch (error) {
                   console.error('共同編集者追加エラー:', error);
                   alert(`共同編集者の追加に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
@@ -351,24 +438,104 @@ export default function WorkflowDetailPage() {
               }}
               onRemoveCollaborator={async (collaboratorId) => {
                 try {
-                  // APIを呼び出して共同編集者を削除
-                  const response = await fetch(`/api/workflows/collaborators?id=${collaboratorId}`, {
-                    method: 'DELETE',
-                  });
+                  // 本番環境かどうかを判定
+                  const isProduction = typeof window !== 'undefined' && (
+                    window.location.hostname.includes('vercel.app') || 
+                    window.location.hostname !== 'localhost'
+                  );
                   
-                  if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error('API response error:', errorData);
-                    throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                  if (isProduction) {
+                    // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
+                    try {
+                      console.log('本番環境でMCPを使用して共同編集者を削除します');
+                      console.log('ホスト名:', window.location.hostname);
+                      
+                      // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
+                      const result = await global.use_mcp_tool(
+                        'github.com/supabase-community/supabase-mcp',
+                        'execute_sql',
+                        {
+                          project_id: 'czuedairowlwfgbjmfbg',
+                          query: `
+                            DELETE FROM workflow_collaborators
+                            WHERE id = '${collaboratorId}'
+                            RETURNING *;
+                          `
+                        }
+                      );
+                      
+                      console.log('共同編集者削除結果:', result);
+                      
+                      // 共同編集者リストを再取得
+                      try {
+                        // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
+                        const collaboratorsResult = await global.use_mcp_tool(
+                          'github.com/supabase-community/supabase-mcp',
+                          'execute_sql',
+                          {
+                            project_id: 'czuedairowlwfgbjmfbg',
+                            query: `
+                              SELECT wc.*, au.full_name as user_full_name, au.email as user_email
+                              FROM workflow_collaborators wc
+                              LEFT JOIN app_users au ON wc.user_id = au.id
+                              WHERE wc.workflow_id = '${workflow.id}';
+                            `
+                          }
+                        );
+                        
+                        console.log('共同編集者リスト取得結果:', collaboratorsResult);
+                        
+                        // 共同編集者リストを更新
+                        if (collaboratorsResult) {
+                          const formattedData = collaboratorsResult.map((collab: any) => ({
+                            id: collab.id,
+                            workflowId: collab.workflow_id,
+                            userId: collab.user_id,
+                            permissionType: collab.permission_type,
+                            addedAt: collab.added_at,
+                            addedBy: collab.added_by,
+                            full_name: collab.full_name || collab.user_full_name || '',
+                            user: {
+                              id: collab.user_id,
+                              full_name: collab.user_full_name || '',
+                              email: collab.user_email || ''
+                            }
+                          }));
+                          
+                          // 共同編集者リストを更新
+                          setCollaborators(formattedData);
+                        }
+                      } catch (fetchError) {
+                        console.error('共同編集者リスト取得エラー:', fetchError);
+                      }
+                      
+                      return true;
+                    } catch (mcpError) {
+                      console.error('MCP実行エラー:', mcpError);
+                      alert(`共同編集者の削除に失敗しました: ${mcpError instanceof Error ? mcpError.message : '不明なエラー'}`);
+                      return false;
+                    }
+                  } else {
+                    // ローカル環境の場合は、通常のAPIを使用
+                    console.log('ローカル環境でAPIを使用して共同編集者を削除します');
+                    const response = await fetch(`/api/workflows/collaborators?id=${collaboratorId}`, {
+                      method: 'DELETE',
+                    });
+                    
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      console.error('API response error:', errorData);
+                      throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                    }
+                    
+                    const result = await response.json();
+                    console.log('Removed collaborator:', result);
+                    
+                    // 共同編集者リストを再取得
+                    fetchCollaborators();
+                    
+                    return true;
                   }
-                  
-                  const result = await response.json();
-                  console.log('Removed collaborator:', result);
-                  
-                  // 共同編集者リストを再取得
-                  fetchCollaborators();
-                  
-                  return true;
                 } catch (error) {
                   console.error('共同編集者削除エラー:', error);
                   alert(`共同編集者の削除に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);

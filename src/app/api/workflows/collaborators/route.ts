@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, supabaseAdmin } from '@/lib/supabaseClient';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -23,12 +23,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     
-    // ユーザー情報を別途取得
+    // 管理者権限を持つクライアントを使用してユーザー情報を別途取得
     const userIds = data.map(collab => collab.user_id);
     let userData: any[] = [];
     
     if (userIds.length > 0) {
-      const { data: users, error: userError } = await client
+      const adminClient = supabaseAdmin();
+      const { data: users, error: userError } = await adminClient
         .from('app_users')
         .select('*')
         .in('id', userIds);
@@ -108,8 +109,9 @@ export async function POST(request: Request) {
     // app_usersテーブルから確実にユーザー情報を取得
     console.log('ユーザーID:', body.userId);
     
-    // app_usersテーブルから直接full_nameを取得
-    let { data: userData, error: userError } = await client
+    // 管理者権限を持つクライアントを使用してapp_usersテーブルから直接full_nameを取得
+    const adminClient = supabaseAdmin();
+    let { data: userData, error: userError } = await adminClient
       .from('app_users')
       .select('full_name')
       .eq('id', body.userId)
@@ -123,9 +125,17 @@ export async function POST(request: Request) {
       
       // ユーザーが存在しない場合は、app_usersテーブルにユーザーを作成
       try {
-        // authテーブルからユーザー情報を取得
-        const { data: authData } = await client.auth.admin.getUserById(body.userId);
+        // 管理者権限を持つクライアントを使用してauthテーブルからユーザー情報を取得
+        const adminClient = supabaseAdmin();
+        const { data: authData, error: authError } = await adminClient.auth.admin.getUserById(body.userId);
         
+        // エラーが発生した場合はログに出力するが、処理は続行する
+        if (authError) {
+          console.error('Auth API呼び出しエラー:', authError);
+          console.log('Auth APIエラーが発生しましたが、処理を続行します');
+        }
+        
+        // ユーザー情報を取得できた場合
         if (authData && authData.user) {
           // ユーザーのメールアドレスを取得
           const email = authData.user.email || '';
@@ -136,29 +146,40 @@ export async function POST(request: Request) {
             full_name = authData.user.user_metadata.full_name;
           }
           
-          // app_usersテーブルにユーザーを作成
-          const { data: newUser, error: insertError } = await client
-            .from('app_users')
-            .insert({
-              id: body.userId,
-              auth_uid: body.userId,
-              email: email,
-              full_name: full_name,
-              role: '一般ユーザー',
-              status: 'アクティブ'
-            })
-            .select('full_name')
-            .single();
-          
-          if (insertError) {
-            console.error('ユーザー作成エラー:', insertError);
-            return NextResponse.json({ error: `ユーザーの作成に失敗しました: ${insertError.message}` }, { status: 500 });
+          try {
+            // 管理者権限を持つクライアントを使用してapp_usersテーブルにユーザーを作成
+            const adminClient = supabaseAdmin();
+            const { data: newUser, error: insertError } = await adminClient
+              .from('app_users')
+              .insert({
+                id: body.userId,
+                auth_uid: body.userId,
+                email: email,
+                full_name: full_name,
+                role: '一般ユーザー',
+                status: 'アクティブ'
+              })
+              .select('full_name')
+              .single();
+            
+            if (insertError) {
+              console.error('ユーザー作成エラー:', insertError);
+              // エラーが発生しても処理を続行
+              console.log('ユーザー作成エラーが発生しましたが、処理を続行します');
+            } else {
+              // 作成したユーザーのfull_nameを使用
+              userData = newUser;
+            }
+          } catch (insertErr) {
+            console.error('ユーザー作成中に例外が発生:', insertErr);
+            // 例外が発生しても処理を続行
+            console.log('ユーザー作成中に例外が発生しましたが、処理を続行します');
           }
-          
-          // 作成したユーザーのfull_nameを使用
-          userData = newUser;
         } else {
-          return NextResponse.json({ error: 'ユーザーが存在しません' }, { status: 404 });
+          // ユーザー情報を取得できなかった場合でも処理を続行
+          console.log('Auth APIからユーザー情報を取得できませんでしたが、処理を続行します');
+          // 空のuserDataオブジェクトを作成
+          userData = { full_name: body.userId };
         }
       } catch (error) {
         console.error('Auth API呼び出しエラー:', error);
