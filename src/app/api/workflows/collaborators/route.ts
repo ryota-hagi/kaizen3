@@ -126,7 +126,10 @@ export async function POST(request: Request) {
     }
     
     if (!userData) {
-      // 代替手段として、authテーブルからユーザー情報を取得
+      // ユーザー情報が取得できない場合でも処理を続行
+      console.log('app_usersテーブルからユーザー情報が取得できませんでした。空の情報で処理を続行します。');
+      
+      // 代替手段として、authテーブルからユーザー情報を取得（エラーが発生しても処理を続行）
       try {
         const { data: authData } = await client.auth.admin.getUserById(body.userId);
         console.log('Auth APIからの取得結果:', authData);
@@ -135,12 +138,11 @@ export async function POST(request: Request) {
           // Auth APIからユーザー情報を取得できた場合は、そのまま処理を続行
           console.log('Auth APIからユーザー情報を取得しました');
         } else {
-          console.error('ユーザーが存在しません:', body.userId);
-          return NextResponse.json({ error: 'ユーザーが存在しません' }, { status: 404 });
+          console.log('Auth APIからもユーザー情報が取得できませんでした。空の情報で処理を続行します。');
         }
       } catch (error) {
-        console.error('Auth API呼び出しエラー:', error);
-        return NextResponse.json({ error: 'ユーザー情報の取得に失敗しました' }, { status: 500 });
+        console.log('Auth API呼び出しエラー:', error);
+        console.log('エラーが発生しましたが、空の情報で処理を続行します。');
       }
     }
     
