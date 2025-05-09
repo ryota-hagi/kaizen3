@@ -30,8 +30,30 @@ export async function POST(request: Request) {
     
     switch (operation) {
       case 'execute_sql':
-        // 直接SQLを実行（本番環境ではサポートされていない）
-        return NextResponse.json({ error: 'この操作は本番環境ではサポートされていません' }, { status: 400 });
+        try {
+          const { sql } = params;
+          
+          if (!sql) {
+            return NextResponse.json({ error: 'SQLクエリが指定されていません' }, { status: 400 });
+          }
+          
+          console.log('実行するSQL:', sql);
+          
+          // SQLを実行
+          const { data, error } = await supabaseClient.rpc('exec_sql', { sql_query: sql });
+          
+          if (error) {
+            console.error('SQL実行エラー:', error);
+            return NextResponse.json({ error: error.message }, { status: 400 });
+          }
+          
+          result = { success: true, message: 'SQLが正常に実行されました', data };
+        } catch (error) {
+          console.error('SQL実行中にエラーが発生しました:', error);
+          return NextResponse.json({ 
+            error: `SQL実行エラー: ${error instanceof Error ? error.message : '不明なエラー'}` 
+          }, { status: 500 });
+        }
         break;
         
       case 'get_workflows':
