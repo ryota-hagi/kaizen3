@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>更新されたワークフローRLSポリシーの適用</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+  <div class="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-6">
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">更新されたワークフローRLSポリシーの適用</h1>
+    
+    <div class="mb-6">
+      <p class="mb-4 text-gray-700">
+        このツールは、更新されたワークフローのRLSポリシーをSupabaseプロジェクトに適用します。
+        以下の変更が適用されます：
+      </p>
+      <ul class="list-disc pl-6 mb-4 text-gray-700 space-y-2">
+        <li>管理者IDのユーザーには会社アカウントの全てのワークフローが表示される</li>
+        <li>マネージャーアカウントや一般ユーザーは「全社共有」になっているワークフロー、自分の部署内共有に設定されているワークフロー、自分が作成したワークフロー、共同編集として招待されたワークフローが表示される</li>
+      </ul>
+    </div>
+
+    <div class="mb-6">
+      <label for="projectId" class="block text-sm font-medium text-gray-700 mb-2">Supabaseプロジェクトリファレンス</label>
+      <input type="text" id="projectId" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="例: abcdefghijklmnopqrst">
+    </div>
+
+    <div class="flex justify-between items-center mb-6">
+      <button id="applyButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+        RLSポリシーを適用
+      </button>
+      <button id="viewSqlButton" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+        SQLを表示
+      </button>
+    </div>
+
+    <div id="result" class="hidden p-4 rounded-md mb-6"></div>
+
+    <div id="sqlPreview" class="hidden">
+      <h2 class="text-xl font-semibold mb-3 text-gray-800">適用されるSQL</h2>
+      <pre id="sqlContent" class="bg-gray-800 text-green-400 p-4 rounded-md overflow-x-auto text-sm"></pre>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const applyButton = document.getElementById('applyButton');
+      const viewSqlButton = document.getElementById('viewSqlButton');
+      const projectIdInput = document.getElementById('projectId');
+      const resultDiv = document.getElementById('result');
+      const sqlPreview = document.getElementById('sqlPreview');
+      const sqlContent = document.getElementById('sqlContent');
+
+      // SQLファイルの内容を取得
+      async function fetchSqlContent() {
+        try {
+          const response = await fetch('/api/workflows/get-rls-sql?file=update_workflows_rls_policies.sql');
+          if (!response.ok) {
+            throw new Error('SQLファイルの取得に失敗しました');
+          }
+          const data = await response.json();
+          return data.sql;
+        } catch (error) {
+          console.error('SQLファイルの取得エラー:', error);
+          return '-- SQLファイルの取得に失敗しました';
+        }
+      }
+
+      // SQLを表示ボタンのイベントハンドラ
+      viewSqlButton.addEventListener('click', async () => {
+        const sql = await fetchSqlContent();
+        sqlContent.textContent = sql;
+        sqlPreview.classList.remove('hidden');
+        // ページの下部にスクロール
+        sqlPreview.scrollIntoView({ behavior: 'smooth' });
+      });
+
+      // RLSポリシーを適用ボタンのイベントハンドラ
+      applyButton.addEventListener('click', async () => {
+        const projectId = projectIdInput.value.trim();
+        
+        if (!projectId) {
+          showResult('エラー: プロジェクトIDを入力してください', 'error');
+          return;
+        }
+
+        applyButton.disabled = true;
+        applyButton.textContent = '適用中...';
+        
+        try {
+          const response = await fetch('/api/workflows/apply-updated-rls-policies', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ projectId }),
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok) {
+            showResult(`成功: ${data.message}`, 'success');
+          } else {
+            showResult(`エラー: ${data.message}`, 'error');
+          }
+        } catch (error) {
+          showResult(`エラー: ${error.message}`, 'error');
+        } finally {
+          applyButton.disabled = false;
+          applyButton.textContent = 'RLSポリシーを適用';
+        }
+      });
+
+      // 結果表示関数
+      function showResult(message, type) {
+        resultDiv.textContent = message;
+        resultDiv.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800');
+        
+        if (type === 'success') {
+          resultDiv.classList.add('bg-green-100', 'text-green-800');
+        } else {
+          resultDiv.classList.add('bg-red-100', 'text-red-800');
+        }
+        
+        resultDiv.classList.remove('hidden');
+      }
+
+      // 初期SQLの読み込み
+      const initialSql = await fetchSqlContent();
+      sqlContent.textContent = initialSql;
+    });
+  </script>
+</body>
+</html>
