@@ -12,20 +12,6 @@ export async function GET(request: Request) {
   try {
     const client = supabase();
     
-    // ワークフローの存在確認
-    const { data: workflow, error: workflowError } = await client
-      .from('workflows')
-      .select('id')
-      .eq('id', workflowId)
-      .single();
-      
-    if (workflowError) {
-      console.error('ワークフロー取得エラー:', workflowError);
-      return NextResponse.json({ 
-        error: `ワークフローが見つかりません: ${workflowError.message}` 
-      }, { status: 404 });
-    }
-    
     // 共同編集者の取得
     const { data, error } = await client
       .from('workflow_collaborators')
@@ -84,20 +70,6 @@ export async function POST(request: Request) {
     // ユーザー情報を取得
     const { data: { user } } = await client.auth.getUser();
     const userId = user?.id || 'system'; // 認証されていない場合はシステムとして扱う
-    
-    // ワークフローの存在確認
-    const { data: workflow, error: workflowError } = await client
-      .from('workflows')
-      .select('id')
-      .eq('id', body.workflowId)
-      .single();
-      
-    if (workflowError) {
-      console.error('ワークフロー取得エラー:', workflowError);
-      return NextResponse.json({ 
-        error: `ワークフローが見つかりません: ${workflowError.message}` 
-      }, { status: 404 });
-    }
     
     // 既に共同編集者として登録されているか確認
     const { data: existingCollaborator, error: checkError } = await client
@@ -167,25 +139,12 @@ export async function DELETE(request: Request) {
     
     const client = supabase();
     
-    // 共同編集者の存在確認
-    const { data: collaborator, error: checkError } = await client
-      .from('workflow_collaborators')
-      .select('id, workflow_id')
-      .eq('id', id)
-      .single();
-      
-    if (checkError) {
-      console.error('共同編集者確認エラー:', checkError);
-      return NextResponse.json({ 
-        error: `共同編集者が見つかりません: ${checkError.message}` 
-      }, { status: 404 });
-    }
-    
     // 削除処理
-    const { error } = await client
+    const { data, error } = await client
       .from('workflow_collaborators')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select();
       
     if (error) {
       console.error('共同編集者削除エラー:', error);
@@ -196,7 +155,7 @@ export async function DELETE(request: Request) {
       success: true,
       message: '共同編集者を削除しました',
       id: id,
-      workflowId: collaborator.workflow_id
+      data: data
     });
   } catch (error) {
     console.error('共同編集者削除中にエラーが発生しました:', error);
