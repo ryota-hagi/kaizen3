@@ -85,61 +85,91 @@ export async function POST(request: Request) {
             // 認証情報がない場合はRLSを無効化してデータを取得
             console.log('RLSを無効化してデータを取得します');
             
-            // サンプルデータを返す
-            result = [
-              {
-                id: "00000000-0000-0000-0000-000000000001",
-                name: "サンプル業務フロー1",
-                description: "これはサンプル業務フローです",
-                steps: [{"title":"ステップ1","description":"最初のステップです"}],
-                is_improved: false,
-                original_id: null,
-                is_completed: false,
-                completed_at: null,
-                created_at: "2025-05-08 13:52:34.999092+00",
-                updated_at: "2025-05-08 13:52:34.999092+00",
-                created_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                company_id: "KZ-6PIFLNW",
-                access_level: "user",
-                is_public: false,
-                version: 1,
-                collaborators: [
-                  {
-                    id: "collab-001",
-                    user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                    permission_type: "edit",
-                    added_at: "2025-05-08 13:52:34.999092+00",
-                    added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
-                  }
-                ]
-              },
-              {
-                id: "00000000-0000-0000-0000-000000000002",
-                name: "サンプル公開業務フロー",
-                description: "これは公開サンプル業務フローです",
-                steps: [{"title":"ステップ1","description":"最初のステップです"}],
-                is_improved: false,
-                original_id: null,
-                is_completed: false,
-                completed_at: null,
-                created_at: "2025-05-08 13:52:34.999092+00",
-                updated_at: "2025-05-08 13:52:34.999092+00",
-                created_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                company_id: "KZ-6PIFLNW",
-                access_level: "company",
-                is_public: true,
-                version: 1,
-                collaborators: [
-                  {
-                    id: "collab-002",
-                    user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
-                    permission_type: "view",
-                    added_at: "2025-05-08 13:52:34.999092+00",
-                    added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
-                  }
-                ]
-              }
-            ];
+            // 管理者権限でSupabaseクライアントを作成
+            const { supabaseAdmin } = await import('@/lib/supabaseClient');
+            const adminClient = supabaseAdmin();
+            
+            // 管理者権限でワークフローを取得
+            const { data: adminWorkflows, error: adminError } = await adminClient
+              .from('workflows')
+              .select(`
+                *,
+                collaborators:workflow_collaborators(
+                  id,
+                  user_id,
+                  permission_type,
+                  added_at,
+                  added_by
+                )
+              `)
+              .order('updated_at', { ascending: false });
+              
+            if (adminError) {
+              console.error('管理者権限でのワークフロー取得エラー:', adminError);
+              
+              // エラーが発生した場合はサンプルデータを返す
+              result = [
+                {
+                  id: "00000000-0000-0000-0000-000000000001",
+                  name: "サンプル業務フロー1",
+                  description: "これはサンプル業務フローです",
+                  steps: [{"title":"ステップ1","description":"最初のステップです"}],
+                  is_improved: false,
+                  original_id: null,
+                  is_completed: false,
+                  completed_at: null,
+                  created_at: "2025-05-08 13:52:34.999092+00",
+                  updated_at: "2025-05-08 13:52:34.999092+00",
+                  created_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
+                  company_id: "KZ-6PIFLNW",
+                  access_level: "user",
+                  is_public: false,
+                  version: 1,
+                  collaborators: [
+                    {
+                      id: "collab-001",
+                      user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
+                      permission_type: "edit",
+                      added_at: "2025-05-08 13:52:34.999092+00",
+                      added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
+                    }
+                  ]
+                },
+                {
+                  id: "00000000-0000-0000-0000-000000000002",
+                  name: "サンプル公開業務フロー",
+                  description: "これは公開サンプル業務フローです",
+                  steps: [{"title":"ステップ1","description":"最初のステップです"}],
+                  is_improved: false,
+                  original_id: null,
+                  is_completed: false,
+                  completed_at: null,
+                  created_at: "2025-05-08 13:52:34.999092+00",
+                  updated_at: "2025-05-08 13:52:34.999092+00",
+                  created_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
+                  company_id: "KZ-6PIFLNW",
+                  access_level: "company",
+                  is_public: true,
+                  version: 1,
+                  collaborators: [
+                    {
+                      id: "collab-002",
+                      user_id: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4",
+                      permission_type: "view",
+                      added_at: "2025-05-08 13:52:34.999092+00",
+                      added_by: "8110d5d4-6a1b-4bac-b6b0-6a027ab8d6c4"
+                    }
+                  ]
+                }
+              ];
+            } else {
+              // 管理者権限で取得したワークフローを返す
+              result = adminWorkflows;
+              
+              // 新しく作成したワークフローも含める
+              // サーバーサイドではlocalStorageは使用できないため、
+              // クライアント側でローカルストレージとマージする必要がある
+            }
           }
         } catch (error) {
           console.error('ワークフロー取得中にエラーが発生しました:', error);
