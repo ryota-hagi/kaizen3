@@ -369,31 +369,31 @@ export default function Home() {
                   </button>
                 </div>
                 
-                <div className="bg-white rounded-lg shadow overflow-x-auto">
-                  <table className="min-w-full divide-y divide-secondary-200 table-fixed">
-                    <thead className="bg-blue-50 border-b-2 border-blue-200">
+                <div className="bg-white rounded-lg shadow-lg overflow-x-auto border border-gray-100">
+                  <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                    <thead className="bg-gradient-to-r from-blue-600 to-blue-500">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           フロー名
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           説明
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           ステップ数
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           最終更新日
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           作成者
                         </th>
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-secondary-500 uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           操作
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-secondary-200">
+                    <tbody className="bg-white divide-y divide-gray-100">
                       {workflowGroups.length > 0 ? (
                         workflowGroups.map(([groupId, group]) => {
                           const { original, improved } = group
@@ -403,8 +403,8 @@ export default function Home() {
                           if (!displayWorkflow) return null
                           
                           return (
-                            <tr key={groupId} className="hover:bg-secondary-50">
-                              <td className="px-6 py-4 whitespace-nowrap bg-blue-50">
+                            <tr key={groupId} className="hover:bg-blue-50 transition-colors duration-150">
+                              <td className="px-6 py-4 whitespace-nowrap border-l-4 border-blue-500">
                                 <Link 
                                   href={`/workflows/${displayWorkflow.id}`}
                                   className="text-sm font-medium text-secondary-900 hover:text-primary-600"
@@ -418,172 +418,187 @@ export default function Home() {
                                 </Link>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="text-sm text-secondary-500 line-clamp-2">{displayWorkflow.description}</div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap bg-blue-50">
-                                <div className="text-sm text-secondary-500">{displayWorkflow.steps?.length || 0}ステップ</div>
+                                <div className="text-sm text-gray-600 line-clamp-2">{displayWorkflow.description}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-secondary-500">
+                                <div className="text-sm font-medium text-blue-600 bg-blue-50 py-1 px-3 rounded-full inline-block">
+                                  {displayWorkflow.steps?.length || 0}ステップ
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-600">
                                   {displayWorkflow.updatedAt.toLocaleDateString('ja-JP')}
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col">
-                                  {/* 作成者 */}
-                                  {displayWorkflow.createdBy && getUserById && getUserById(displayWorkflow.createdBy) ? (
-                                    <div className="flex items-center mb-2">
-                                      <div className="flex-shrink-0 h-8 w-8">
-                                        {getUserById(displayWorkflow.createdBy)?.profileImage ? (
-                                          <img
-                                            className="h-8 w-8 rounded-full"
-                                            src={getUserById(displayWorkflow.createdBy)?.profileImage}
-                                            alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
-                                          />
-                                        ) : (
-                                          <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-800">
-                                            {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
-                                          </div>
-                                        )}
-                                      </div>
-                                      <div className="ml-2">
-                                        <div className="text-sm font-medium text-secondary-900">
-                                          {getUserById(displayWorkflow.createdBy)?.fullName}
+                                <div>
+                                  {/* 作成者と共同編集者を横に並べる */}
+                                  <div className="flex items-center">
+                                    {/* 作成者 */}
+                                    {displayWorkflow.createdBy && getUserById && getUserById(displayWorkflow.createdBy) ? (
+                                      <div className="flex items-center group relative">
+                                        <div className="flex-shrink-0 h-8 w-8 shadow-md rounded-full border-2 border-white z-10">
+                                          {getUserById(displayWorkflow.createdBy)?.profileImage ? (
+                                            <img
+                                              className="h-full w-full rounded-full object-cover"
+                                              src={getUserById(displayWorkflow.createdBy)?.profileImage}
+                                              alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
+                                            />
+                                          ) : (
+                                            <div className="h-full w-full rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-medium">
+                                              {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
+                                            </div>
+                                          )}
                                         </div>
-                                        <div className="text-xs text-secondary-500">作成者</div>
+                                        <div className="absolute bottom-full left-0 mb-2 w-40 bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                          <p className="font-medium">{getUserById(displayWorkflow.createdBy)?.fullName}</p>
+                                          <p>作成者</p>
+                                        </div>
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <div className="text-sm text-secondary-500 mb-2">作成者: 未設定</div>
-                                  )}
-                                  
-                                  {/* 共同編集者 */}
-                                  {(() => {
-                                    // 共同編集者情報を取得
-                                    const collaborators = displayWorkflow.collaborators || [];
+                                    ) : (
+                                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shadow-md border-2 border-white z-10">
+                                        <span className="text-xs">?</span>
+                                      </div>
+                                    )}
                                     
-                                    if (collaborators.length > 0) {
-                                      // 最大2人まで表示
-                                      const displayCollaborators = collaborators.slice(0, 2);
-                                      const remainingCount = collaborators.length - 2;
+                                    {/* 共同編集者 - 横に並べる */}
+                                    {(() => {
+                                      // 共同編集者情報を取得
+                                      const collaborators = displayWorkflow.collaborators || [];
                                       
-                                      return (
-                                        <div>
-                                          {displayCollaborators.map((collab: any) => {
-                                            // app_usersテーブルからユーザー情報を取得
-                                            const user = getUserById && getUserById(collab.user_id);
-                                            
-                                            return (
-                                              <div key={collab.id} className="flex items-center mb-1">
+                                      if (collaborators.length > 0) {
+                                        // 最大3人まで表示
+                                        const displayCollaborators = collaborators.slice(0, 3);
+                                        const remainingCount = collaborators.length - 3;
+                                        
+                                        return (
+                                          <div className="flex -ml-2">
+                                            {displayCollaborators.map((collab: any, index: number) => (
+                                              <div key={collab.id} className="group relative" style={{ zIndex: 10 - index }}>
                                                 {collab.full_name ? (
-                                                  <div className="flex-shrink-0 h-6 w-6">
-                                                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
+                                                  <div className="flex-shrink-0 h-8 w-8 rounded-full border-2 border-white shadow-md -ml-1">
+                                                    <div className="h-full w-full rounded-full bg-gradient-to-br from-indigo-400 to-indigo-500 flex items-center justify-center text-white text-xs">
                                                       {collab.full_name.charAt(0)}
                                                     </div>
                                                   </div>
                                                 ) : null}
-                                                {/* 編集者という表記をなくし、アイコンのみに */}
+                                                <div className="absolute bottom-full left-0 mb-2 w-40 bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                                  <p className="font-medium">{collab.full_name}</p>
+                                                  <p>共同編集者</p>
+                                                </div>
                                               </div>
-                                            );
-                                          })}
-                                          
-                                          {remainingCount > 0 && (
-                                            <div className="text-xs text-secondary-500 mt-1">
-                                              +{remainingCount}
-                                            </div>
-                                          )}
+                                            ))}
+                                            
+                                            {remainingCount > 0 && (
+                                              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 border-2 border-white shadow-md flex items-center justify-center text-gray-700 text-xs font-medium -ml-1">
+                                                +{remainingCount}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <div className="ml-2">
+                                          <button 
+                                            onClick={() => router.push(`/workflows/${displayWorkflow.id}`)}
+                                            className="text-blue-600 hover:text-blue-800 text-xs font-medium bg-blue-50 hover:bg-blue-100 rounded-full px-2 py-1 transition-colors duration-150"
+                                          >
+                                            + 共同編集者を追加
+                                          </button>
                                         </div>
                                       );
-                                    }
-                                    
-                                    return (
-                                      <div className="text-xs text-secondary-500">
-                                        <button 
-                                          onClick={() => router.push(`/workflows/${displayWorkflow.id}`)}
-                                          className="text-primary-600 hover:text-primary-800"
-                                        >
-                                          + 共同編集者を追加
-                                        </button>
-                                      </div>
-                                    );
-                                  })()}
+                                    })()}
+                                  </div>
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button
-                                  onClick={async () => {
-                                    // ワークフローの完了状態を切り替える
-                                    try {
-                                      const isCompleted = !displayWorkflow.isCompleted;
-                                      
-                                      // 直接Supabaseクライアントを使用して更新
-                                      const response = await fetch('/api/workflows/supabase-mcp', {
-                                        method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                        },
-                                        body: JSON.stringify({
-                                          operation: 'update_workflow_completion',
-                                          params: {
-                                            id: displayWorkflow.id,
-                                            isCompleted: isCompleted
-                                          }
-                                        }),
-                                      });
-                                      
-                                      if (!response.ok) {
-                                        const errorData = await response.json();
-                                        console.error('API response error:', errorData);
-                                        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                                <div className="flex justify-end space-x-2">
+                                  <button
+                                    onClick={async () => {
+                                      // ワークフローの完了状態を切り替える
+                                      try {
+                                        const isCompleted = !displayWorkflow.isCompleted;
+                                        
+                                        // 直接Supabaseクライアントを使用して更新
+                                        const response = await fetch('/api/workflows/supabase-mcp', {
+                                          method: 'POST',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                          },
+                                          body: JSON.stringify({
+                                            operation: 'update_workflow_completion',
+                                            params: {
+                                              id: displayWorkflow.id,
+                                              isCompleted: isCompleted
+                                            }
+                                          }),
+                                        });
+                                        
+                                        if (!response.ok) {
+                                          const errorData = await response.json();
+                                          console.error('API response error:', errorData);
+                                          throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                                        }
+                                        
+                                        const result = await response.json();
+                                        console.log('Updated workflow completion status:', result);
+                                        
+                                        // 状態を更新
+                                        loadWorkflows();
+                                        
+                                        // 完了状態の変更を通知
+                                        alert(isCompleted ? 'ワークフローを完了済みに設定しました' : 'ワークフローを未完了に設定しました');
+                                      } catch (error) {
+                                        console.error('ワークフローの更新エラー:', error);
+                                        alert(`ワークフローの更新に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
                                       }
-                                      
-                                      const result = await response.json();
-                                      console.log('Updated workflow completion status:', result);
-                                      
-                                      // 状態を更新
-                                      loadWorkflows();
-                                      
-                                      // 完了状態の変更を通知
-                                      alert(isCompleted ? 'ワークフローを完了済みに設定しました' : 'ワークフローを未完了に設定しました');
-                                    } catch (error) {
-                                      console.error('ワークフローの更新エラー:', error);
-                                      alert(`ワークフローの更新に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
-                                    }
-                                  }}
-                                  className={`${
-                                    displayWorkflow.isCompleted 
-                                      ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                  } px-3 py-1 text-sm rounded transition-colors mr-2`}
-                                >
-                                  {displayWorkflow.isCompleted ? '完了済み' : '完了'}
-                                </button>
-                                <Link
-                                  href={`/workflows/${displayWorkflow.id}`}
-                                  className="text-primary-600 hover:text-primary-900 mr-2"
-                                >
-                                  詳細
-                                </Link>
-                                <button
-                                  onClick={() => setActiveWorkflow(displayWorkflow.id)}
-                                  className="text-primary-600 hover:text-primary-900 mr-2"
-                                >
-                                  編集
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteWorkflow(displayWorkflow.id)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  削除
-                                </button>
+                                    }}
+                                    className={`${
+                                      displayWorkflow.isCompleted 
+                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700' 
+                                        : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
+                                    } px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105`}
+                                  >
+                                    {displayWorkflow.isCompleted ? '完了済み' : '完了'}
+                                  </button>
+                                  <Link
+                                    href={`/workflows/${displayWorkflow.id}`}
+                                    className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105"
+                                  >
+                                    詳細
+                                  </Link>
+                                  <button
+                                    onClick={() => setActiveWorkflow(displayWorkflow.id)}
+                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105"
+                                  >
+                                    編集
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteWorkflow(displayWorkflow.id)}
+                                    className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105"
+                                  >
+                                    削除
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           )
                         })
                       ) : (
                         <tr>
-                          <td colSpan={6} className="px-6 py-10 text-center text-sm text-secondary-500">
-                            {searchTerm ? '検索条件に一致する業務フローはありません' : '保存された業務フローはありません'}
+                          <td colSpan={6} className="px-6 py-12 text-center">
+                            <div className="bg-blue-50 rounded-lg p-6 inline-block">
+                              <svg className="w-12 h-12 text-blue-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              <p className="text-blue-800 font-medium">
+                                {searchTerm ? '検索条件に一致する業務フローはありません' : '保存された業務フローはありません'}
+                              </p>
+                              <p className="text-blue-600 text-sm mt-2">
+                                新規作成ボタンをクリックして最初のワークフローを作成しましょう
+                              </p>
+                            </div>
                           </td>
                         </tr>
                       )}
