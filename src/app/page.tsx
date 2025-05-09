@@ -369,31 +369,31 @@ export default function Home() {
                   </button>
                 </div>
                 
-                <div className="bg-white rounded-lg shadow-lg overflow-x-auto border border-gray-100">
-                  <table className="min-w-full divide-y divide-gray-200 table-fixed">
-                    <thead className="bg-gradient-to-r from-blue-600 to-blue-500">
+                <div className="bg-white rounded-lg shadow-md overflow-x-auto border border-secondary-200">
+                  <table className="min-w-full divide-y divide-secondary-200 table-fixed">
+                    <thead className="bg-primary-600">
                       <tr>
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           フロー名
                         </th>
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           説明
                         </th>
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           ステップ数
                         </th>
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           最終更新日
                         </th>
-                        <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           作成者
                         </th>
-                        <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider w-1/6">
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider w-1/6">
                           操作
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
+                    <tbody className="bg-white divide-y divide-secondary-100">
                       {workflowGroups.length > 0 ? (
                         workflowGroups.map(([groupId, group]) => {
                           const { original, improved } = group
@@ -403,8 +403,8 @@ export default function Home() {
                           if (!displayWorkflow) return null
                           
                           return (
-                            <tr key={groupId} className="hover:bg-blue-50 transition-colors duration-150">
-                              <td className="px-6 py-4 whitespace-nowrap border-l-4 border-blue-500">
+                            <tr key={groupId} className="hover:bg-secondary-50 transition-colors duration-150">
+                              <td className="px-6 py-4 whitespace-nowrap border-l-4 border-primary-500">
                                 <Link 
                                   href={`/workflows/${displayWorkflow.id}`}
                                   className="text-sm font-medium text-secondary-900 hover:text-primary-600"
@@ -418,15 +418,15 @@ export default function Home() {
                                 </Link>
                               </td>
                               <td className="px-6 py-4">
-                                <div className="text-sm text-gray-600 line-clamp-2">{displayWorkflow.description}</div>
+                                <div className="text-sm text-secondary-600 line-clamp-2">{displayWorkflow.description}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-blue-600 bg-blue-50 py-1 px-3 rounded-full inline-block">
+                                <div className="text-sm font-medium text-primary-600 bg-primary-50 py-1 px-3 rounded-md inline-block">
                                   {displayWorkflow.steps?.length || 0}ステップ
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-600">
+                                <div className="text-sm text-secondary-600">
                                   {displayWorkflow.updatedAt.toLocaleDateString('ja-JP')}
                                 </div>
                               </td>
@@ -437,7 +437,7 @@ export default function Home() {
                                     {/* 作成者 */}
                                     {displayWorkflow.createdBy && getUserById && getUserById(displayWorkflow.createdBy) ? (
                                       <div className="flex items-center group relative">
-                                        <div className="flex-shrink-0 h-8 w-8 shadow-md rounded-full border-2 border-white z-10">
+                                        <div className="flex-shrink-0 h-8 w-8 shadow-sm rounded-full border border-secondary-200 z-10">
                                           {getUserById(displayWorkflow.createdBy)?.profileImage ? (
                                             <img
                                               className="h-full w-full rounded-full object-cover"
@@ -445,18 +445,18 @@ export default function Home() {
                                               alt={`${getUserById(displayWorkflow.createdBy)?.fullName}のプロフィール画像`}
                                             />
                                           ) : (
-                                            <div className="h-full w-full rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-medium">
+                                            <div className="h-full w-full rounded-full bg-primary-600 flex items-center justify-center text-white font-medium">
                                               {getUserById(displayWorkflow.createdBy)?.fullName.charAt(0)}
                                             </div>
                                           )}
                                         </div>
-                                        <div className="absolute bottom-full left-0 mb-2 w-40 bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                        <div className="absolute bottom-full left-0 mb-2 w-40 bg-secondary-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
                                           <p className="font-medium">{getUserById(displayWorkflow.createdBy)?.fullName}</p>
                                           <p>作成者</p>
                                         </div>
                                       </div>
                                     ) : (
-                                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 shadow-md border-2 border-white z-10">
+                                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-secondary-200 flex items-center justify-center text-secondary-500 shadow-sm border border-secondary-200 z-10">
                                         <span className="text-xs">?</span>
                                       </div>
                                     )}
@@ -476,13 +476,13 @@ export default function Home() {
                                             {displayCollaborators.map((collab: any, index: number) => (
                                               <div key={collab.id} className="group relative" style={{ zIndex: 10 - index }}>
                                                 {collab.full_name ? (
-                                                  <div className="flex-shrink-0 h-8 w-8 rounded-full border-2 border-white shadow-md -ml-1">
-                                                    <div className="h-full w-full rounded-full bg-gradient-to-br from-indigo-400 to-indigo-500 flex items-center justify-center text-white text-xs">
+                                                  <div className="flex-shrink-0 h-8 w-8 rounded-full border border-secondary-200 shadow-sm -ml-1">
+                                                    <div className="h-full w-full rounded-full bg-primary-500 flex items-center justify-center text-white text-xs">
                                                       {collab.full_name.charAt(0)}
                                                     </div>
                                                   </div>
                                                 ) : null}
-                                                <div className="absolute bottom-full left-0 mb-2 w-40 bg-gray-900 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                                <div className="absolute bottom-full left-0 mb-2 w-40 bg-secondary-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
                                                   <p className="font-medium">{collab.full_name}</p>
                                                   <p>共同編集者</p>
                                                 </div>
@@ -490,7 +490,7 @@ export default function Home() {
                                             ))}
                                             
                                             {remainingCount > 0 && (
-                                              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 border-2 border-white shadow-md flex items-center justify-center text-gray-700 text-xs font-medium -ml-1">
+                                              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-secondary-200 border border-secondary-200 shadow-sm flex items-center justify-center text-secondary-700 text-xs font-medium -ml-1">
                                                 +{remainingCount}
                                               </div>
                                             )}
@@ -502,7 +502,7 @@ export default function Home() {
                                         <div className="ml-2">
                                           <button 
                                             onClick={() => router.push(`/workflows/${displayWorkflow.id}`)}
-                                            className="text-blue-600 hover:text-blue-800 text-xs font-medium bg-blue-50 hover:bg-blue-100 rounded-full px-2 py-1 transition-colors duration-150"
+                                            className="text-primary-600 hover:text-primary-800 text-xs font-medium bg-primary-50 hover:bg-primary-100 rounded-md px-2 py-1 transition-colors duration-150"
                                           >
                                             + 共同編集者を追加
                                           </button>
@@ -556,27 +556,27 @@ export default function Home() {
                                     }}
                                     className={`${
                                       displayWorkflow.isCompleted 
-                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700' 
-                                        : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700'
-                                    } px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105`}
+                                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                                        : 'bg-primary-600 text-white hover:bg-primary-700'
+                                    } px-3 py-1.5 text-xs font-medium rounded-md shadow-sm transition-colors duration-150`}
                                   >
                                     {displayWorkflow.isCompleted ? '完了済み' : '完了'}
                                   </button>
                                   <Link
                                     href={`/workflows/${displayWorkflow.id}`}
-                                    className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105"
+                                    className="bg-secondary-100 text-secondary-700 hover:bg-secondary-200 px-3 py-1.5 text-xs font-medium rounded-md shadow-sm transition-colors duration-150"
                                   >
                                     詳細
                                   </Link>
                                   <button
                                     onClick={() => setActiveWorkflow(displayWorkflow.id)}
-                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105"
+                                    className="bg-primary-50 text-primary-600 hover:bg-primary-100 px-3 py-1.5 text-xs font-medium rounded-md shadow-sm transition-colors duration-150"
                                   >
                                     編集
                                   </button>
                                   <button
                                     onClick={() => handleDeleteWorkflow(displayWorkflow.id)}
-                                    className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 text-xs font-medium rounded-full shadow-sm transition-all duration-200 transform hover:scale-105"
+                                    className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 text-xs font-medium rounded-md shadow-sm transition-colors duration-150"
                                   >
                                     削除
                                   </button>
@@ -588,14 +588,14 @@ export default function Home() {
                       ) : (
                         <tr>
                           <td colSpan={6} className="px-6 py-12 text-center">
-                            <div className="bg-blue-50 rounded-lg p-6 inline-block">
-                              <svg className="w-12 h-12 text-blue-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <div className="bg-primary-50 rounded-lg p-6 inline-block">
+                              <svg className="w-12 h-12 text-primary-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
-                              <p className="text-blue-800 font-medium">
+                              <p className="text-primary-800 font-medium">
                                 {searchTerm ? '検索条件に一致する業務フローはありません' : '保存された業務フローはありません'}
                               </p>
-                              <p className="text-blue-600 text-sm mt-2">
+                              <p className="text-primary-600 text-sm mt-2">
                                 新規作成ボタンをクリックして最初のワークフローを作成しましょう
                               </p>
                             </div>
