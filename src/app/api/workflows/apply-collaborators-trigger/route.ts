@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { supabase } from '@/lib/supabaseClient';
 
 export async function POST(request: Request) {
   try {
@@ -12,27 +13,33 @@ export async function POST(request: Request) {
     const sqlFilePath = path.join(process.cwd(), 'src/db/migrations/create_workflow_collaborators_trigger.sql');
     const sqlContent = fs.readFileSync(sqlFilePath, 'utf8');
     
+    // Supabaseクライアントを初期化
+    const client = supabase();
+    
     try {
-      // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
-      const result = await global.use_mcp_tool(
-        'github.com/supabase-community/supabase-mcp',
-        'execute_sql',
-        {
-          project_id: projectId,
-          query: sqlContent
-        }
-      );
+      // SQLを直接実行
+      const { data, error } = await client.rpc('pgmoon', {
+        query: sqlContent
+      });
+      
+      if (error) {
+        console.error('トリガー適用エラー:', error);
+        return NextResponse.json({ 
+          success: false, 
+          message: `トリガーの適用に失敗しました: ${error.message}` 
+        }, { status: 500 });
+      }
       
       return NextResponse.json({ 
         success: true, 
         message: 'workflow_collaboratorsテーブルのトリガーが正常に適用されました',
-        result
+        result: data
       });
-    } catch (mcpError) {
-      console.error('MCP実行エラー:', mcpError);
+    } catch (execError) {
+      console.error('SQL実行エラー:', execError);
       return NextResponse.json({ 
         success: false, 
-        message: `トリガーの適用に失敗しました: ${mcpError instanceof Error ? mcpError.message : '不明なエラー'}` 
+        message: `トリガーの適用に失敗しました: ${execError instanceof Error ? execError.message : '不明なエラー'}` 
       }, { status: 500 });
     }
   } catch (error) {
