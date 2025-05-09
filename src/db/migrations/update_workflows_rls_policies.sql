@@ -13,7 +13,11 @@ CREATE POLICY admin_all_workflows ON workflows
       SELECT 1 FROM app_users
       WHERE app_users.auth_uid = auth.uid()
       AND app_users.role = 'admin'
-      AND app_users.company_id = workflows.company_id
+      AND EXISTS (
+        SELECT 1 FROM app_users admin_user
+        WHERE admin_user.auth_uid = auth.uid()
+        AND admin_user.company_id = workflows.company_id
+      )
     )
   );
 
