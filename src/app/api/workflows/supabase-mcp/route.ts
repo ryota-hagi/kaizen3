@@ -72,7 +72,7 @@ export async function POST(request: Request) {
                   added_at,
                   added_by
                 ),
-                creator:app_users!created_by(id, full_name, profile_image)
+                creator:app_users!created_by(id, full_name)
               `)
               .order('updated_at', { ascending: false });
               
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
                   added_at,
                   added_by
                 ),
-                creator:app_users!created_by(id, full_name, profile_image)
+                creator:app_users!created_by(id, full_name)
               `)
               .order('updated_at', { ascending: false });
               
