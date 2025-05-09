@@ -106,6 +106,9 @@
       const loading = document.getElementById('loading');
       const result = document.getElementById('result');
       
+      // SupabaseプロジェクトのデフォルトプロジェクトID
+      const defaultProjectId = 'czuedairowlwfgbjmfbg';
+      
       applyTriggerBtn.addEventListener('click', async function() {
         try {
           // ボタンを無効化し、ローディングを表示
@@ -113,8 +116,8 @@
           loading.style.display = 'inline-block';
           result.style.display = 'none';
           
-          // APIを呼び出してトリガーを適用
-          const response = await fetch('/api/workflows/apply-collaborators-trigger');
+          // APIを呼び出してトリガーを適用（プロジェクトIDをクエリパラメータとして渡す）
+          const response = await fetch(`/api/workflows/apply-collaborators-trigger?projectId=${defaultProjectId}`);
           const data = await response.json();
           
           // 結果を表示
@@ -125,7 +128,7 @@
             result.textContent = `成功: ${data.message || 'トリガーが正常に適用されました'}`;
           } else {
             result.className = 'result error';
-            result.textContent = `エラー: ${data.error || '不明なエラーが発生しました'}`;
+            result.textContent = `エラー: ${data.message || data.error || '不明なエラーが発生しました'}`;
           }
         } catch (error) {
           // エラーを表示
