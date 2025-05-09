@@ -76,6 +76,14 @@ export async function POST(request: Request) {
                 error: `ユーザー情報取得エラー: ${userError?.message || 'ユーザー情報が見つかりません'}` 
               }, { status: 500 });
             }
+
+            // 型安全のために会社IDが存在することを確認
+            if (!userData.company_id) {
+              console.error('会社IDが見つかりません');
+              return NextResponse.json({ 
+                error: 'ユーザーに会社IDが設定されていません' 
+              }, { status: 500 });
+            }
             
             // 管理者権限でSupabaseクライアントを作成
             const { supabaseAdmin } = await import('@/lib/supabaseClient');
