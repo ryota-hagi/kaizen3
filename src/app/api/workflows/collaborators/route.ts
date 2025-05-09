@@ -109,11 +109,12 @@ export async function POST(request: Request) {
     console.log('ユーザーID:', body.userId);
     
     // app_usersテーブルから直接ユーザー情報を取得（全カラムを取得）
+    // single()ではなくmaybeSingle()を使用して、複数行が返された場合にエラーにならないようにする
     const { data: userData, error: userError } = await client
       .from('app_users')
       .select('*')
       .eq('id', body.userId)
-      .single();
+      .maybeSingle();
     
     console.log('app_usersテーブルからの取得結果:', userData);
     console.log('ユーザー取得エラー:', userError);
@@ -125,13 +126,27 @@ export async function POST(request: Request) {
     }
     
     if (!userData) {
-      console.error('ユーザーが存在しません:', body.userId);
-      return NextResponse.json({ error: 'ユーザーが存在しません' }, { status: 404 });
+      // 代替手段として、authテーブルからユーザー情報を取得
+      try {
+        const { data: authData } = await client.auth.admin.getUserById(body.userId);
+        console.log('Auth APIからの取得結果:', authData);
+        
+        if (authData && authData.user) {
+          // Auth APIからユーザー情報を取得できた場合は、そのまま処理を続行
+          console.log('Auth APIからユーザー情報を取得しました');
+        } else {
+          console.error('ユーザーが存在しません:', body.userId);
+          return NextResponse.json({ error: 'ユーザーが存在しません' }, { status: 404 });
+        }
+      } catch (error) {
+        console.error('Auth API呼び出しエラー:', error);
+        return NextResponse.json({ error: 'ユーザー情報の取得に失敗しました' }, { status: 500 });
+      }
     }
     
     // full_nameを取得
     let userFullName = "";
-    if (userData.full_name && typeof userData.full_name === 'string') {
+    if (userData && userData.full_name && typeof userData.full_name === 'string') {
       userFullName = userData.full_name;
     } else {
       // full_nameが存在しない場合は空文字列を使用
