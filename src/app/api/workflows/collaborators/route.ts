@@ -108,58 +108,66 @@ export async function POST(request: Request) {
     // app_usersテーブルから確実にユーザー情報を取得
     console.log('ユーザーID:', body.userId);
     
-    // app_usersテーブルから直接ユーザー情報を取得（全カラムを取得）
-    // single()ではなくmaybeSingle()を使用して、複数行が返された場合にエラーにならないようにする
-    const { data: userData, error: userError } = await client
+    // app_usersテーブルから直接full_nameを取得
+    let { data: userData, error: userError } = await client
       .from('app_users')
-      .select('*')
+      .select('full_name')
       .eq('id', body.userId)
-      .maybeSingle();
+      .single();
     
     console.log('app_usersテーブルからの取得結果:', userData);
-    console.log('ユーザー取得エラー:', userError);
     
     // ユーザー情報が取得できない場合はエラーを返す
     if (userError) {
       console.error('ユーザー情報取得エラー:', userError);
-      return NextResponse.json({ error: `ユーザー情報の取得に失敗しました: ${userError.message}` }, { status: 500 });
-    }
-    
-    // full_nameを取得
-    let userFullName = "";
-    
-    if (userData && userData.full_name && typeof userData.full_name === 'string') {
-      // app_usersテーブルからfull_nameを取得できた場合
-      userFullName = userData.full_name;
-      console.log('app_usersテーブルからfull_nameを取得:', userFullName);
-    } else {
-      // app_usersテーブルからfull_nameを取得できない場合は、authテーブルから取得を試みる
+      
+      // ユーザーが存在しない場合は、app_usersテーブルにユーザーを作成
       try {
+        // authテーブルからユーザー情報を取得
         const { data: authData } = await client.auth.admin.getUserById(body.userId);
-        console.log('Auth APIからの取得結果:', authData);
         
         if (authData && authData.user) {
-          // Auth APIからユーザー情報を取得できた場合
+          // ユーザーのメールアドレスを取得
+          const email = authData.user.email || '';
+          
+          // ユーザーのメタデータからfull_nameを取得
+          let full_name = '';
           if (authData.user.user_metadata && authData.user.user_metadata.full_name) {
-            userFullName = authData.user.user_metadata.full_name;
-            console.log('Auth APIのuser_metadata.full_nameを使用:', userFullName);
-          } else if (authData.user.email) {
-            // emailがある場合は、@より前の部分を使用
-            userFullName = authData.user.email.split('@')[0];
-            console.log('Auth APIのemailを使用:', userFullName);
+            full_name = authData.user.user_metadata.full_name;
           }
+          
+          // app_usersテーブルにユーザーを作成
+          const { data: newUser, error: insertError } = await client
+            .from('app_users')
+            .insert({
+              id: body.userId,
+              auth_uid: body.userId,
+              email: email,
+              full_name: full_name,
+              role: '一般ユーザー',
+              status: 'アクティブ'
+            })
+            .select('full_name')
+            .single();
+          
+          if (insertError) {
+            console.error('ユーザー作成エラー:', insertError);
+            return NextResponse.json({ error: `ユーザーの作成に失敗しました: ${insertError.message}` }, { status: 500 });
+          }
+          
+          // 作成したユーザーのfull_nameを使用
+          userData = newUser;
+        } else {
+          return NextResponse.json({ error: 'ユーザーが存在しません' }, { status: 404 });
         }
       } catch (error) {
-        console.log('Auth API呼び出しエラー:', error);
-      }
-      
-      // それでもfull_nameが取得できない場合は、ユーザーIDを使用
-      if (!userFullName) {
-        userFullName = body.userId;
-        console.log('ユーザーIDを使用:', userFullName);
+        console.error('Auth API呼び出しエラー:', error);
+        return NextResponse.json({ error: 'ユーザー情報の取得に失敗しました' }, { status: 500 });
       }
     }
     
+    // full_nameを取得（userData.full_nameが存在しない場合は空文字列を使用）
+    const userFullName = userData && userData.full_name ? userData.full_name : '';
     console.log('使用するユーザー名:', userFullName);
     
     // 既に登録されている場合は更新
