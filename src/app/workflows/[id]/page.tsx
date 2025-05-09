@@ -80,21 +80,30 @@ export default function WorkflowDetailPage() {
         // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
         try {
           console.log('本番環境でMCPを使用して共同編集者リストを取得します');
-          // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
-          const result = await global.use_mcp_tool(
-            'github.com/supabase-community/supabase-mcp',
-            'execute_sql',
-            {
-              project_id: 'czuedairowlwfgbjmfbg',
-              query: `
-                SELECT wc.*, au.full_name as user_full_name, au.email as user_email
-                FROM workflow_collaborators wc
-                LEFT JOIN app_users au ON wc.user_id = au.id
-                WHERE wc.workflow_id = '${workflowId}';
-              `
-            }
-          );
+          // MCPを使用してSupabaseに直接アクセス
+          const response = await fetch('/api/workflows/supabase-mcp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              operation: 'execute_sql',
+              params: {
+                sql: `
+                  SELECT wc.*, au.full_name as user_full_name, au.email as user_email
+                  FROM workflow_collaborators wc
+                  LEFT JOIN app_users au ON wc.user_id = au.id
+                  WHERE wc.workflow_id = '${workflowId}';
+                `
+              }
+            }),
+          });
           
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          const result = await response.json();
           console.log('MCP実行結果:', result);
           
           // データを整形
@@ -381,22 +390,32 @@ export default function WorkflowDetailPage() {
                     // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
                     try {
                       console.log('本番環境でMCPを使用して共同編集者を追加します');
-                      // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
-                      const result = await global.use_mcp_tool(
-                        'github.com/supabase-community/supabase-mcp',
-                        'execute_sql',
-                        {
-                          project_id: 'czuedairowlwfgbjmfbg',
-                          query: `
-                            INSERT INTO workflow_collaborators (workflow_id, user_id, permission_type, full_name)
-                            VALUES ('${workflow.id}', '${userId}', '${permissionType}', 
-                              (SELECT full_name FROM app_users WHERE id = '${userId}'))
-                            ON CONFLICT (workflow_id, user_id) 
-                            DO UPDATE SET permission_type = '${permissionType}'
-                            RETURNING *;
-                          `
-                        }
-                      );
+                      // MCPを使用してSupabaseに直接アクセス
+                      const response = await fetch('/api/workflows/supabase-mcp', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          operation: 'execute_sql',
+                          params: {
+                            sql: `
+                              INSERT INTO workflow_collaborators (workflow_id, user_id, permission_type, full_name)
+                              VALUES ('${workflow.id}', '${userId}', '${permissionType}', 
+                                COALESCE((SELECT full_name FROM app_users WHERE id = '${userId}'), '${userId}'))
+                              ON CONFLICT (workflow_id, user_id) 
+                              DO UPDATE SET permission_type = '${permissionType}'
+                              RETURNING *;
+                            `
+                          }
+                        }),
+                      });
+                      
+                      if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                      }
+                      
+                      const result = await response.json();
                       
                       console.log('MCP実行結果:', result);
                       
@@ -459,38 +478,56 @@ export default function WorkflowDetailPage() {
                     // 本番環境の場合は、直接APIを呼び出す代わりにMCPを使用
                     try {
                       console.log('本番環境でMCPを使用して共同編集者を削除します');
-                      // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
-                      const result = await global.use_mcp_tool(
-                        'github.com/supabase-community/supabase-mcp',
-                        'execute_sql',
-                        {
-                          project_id: 'czuedairowlwfgbjmfbg',
-                          query: `
-                            DELETE FROM workflow_collaborators
-                            WHERE id = '${collaboratorId}'
-                            RETURNING *;
-                          `
-                        }
-                      );
+                      // MCPを使用してSupabaseに直接アクセス
+                      const response1 = await fetch('/api/workflows/supabase-mcp', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          operation: 'execute_sql',
+                          params: {
+                            sql: `
+                              DELETE FROM workflow_collaborators
+                              WHERE id = '${collaboratorId}'
+                              RETURNING *;
+                            `
+                          }
+                        }),
+                      });
                       
+                      if (!response1.ok) {
+                        throw new Error(`API error: ${response1.status}`);
+                      }
+                      
+                      const result = await response1.json();
                       console.log('MCP実行結果:', result);
                       
                       // 共同編集者リストを再取得
                       try {
-                        // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
-                        const collaboratorsResult = await global.use_mcp_tool(
-                          'github.com/supabase-community/supabase-mcp',
-                          'execute_sql',
-                          {
-                            project_id: 'czuedairowlwfgbjmfbg',
-                            query: `
-                              SELECT wc.*, au.full_name as user_full_name, au.email as user_email
-                              FROM workflow_collaborators wc
-                              LEFT JOIN app_users au ON wc.user_id = au.id
-                              WHERE wc.workflow_id = '${workflowId}';
-                            `
-                          }
-                        );
+                        const response2 = await fetch('/api/workflows/supabase-mcp', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            operation: 'execute_sql',
+                            params: {
+                              sql: `
+                                SELECT wc.*, au.full_name as user_full_name, au.email as user_email
+                                FROM workflow_collaborators wc
+                                LEFT JOIN app_users au ON wc.user_id = au.id
+                                WHERE wc.workflow_id = '${workflowId}';
+                              `
+                            }
+                          }),
+                        });
+                        
+                        if (!response2.ok) {
+                          throw new Error(`API error: ${response2.status}`);
+                        }
+                        
+                        const collaboratorsResult = await response2.json();
                         
                         console.log('共同編集者リスト取得結果:', collaboratorsResult);
                         
