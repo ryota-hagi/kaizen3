@@ -183,6 +183,21 @@ export async function DELETE(request: Request) {
     
     const client = supabase();
     
+    // 認証情報を取得
+    const { data: { user } } = await client.auth.getUser();
+    
+    // 削除前に共同編集者情報を取得
+    const { data: collaborator, error: getError } = await client
+      .from('workflow_collaborators')
+      .select('*')
+      .eq('id', id)
+      .single();
+      
+    if (getError) {
+      console.error('共同編集者情報取得エラー:', getError);
+      return NextResponse.json({ error: getError.message }, { status: 400 });
+    }
+    
     // 削除処理
     const { data, error } = await client
       .from('workflow_collaborators')
