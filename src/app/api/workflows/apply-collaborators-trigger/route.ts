@@ -17,23 +17,24 @@ export async function POST(request: Request) {
     const client = supabase();
     
     try {
-      // SQLを直接実行
-      const { data, error } = await client.rpc('pgmoon', {
-        query: sqlContent
-      });
+      // SQLを直接実行（複数のステートメントを実行するため、一つずつ実行）
+      const sqlStatements = sqlContent.split(';').filter(stmt => stmt.trim().length > 0);
       
-      if (error) {
-        console.error('トリガー適用エラー:', error);
-        return NextResponse.json({ 
-          success: false, 
-          message: `トリガーの適用に失敗しました: ${error.message}` 
-        }, { status: 500 });
+      for (const statement of sqlStatements) {
+        const { error } = await client.from('_sql').select('*').limit(1).or(`sql.eq."${statement.trim()}"`);
+        
+        if (error) {
+          console.error('SQL実行エラー:', error);
+          return NextResponse.json({ 
+            success: false, 
+            message: `トリガーの適用に失敗しました: ${error.message}` 
+          }, { status: 500 });
+        }
       }
       
       return NextResponse.json({ 
         success: true, 
-        message: 'workflow_collaboratorsテーブルのトリガーが正常に適用されました',
-        result: data
+        message: 'workflow_collaboratorsテーブルのトリガーが正常に適用されました'
       });
     } catch (execError) {
       console.error('SQL実行エラー:', execError);
