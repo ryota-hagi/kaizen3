@@ -60,44 +60,8 @@ export async function POST(request: Request) {
       case 'get_workflows':
         try {
           // 認証情報がある場合は直接Supabaseクライアントを使用
-          if (user) {
+          if (user && user.id) {
             console.log('認証情報を使用してワークフローを取得します');
-            const { data: workflows, error: workflowsError } = await supabaseClient
-              .from('workflows')
-              .select(`
-                *,
-                collaborators:workflow_collaborators(
-                  id,
-                  user_id,
-                  permission_type,
-                  added_at,
-                  added_by
-                ),
-                creator:app_users!created_by(id, full_name)
-              `)
-              .order('updated_at', { ascending: false });
-              
-            if (workflowsError) {
-              console.error('ワークフロー取得エラー:', workflowsError);
-              throw new Error(`ワークフロー取得エラー: ${workflowsError.message}`);
-            }
-            
-            result = workflows;
-          } else {
-            // 認証情報がない場合はRLSを無効化してデータを取得
-            console.log('RLSを無効化してデータを取得します');
-            
-            // 管理者権限でSupabaseクライアントを作成
-            const { supabaseAdmin } = await import('@/lib/supabaseClient');
-            const adminClient = supabaseAdmin();
-            
-            // 認証情報がない場合はエラーを返す
-            if (!user || !user.id) {
-              console.error('未認証ユーザー: 会社IDが取得できません');
-              return NextResponse.json({ 
-                error: '認証情報がありません。ログインしてください。' 
-              }, { status: 401 });
-            }
             
             // ユーザー情報を取得して会社IDを取得
             const { data: userData, error: userError } = await supabaseClient
@@ -112,6 +76,10 @@ export async function POST(request: Request) {
                 error: `ユーザー情報取得エラー: ${userError?.message || 'ユーザー情報が見つかりません'}` 
               }, { status: 500 });
             }
+            
+            // 管理者権限でSupabaseクライアントを作成
+            const { supabaseAdmin } = await import('@/lib/supabaseClient');
+            const adminClient = supabaseAdmin();
             
             // 管理者権限でワークフローを取得（会社IDでフィルタリング）
             const { data: adminWorkflows, error: adminError } = await adminClient
@@ -136,14 +104,16 @@ export async function POST(request: Request) {
               return NextResponse.json({ 
                 error: `管理者権限でのワークフロー取得エラー: ${adminError.message}` 
               }, { status: 500 });
-            } else {
-              // 管理者権限で取得したワークフローを返す
-              result = adminWorkflows;
-              
-              // 新しく作成したワークフローも含める
-              // サーバーサイドではlocalStorageは使用できないため、
-              // クライアント側でローカルストレージとマージする必要がある
             }
+            
+            // 管理者権限で取得したワークフローを返す
+            result = adminWorkflows;
+          } else {
+            // 認証情報がない場合はエラーを返す
+            console.error('未認証ユーザー: 会社IDが取得できません');
+            return NextResponse.json({ 
+              error: '認証情報がありません。ログインしてください。' 
+            }, { status: 401 });
           }
         } catch (error) {
           console.error('ワークフロー取得中にエラーが発生しました:', error);
@@ -279,43 +249,57 @@ export async function POST(request: Request) {
         break;
         
       case 'update_workflow_completion':
-        // ワークフローの完了状態を更新
-        const { id, isCompleted } = params;
-        const completedAt = isCompleted ? new Date().toISOString() : null;
-        
-        // 直接Supabaseクライアントを使用
-        const { data: updatedWorkflow, error: updateError } = await supabaseClient
-          .from('workflows')
-          .update({
-            is_completed: isCompleted,
-            completed_at: completedAt,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id)
-          .select();
+        try {
+          // ワークフローの完了状態を更新
+          const { id, isCompleted } = params;
+          const completedAt = isCompleted ? new Date().toISOString() : null;
           
-        if (updateError) {
-          console.error('ワークフロー更新エラー:', updateError);
-          return NextResponse.json({ error: `ワークフロー更新エラー: ${updateError.message}` }, { status: 500 });
+          // 直接Supabaseクライアントを使用
+          const { data: updatedWorkflow, error: updateError } = await supabaseClient
+            .from('workflows')
+            .update({
+              is_completed: isCompleted,
+              completed_at: completedAt,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select();
+            
+          if (updateError) {
+            console.error('ワークフロー更新エラー:', updateError);
+            return NextResponse.json({ error: `ワークフロー更新エラー: ${updateError.message}` }, { status: 500 });
+          }
+          
+          result = updatedWorkflow;
+        } catch (error) {
+          console.error('ワークフロー更新中にエラーが発生しました:', error);
+          return NextResponse.json({ 
+            error: `ワークフロー更新エラー: ${error instanceof Error ? error.message : '不明なエラー'}` 
+          }, { status: 500 });
         }
-        
-        result = updatedWorkflow;
         break;
         
       case 'delete_workflow':
-        // ワークフローを削除
-        const { data: deletedWorkflow, error: deleteError } = await supabaseClient
-          .from('workflows')
-          .delete()
-          .eq('id', params.id)
-          .select();
+        try {
+          // ワークフローを削除
+          const { data: deletedWorkflow, error: deleteError } = await supabaseClient
+            .from('workflows')
+            .delete()
+            .eq('id', params.id)
+            .select();
+            
+          if (deleteError) {
+            console.error('ワークフロー削除エラー:', deleteError);
+            return NextResponse.json({ error: `ワークフロー削除エラー: ${deleteError.message}` }, { status: 500 });
+          }
           
-        if (deleteError) {
-          console.error('ワークフロー削除エラー:', deleteError);
-          return NextResponse.json({ error: `ワークフロー削除エラー: ${deleteError.message}` }, { status: 500 });
+          result = deletedWorkflow;
+        } catch (error) {
+          console.error('ワークフロー削除中にエラーが発生しました:', error);
+          return NextResponse.json({ 
+            error: `ワークフロー削除エラー: ${error instanceof Error ? error.message : '不明なエラー'}` 
+          }, { status: 500 });
         }
-        
-        result = deletedWorkflow;
         break;
         
       default:
