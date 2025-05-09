@@ -12,24 +12,10 @@ export async function GET(request: Request) {
   try {
     const client = supabase();
     
-    // 共同編集者の取得
+    // 共同編集者の取得（外部キー関連付けを使用しない）
     const { data, error } = await client
       .from('workflow_collaborators')
-      .select(`
-        id,
-        workflow_id,
-        user_id,
-        permission_type,
-        added_at,
-        added_by,
-        user:user_id(
-          id,
-          email,
-          full_name,
-          role,
-          department
-        )
-      `)
+      .select('*')
       .eq('workflow_id', workflowId);
       
     if (error) {
@@ -37,16 +23,36 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     
+    // ユーザー情報を別途取得
+    const userIds = data.map(collab => collab.user_id);
+    let userData: any[] = [];
+    
+    if (userIds.length > 0) {
+      const { data: users, error: userError } = await client
+        .from('app_users')
+        .select('*')
+        .in('id', userIds);
+        
+      if (!userError && users) {
+        userData = users;
+      } else {
+        console.error('ユーザー情報取得エラー:', userError);
+      }
+    }
+    
     // データを整形して返す
-    const formattedData = data.map(collab => ({
-      id: collab.id,
-      workflowId: collab.workflow_id,
-      userId: collab.user_id,
-      permissionType: collab.permission_type,
-      addedAt: collab.added_at,
-      addedBy: collab.added_by,
-      user: collab.user
-    }));
+    const formattedData = data.map(collab => {
+      const user = userData.find(u => u.id === collab.user_id);
+      return {
+        id: collab.id,
+        workflowId: collab.workflow_id,
+        userId: collab.user_id,
+        permissionType: collab.permission_type,
+        addedAt: collab.added_at,
+        addedBy: collab.added_by,
+        user: user || null
+      };
+    });
     
     return NextResponse.json(formattedData);
   } catch (error) {
