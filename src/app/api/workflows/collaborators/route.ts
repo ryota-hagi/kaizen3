@@ -50,6 +50,7 @@ export async function GET(request: Request) {
         permissionType: collab.permission_type,
         addedAt: collab.added_at,
         addedBy: collab.added_by,
+        full_name: collab.full_name || (user?.full_name || user?.username || (user?.email ? user?.email.split('@')[0] : '不明なユーザー')),
         user: user || null
       };
     });
