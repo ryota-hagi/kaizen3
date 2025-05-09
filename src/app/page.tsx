@@ -161,8 +161,29 @@ export default function Home() {
         return;
       }
       
+      // 各ワークフローの共同編集者情報を取得
+      const workflowsWithCollaborators = await Promise.all(
+        result.map(async (wf: any) => {
+          // 共同編集者情報を取得
+          const collabResponse = await fetch(`/api/workflows/collaborators?workflowId=${wf.id}`);
+          let collaborators = [];
+          
+          if (collabResponse.ok) {
+            collaborators = await collabResponse.json();
+            console.log(`Fetched collaborators for workflow ${wf.id}:`, collaborators);
+          } else {
+            console.error(`Failed to fetch collaborators for workflow ${wf.id}`);
+          }
+          
+          return {
+            ...wf,
+            collaborators
+          };
+        })
+      );
+      
       // Supabaseのカラム名をアプリケーションの命名規則に合わせて変換
-      const formattedWorkflows: Workflow[] = result.map((wf: any) => ({
+      const formattedWorkflows: Workflow[] = workflowsWithCollaborators.map((wf: any) => ({
         id: wf.id,
         name: wf.name,
         description: wf.description,
