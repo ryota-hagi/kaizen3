@@ -609,14 +609,16 @@ export const useWorkflowSave = (
         createdBy: currentUser?.id // 現在のユーザーIDを作成者として設定
       } as Workflow // 型アサーションを追加
 
-      // 既存の改善後ワークフローを検索
-      const improvedIndex = workflows.findIndex(wf => wf.id === improvedWorkflowData.id)
-      if (improvedIndex !== -1) {
-        // 既存の改善後ワークフローを更新
-        workflows[improvedIndex] = improvedWorkflowData
-      } else {
-        // 新しい改善後ワークフローを追加
-        workflows.push(improvedWorkflowData)
+      if (improvedWorkflowData !== null) {
+        // 既存の改善後ワークフローを検索
+        const improvedIndex = workflows.findIndex(wf => wf.id === improvedWorkflowData?.id)
+        if (improvedIndex !== -1) {
+          // 既存の改善後ワークフローを更新
+          workflows[improvedIndex] = improvedWorkflowData
+        } else {
+          // 新しい改善後ワークフローを追加
+          workflows.push(improvedWorkflowData)
+        }
       }
 
       // 状態を更新
