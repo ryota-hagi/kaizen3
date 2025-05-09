@@ -94,22 +94,57 @@ export async function POST(request: Request) {
     
     // ユーザー情報を取得
     let userFullName = "不明なユーザー";
+    
+    console.log('ユーザーID:', body.userId);
+    
+    // app_usersテーブルから直接ユーザー情報を取得
     const { data: userData, error: userError } = await client
       .from('app_users')
-      .select('full_name, username, email')
+      .select('*')
       .eq('id', body.userId)
       .single();
       
+    console.log('取得したユーザーデータ:', userData);
+    console.log('ユーザー取得エラー:', userError);
+    
     if (!userError && userData) {
+      // full_nameが存在する場合
       if (userData.full_name && typeof userData.full_name === 'string') {
         userFullName = userData.full_name;
-      } else if (userData.username && typeof userData.username === 'string') {
+        console.log('full_nameを使用:', userFullName);
+      } 
+      // usernameが存在する場合
+      else if (userData.username && typeof userData.username === 'string') {
         userFullName = userData.username;
-      } else if (userData.email && typeof userData.email === 'string') {
+        console.log('usernameを使用:', userFullName);
+      } 
+      // emailが存在する場合
+      else if (userData.email && typeof userData.email === 'string') {
         userFullName = userData.email.split('@')[0]; // メールアドレスのユーザー名部分を使用
+        console.log('emailを使用:', userFullName);
       }
     } else {
       console.log('ユーザー情報取得エラーまたはユーザーが存在しません:', userError);
+      
+      // authテーブルからユーザー情報を取得してみる
+      try {
+        const { data: authUser, error: authError } = await client.auth.admin.getUserById(body.userId);
+        console.log('Auth APIからのユーザー情報:', authUser);
+        
+        if (!authError && authUser && authUser.user) {
+          if (authUser.user.user_metadata && authUser.user.user_metadata.full_name) {
+            userFullName = authUser.user.user_metadata.full_name;
+            console.log('Auth APIからfull_nameを取得:', userFullName);
+          } else if (authUser.user.email) {
+            userFullName = authUser.user.email.split('@')[0];
+            console.log('Auth APIからemailを取得:', userFullName);
+          }
+        } else {
+          console.log('Auth APIからのユーザー取得エラー:', authError);
+        }
+      } catch (authFetchError) {
+        console.error('Auth API呼び出しエラー:', authFetchError);
+      }
     }
     
     // 既に登録されている場合は更新
