@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ワークフロー共同編集者テーブルのRLS無効化</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 0;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    pre {
+      background-color: #f8f8f8;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      overflow: auto;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-left: 4px solid #3498db;
+    }
+    .error {
+      color: #e74c3c;
+      border-left: 4px solid #e74c3c;
+    }
+    .success {
+      color: #27ae60;
+      border-left: 4px solid #27ae60;
+    }
+  </style>
+</head>
+<body>
+  <h1>ワークフロー共同編集者テーブルのRLS無効化</h1>
+  
+  <p>このツールは、ワークフロー共同編集者テーブル（workflow_collaborators）のRLSポリシーを一時的に無効化し、すべてのユーザーがアクセスできるようにします。</p>
+  
+  <div>
+    <button id="disableRLS">RLSを無効化</button>
+    <button id="createStoredProcedures">ストアドプロシージャを作成</button>
+  </div>
+  
+  <div id="result" class="result"></div>
+  
+  <h2>実行されるSQL</h2>
+  <pre id="sql-preview">-- ワークフロー共同編集者テーブルのRLSを一時的に無効化
+ALTER TABLE workflow_collaborators DISABLE ROW LEVEL SECURITY;
+
+-- 全てのユーザーがワークフロー共同編集者テーブルにアクセスできるポリシーを作成
+CREATE POLICY allow_all_workflow_collaborators ON workflow_collaborators
+  FOR ALL
+  TO authenticated
+  USING (true);</pre>
+
+  <h2>ストアドプロシージャ</h2>
+  <pre id="stored-procedures">-- ワークフロー共同編集者を取得するストアドプロシージャ
+CREATE OR REPLACE FUNCTION get_workflow_collaborators(workflow_id_param UUID)
+RETURNS SETOF workflow_collaborators AS $$
+BEGIN
+  RETURN QUERY
+  SELECT *
+  FROM workflow_collaborators
+  WHERE workflow_id = workflow_id_param;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ワークフロー共同編集者を追加するストアドプロシージャ
+CREATE OR REPLACE FUNCTION add_workflow_collaborator(
+  workflow_id_param UUID,
+  user_id_param UUID,
+  permission_type_param TEXT,
+  added_by_param UUID
+)
+RETURNS workflow_collaborators AS $$
+DECLARE
+  result workflow_collaborators;
+  existing_id UUID;
+BEGIN
+  -- 既存の共同編集者をチェック
+  SELECT id INTO existing_id
+  FROM workflow_collaborators
+  WHERE workflow_id = workflow_id_param AND user_id = user_id_param;
+  
+  IF existing_id IS NOT NULL THEN
+    -- 既存の共同編集者を更新
+    UPDATE workflow_collaborators
+    SET permission_type = permission_type_param,
+        added_by = added_by_param
+    WHERE id = existing_id
+    RETURNING * INTO result;
+  ELSE
+    -- 新規共同編集者を追加
+    INSERT INTO workflow_collaborators (
+      workflow_id,
+      user_id,
+      permission_type,
+      added_by
+    )
+    VALUES (
+      workflow_id_param,
+      user_id_param,
+      permission_type_param,
+      added_by_param
+    )
+    RETURNING * INTO result;
+  END IF;
+  
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ワークフロー共同編集者を削除するストアドプロシージャ
+CREATE OR REPLACE FUNCTION remove_workflow_collaborator(collaborator_id_param UUID)
+RETURNS workflow_collaborators AS $$
+DECLARE
+  result workflow_collaborators;
+BEGIN
+  DELETE FROM workflow_collaborators
+  WHERE id = collaborator_id_param
+  RETURNING * INTO result;
+  
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;</pre>
+
+  <script>
+    const resultDiv = document.getElementById('result');
+    
+    async function executeSQL(sql) {
+      try {
+        const response = await fetch('/api/workflows/supabase-mcp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            operation: 'execute_sql',
+            params: { sql }
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          resultDiv.innerHTML = `<div class="success">
+            <h3>成功</h3>
+            <p>SQLが正常に実行されました。</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          </div>`;
+        } else {
+          resultDiv.innerHTML = `<div class="error">
+            <h3>エラー</h3>
+            <p>${data.error || 'SQLの実行中にエラーが発生しました。'}</p>
+          </div>`;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="error">
+          <h3>エラー</h3>
+          <p>リクエスト中にエラーが発生しました: ${error.message}</p>
+        </div>`;
+      }
+    }
+    
+    document.getElementById('disableRLS').addEventListener('click', async () => {
+      const sql = document.getElementById('sql-preview').textContent;
+      await executeSQL(sql);
+    });
+    
+    document.getElementById('createStoredProcedures').addEventListener('click', async () => {
+      const sql = document.getElementById('stored-procedures').textContent;
+      await executeSQL(sql);
+    });
+  </script>
+</body>
+</html>
