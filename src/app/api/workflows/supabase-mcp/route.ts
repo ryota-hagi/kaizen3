@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
@@ -14,23 +15,14 @@ export async function POST(request: Request) {
     const supabaseClient = supabase();
     const { data: { user } } = await supabaseClient.auth.getUser();
     
-    // TypeScriptのエラー回避のためにユーザー型を明示的に定義
-    type User = {
-      id: string;
-      [key: string]: any;
-    };
-    
-    // ユーザーオブジェクトを適切な型にキャスト
-    const typedUser = user as User | null;
-    
     // 認証情報がない場合でも処理を続行（RLSをバイパス）
     let accessToken = null;
     
-    if (typedUser) {
+    if (user) {
       // ユーザーのJWTトークンを取得
       const { data: { session } } = await supabaseClient.auth.getSession();
       accessToken = session?.access_token;
-      console.log('認証済みユーザー:', typedUser.id);
+      console.log('認証済みユーザー:', user.id);
     } else {
       console.log('未認証ユーザー: RLSをバイパスして処理を続行します');
     }
@@ -68,7 +60,7 @@ export async function POST(request: Request) {
       case 'get_workflows':
         try {
           // 認証情報がある場合は直接Supabaseクライアントを使用
-          if (typedUser) {
+          if (user) {
             console.log('認証情報を使用してワークフローを取得します');
             const { data: workflows, error: workflowsError } = await supabaseClient
               .from('workflows')
@@ -103,11 +95,11 @@ export async function POST(request: Request) {
             // 管理者のユーザー情報を取得して会社IDを取得
             let companyId = null;
             
-            if (typedUser) {
+            if (user && 'id' in user) {
               const { data: adminUserData, error: adminUserError } = await adminClient
                 .from('app_users')
                 .select('company_id')
-                .eq('auth_uid', typedUser.id)
+                .eq('auth_uid', user.id)
                 .single();
                 
               if (adminUserError) {
@@ -245,7 +237,7 @@ export async function POST(request: Request) {
           
           // システムユーザーID（認証されていない場合）
           const systemUserId = '00000000-0000-0000-0000-000000000000';
-          const addedBy = typedUser?.id || systemUserId;
+          const addedBy = user && 'id' in user ? user.id : systemUserId;
           
           // RLSを無効化して共同編集者を追加
           const { data: collaboratorData, error } = await supabaseClient.rpc('add_workflow_collaborator', {
