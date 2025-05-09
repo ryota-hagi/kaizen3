@@ -1,6 +1,23 @@
 import { NextResponse } from 'next/server';
 import { supabase, supabaseAdmin } from '@/lib/supabaseClient';
 
+// デフォルトの会社IDを取得する関数
+async function getDefaultCompanyId(client: any) {
+  // 会社テーブルから最初の会社を取得
+  const { data, error } = await client
+    .from('companies')
+    .select('id')
+    .limit(1)
+    .single();
+    
+  if (error || !data) {
+    console.error('デフォルト会社IDの取得に失敗しました:', error);
+    throw new Error('会社情報が見つかりません。会社情報を先に登録してください。');
+  }
+  
+  return data.id;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
@@ -102,8 +119,8 @@ export async function POST(request: Request) {
     steps: body.steps || [],
     is_improved: body.isImproved || false,
     original_id: body.originalId,
-    created_by: userId || '00000000-0000-0000-0000-000000000000', // ユーザーIDがない場合はデフォルト値を設定
-    company_id: companyId,
+    created_by: userId,
+    company_id: companyId || (await getDefaultCompanyId(client)),
     access_level: body.accessLevel || 'user',
     version: 1
   };
