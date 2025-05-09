@@ -62,6 +62,26 @@ export default function WorkflowDetailPage() {
   const [companyName, setCompanyName] = useState('株式会社サンプル')
   const [companyInfo, setCompanyInfo] = useState<any>(null)
   const [employees, setEmployees] = useState<any[]>([])
+  const [collaborators, setCollaborators] = useState<any[]>([])
+  
+  // 共同編集者リストを取得する関数
+  const fetchCollaborators = async () => {
+    try {
+      const response = await fetch(`/api/workflows/collaborators?workflowId=${workflowId}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API response error:', errorData);
+        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+      
+      const data = await response.json();
+      console.log('Fetched collaborators:', data);
+      setCollaborators(data);
+    } catch (error) {
+      console.error('共同編集者の取得エラー:', error);
+    }
+  };
   
   // 会社情報と従業員情報を取得
   useEffect(() => {
@@ -147,6 +167,13 @@ export default function WorkflowDetailPage() {
       console.log('No Employees Found. Using Default:', defaultEmployees)
     }
   }, [])
+  
+  // 初期表示時に共同編集者リストを取得
+  useEffect(() => {
+    if (workflowId) {
+      fetchCollaborators();
+    }
+  }, [workflowId]);
   
   useEffect(() => {
     // ローカルストレージからワークフローを取得
@@ -290,51 +317,65 @@ export default function WorkflowDetailPage() {
               }}
               onAddCollaborator={async (userId, permissionType) => {
                 try {
-                  // 共同編集者を追加する処理
-                  // 実際のアプリではAPIを呼び出す
-                  const collaboratorId = `collab-${Date.now()}`;
-                  const newCollaborator = {
-                    id: collaboratorId,
-                    workflowId: workflow.id,
-                    userId,
-                    permissionType,
-                    addedAt: new Date(),
-                    addedBy: workflow.createdBy
-                  };
+                  // APIを呼び出して共同編集者を追加
+                  const response = await fetch('/api/workflows/collaborators', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      workflowId: workflow.id,
+                      userId,
+                      permissionType
+                    }),
+                  });
                   
-                  // ローカルストレージに保存
-                  const storedCollaborators = localStorage.getItem(`workflow_collaborators_${workflow.id}`);
-                  let collaborators = storedCollaborators ? JSON.parse(storedCollaborators) : [];
-                  collaborators.push(newCollaborator);
-                  localStorage.setItem(`workflow_collaborators_${workflow.id}`, JSON.stringify(collaborators));
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('API response error:', errorData);
+                    throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                  }
+                  
+                  const result = await response.json();
+                  console.log('Added collaborator:', result);
+                  
+                  // 共同編集者リストを再取得
+                  fetchCollaborators();
                   
                   return true;
                 } catch (error) {
                   console.error('共同編集者追加エラー:', error);
+                  alert(`共同編集者の追加に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
                   return false;
                 }
               }}
               onRemoveCollaborator={async (collaboratorId) => {
                 try {
-                  // 共同編集者を削除する処理
-                  const storedCollaborators = localStorage.getItem(`workflow_collaborators_${workflow.id}`);
-                  if (storedCollaborators) {
-                    let collaborators = JSON.parse(storedCollaborators);
-                    collaborators = collaborators.filter((c: any) => c.id !== collaboratorId);
-                    localStorage.setItem(`workflow_collaborators_${workflow.id}`, JSON.stringify(collaborators));
-                    return true;
+                  // APIを呼び出して共同編集者を削除
+                  const response = await fetch(`/api/workflows/collaborators?id=${collaboratorId}`, {
+                    method: 'DELETE',
+                  });
+                  
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('API response error:', errorData);
+                    throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
                   }
-                  return false;
+                  
+                  const result = await response.json();
+                  console.log('Removed collaborator:', result);
+                  
+                  // 共同編集者リストを再取得
+                  fetchCollaborators();
+                  
+                  return true;
                 } catch (error) {
                   console.error('共同編集者削除エラー:', error);
+                  alert(`共同編集者の削除に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
                   return false;
                 }
               }}
-              collaborators={(() => {
-                // 共同編集者情報を取得
-                const storedCollaborators = localStorage.getItem(`workflow_collaborators_${workflow.id}`);
-                return storedCollaborators ? JSON.parse(storedCollaborators) : [];
-              })()}
+              collaborators={collaborators}
             />
             
             <div className="bg-white rounded-lg shadow p-6 mt-6">

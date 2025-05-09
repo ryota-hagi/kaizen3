@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ワークフロー共同編集者トリガーの適用</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 10px;
+    }
+    .card {
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .btn {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    .btn:hover {
+      background-color: #2980b9;
+    }
+    .btn:disabled {
+      background-color: #95a5a6;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .success {
+      background-color: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .info {
+      background-color: #e2f0fb;
+      border: 1px solid #bee5eb;
+      color: #0c5460;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #3498db;
+      animation: spin 1s ease-in-out infinite;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h1>ワークフロー共同編集者トリガーの適用</h1>
+  
+  <div class="card">
+    <h2>概要</h2>
+    <p>このツールは、workflow_collaboratorsテーブルに対するトリガーを適用します。このトリガーは、共同編集者の追加・削除・更新時にworkflow_historyテーブルに履歴を記録します。</p>
+    <p><strong>注意:</strong> このツールを実行すると、既存のトリガーがある場合は上書きされます。</p>
+  </div>
+  
+  <div class="card">
+    <h2>トリガーの適用</h2>
+    <p>以下のボタンをクリックして、トリガーを適用します。</p>
+    <button id="applyTriggerBtn" class="btn">トリガーを適用</button>
+    <span id="loading" class="loading" style="display: none;"></span>
+    
+    <div id="result" class="result" style="display: none;"></div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const applyTriggerBtn = document.getElementById('applyTriggerBtn');
+      const loading = document.getElementById('loading');
+      const result = document.getElementById('result');
+      
+      applyTriggerBtn.addEventListener('click', async function() {
+        try {
+          // ボタンを無効化し、ローディングを表示
+          applyTriggerBtn.disabled = true;
+          loading.style.display = 'inline-block';
+          result.style.display = 'none';
+          
+          // APIを呼び出してトリガーを適用
+          const response = await fetch('/api/workflows/apply-collaborators-trigger');
+          const data = await response.json();
+          
+          // 結果を表示
+          result.style.display = 'block';
+          
+          if (response.ok) {
+            result.className = 'result success';
+            result.textContent = `成功: ${data.message || 'トリガーが正常に適用されました'}`;
+          } else {
+            result.className = 'result error';
+            result.textContent = `エラー: ${data.error || '不明なエラーが発生しました'}`;
+          }
+        } catch (error) {
+          // エラーを表示
+          result.style.display = 'block';
+          result.className = 'result error';
+          result.textContent = `エラー: ${error.message || '不明なエラーが発生しました'}`;
+        } finally {
+          // ボタンを有効化し、ローディングを非表示
+          applyTriggerBtn.disabled = false;
+          loading.style.display = 'none';
+        }
+      });
+    });
+  </script>
+</body>
+</html>
