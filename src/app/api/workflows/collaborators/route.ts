@@ -121,34 +121,14 @@ export async function POST(request: Request) {
     const { data: authData } = await client.auth.admin.getUserById(body.userId);
     console.log('Auth APIからの取得結果:', authData);
     
-    // ユーザー名を決定
-    let userFullName = "";
+    // app_usersテーブルからfull_nameを取得
+    if (!userData || !userData.full_name || typeof userData.full_name !== 'string') {
+      console.error('ユーザー情報が取得できないか、full_nameが存在しません');
+      return NextResponse.json({ error: 'ユーザー情報が取得できないか、full_nameが存在しません' }, { status: 404 });
+    }
     
-    // 優先順位1: app_usersテーブルのfull_name
-    if (userData && userData.full_name && typeof userData.full_name === 'string') {
-      userFullName = userData.full_name;
-      console.log('app_usersテーブルのfull_nameを使用:', userFullName);
-    }
-    // 優先順位2: app_usersテーブルのemail
-    else if (userData && userData.email && typeof userData.email === 'string') {
-      userFullName = userData.email.split('@')[0];
-      console.log('app_usersテーブルのemailを使用:', userFullName);
-    }
-    // 優先順位3: Auth APIのuser_metadata.full_name
-    else if (authData && authData.user && authData.user.user_metadata && authData.user.user_metadata.full_name) {
-      userFullName = authData.user.user_metadata.full_name;
-      console.log('Auth APIのuser_metadata.full_nameを使用:', userFullName);
-    }
-    // 優先順位4: Auth APIのemail
-    else if (authData && authData.user && authData.user.email) {
-      userFullName = authData.user.email.split('@')[0];
-      console.log('Auth APIのemailを使用:', userFullName);
-    }
-    // 優先順位5: ユーザーID自体
-    else {
-      userFullName = body.userId;
-      console.log('ユーザーIDを使用:', userFullName);
-    }
+    const userFullName = userData.full_name;
+    console.log('app_usersテーブルからfull_nameを取得:', userFullName);
     
     // 既に登録されている場合は更新
     if (existingCollaborator && existingCollaborator.id) {
