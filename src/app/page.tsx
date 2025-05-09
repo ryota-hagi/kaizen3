@@ -455,11 +455,15 @@ export default function Home() {
                                             return (
                                               <div key={collab.id} className="flex items-center mb-1">
                                                 <div className="flex-shrink-0 h-6 w-6">
-                                                  <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
-                                                    {collab.full_name ? collab.full_name.charAt(0) : 
-                                                      (user?.fullName?.charAt(0) || 
-                                                        (collab.permission_type === 'edit' ? 'E' : 'V'))}
-                                                  </div>
+                                                  {collab.full_name ? (
+                                                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-xs">
+                                                      {collab.full_name.charAt(0)}
+                                                    </div>
+                                                  ) : (
+                                                    <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-xs">
+                                                      {/* 登録がない場合は空欄 */}
+                                                    </div>
+                                                  )}
                                                 </div>
                                                 {/* 編集者という表記をなくし、アイコンのみに */}
                                               </div>
