@@ -2,15 +2,15 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
+    // リクエストからプロジェクトIDを取得（指定がない場合はデフォルト値を使用）
+    const body = await request.json().catch(() => ({}));
+    const projectId = body.projectId || 'czuedairowlwfgbjmfbg';
+    
     // トリガーSQLファイルを読み込む
     const sqlFilePath = path.join(process.cwd(), 'src/db/migrations/create_workflow_collaborators_trigger.sql');
     const sqlContent = fs.readFileSync(sqlFilePath, 'utf8');
-    
-    // URLからプロジェクトIDを取得（クエリパラメータがない場合はデフォルト値を使用）
-    const { searchParams } = new URL(request.url);
-    const projectId = searchParams.get('projectId') || 'czuedairowlwfgbjmfbg';
     
     try {
       // @ts-ignore - グローバルスコープでuse_mcp_toolが利用可能
@@ -41,4 +41,12 @@ export async function GET(request: Request) {
       error: `トリガー適用エラー: ${error instanceof Error ? error.message : '不明なエラー'}`
     }, { status: 500 });
   }
+}
+
+// GETメソッドも同様に処理（静的生成のエラーを回避するため）
+export async function GET() {
+  return NextResponse.json({ 
+    success: false, 
+    message: 'このエンドポイントはPOSTメソッドのみをサポートしています'
+  }, { status: 405 });
 }

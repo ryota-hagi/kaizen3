@@ -116,8 +116,15 @@
           loading.style.display = 'inline-block';
           result.style.display = 'none';
           
-          // APIを呼び出してトリガーを適用（プロジェクトIDをクエリパラメータとして渡す）
-          const response = await fetch(`/api/workflows/apply-collaborators-trigger?projectId=${defaultProjectId}`);
+          // APIを呼び出してトリガーを適用（POSTメソッドでプロジェクトIDを送信）
+          const response = await fetch('/api/workflows/apply-collaborators-trigger', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ projectId: defaultProjectId })
+          });
+          
           const data = await response.json();
           
           // 結果を表示
