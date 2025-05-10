@@ -94,7 +94,7 @@ export async function POST(request: Request) {
               const adminClient = supabaseAdmin();
               
               // 管理者権限でワークフローを取得（会社IDでフィルタリング）
-              // company_idがnullでないものだけを取得
+              // company_idが一致するものだけを取得
               const { data: adminWorkflows, error: adminError } = await adminClient
                 .from('workflows')
                 .select(`
@@ -108,7 +108,6 @@ export async function POST(request: Request) {
                   )
                 `)
                 .eq('company_id', userData.company_id)
-                .not('company_id', 'is', null)
                 .order('updated_at', { ascending: false });
                 
               if (adminError) {
