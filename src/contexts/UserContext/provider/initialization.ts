@@ -9,9 +9,16 @@ export const initializeProvider = async (
   setUsers: Dispatch<SetStateAction<UserInfo[]>>,
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
   setCompanyId: Dispatch<SetStateAction<string>>,
-  setUserPasswords: Dispatch<SetStateAction<Record<string, string>>>
+  setUserPasswords: Dispatch<SetStateAction<Record<string, string>>>,
+  alreadyInitialised?: { current: boolean }
 ) => {
   if (typeof window === 'undefined') return;
+  
+  // 既に初期化済みの場合は処理をスキップ
+  if (alreadyInitialised?.current) {
+    console.log('[Provider Init] Already initialized, skipping initialization');
+    return;
+  }
 
   // 1. Supabaseセッションを確認（validateSession関数を使用）
   const client = supabase();

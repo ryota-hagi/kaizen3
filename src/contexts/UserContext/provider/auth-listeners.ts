@@ -50,18 +50,23 @@ export const setupAuthStateChangeListener = (
     if (event === 'SIGNED_IN') {
       console.log('[Provider] Processing SIGNED_IN event');
       
-      // loginWithGoogle内でユーザー情報取得・設定・保存を行う
-      await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
-      
-      // セッションから会社IDを設定
-      if (session?.user?.user_metadata?.company_id) {
-        const cid = session.user.user_metadata.company_id;
-        setCompanyId(cid);
-        console.log('[Provider] Company ID updated from auth event:', cid);
+      // 既に初期化済みの場合は重複処理を防止
+      if (!alreadyInitialised.current) {
+        // loginWithGoogle内でユーザー情報取得・設定・保存を行う
+        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
+        
+        // セッションから会社IDを設定
+        if (session?.user?.user_metadata?.company_id) {
+          const cid = session.user.user_metadata.company_id;
+          setCompanyId(cid);
+          console.log('[Provider] Company ID updated from auth event:', cid);
+        }
+        
+        // 初期化済みフラグを設定
+        alreadyInitialised.current = true;
+      } else {
+        console.log('[Provider] Skipping duplicate SIGNED_IN processing - already initialized');
       }
-      
-      // 初期化済みフラグを設定
-      alreadyInitialised.current = true;
     } else if (event === 'SIGNED_OUT') {
       console.log('[Provider] User SIGNED_OUT, clearing state.');
       handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);

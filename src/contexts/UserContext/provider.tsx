@@ -59,13 +59,14 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           setIsAuthenticated(true);
         }
         
-        // 初期データ読み込みロジックを実行
+        // 初期データ読み込みロジックを実行（alreadyInitialisedフラグを渡す）
         await initializeProvider(
           setCurrentUser,
           setUsers,
           setIsAuthenticated,
           setCompanyId,
-          setUserPasswords
+          setUserPasswords,
+          alreadyInitialised
         );
       } catch (error) {
         console.error('[Provider] Error restoring session:', error);
@@ -76,7 +77,8 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           setUsers,
           setIsAuthenticated,
           setCompanyId,
-          setUserPasswords
+          setUserPasswords,
+          alreadyInitialised
         );
       }
     };
