@@ -95,6 +95,7 @@ export async function POST(request: Request) {
               
               // 管理者権限でワークフローを取得（会社IDでフィルタリング）
               // company_idが一致するものだけを取得
+              const adminCompanyId = userData.company_id as string;
               const { data: adminWorkflows, error: adminError } = await adminClient
                 .from('workflows')
                 .select(`
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
                     added_by
                   )
                 `)
-                .eq('company_id', userData.company_id)
+                .eq('company_id', adminCompanyId)
                 .order('updated_at', { ascending: false });
                 
               if (adminError) {
@@ -120,8 +121,9 @@ export async function POST(request: Request) {
               console.log(`管理者権限で取得したワークフロー数: ${adminWorkflows ? adminWorkflows.length : 0}`);
               result = adminWorkflows || [];
             } else {
-              // 管理者以外はRLSポリシーに基づいてワークフローを取得
-              console.log('RLSポリシーに基づいてワークフローを取得');
+              // 管理者以外もユーザーの会社IDに基づいてワークフローを取得
+              console.log('ユーザーの会社IDに基づいてワークフローを取得:', userData.company_id);
+              const companyId = userData.company_id as string;
               const { data: workflows, error: workflowsError } = await supabaseClient
                 .from('workflows')
                 .select(`
@@ -135,6 +137,7 @@ export async function POST(request: Request) {
                   ),
                   creator:app_users!created_by(id, full_name)
                 `)
+                .eq('company_id', companyId)
                 .order('updated_at', { ascending: false });
                 
               if (workflowsError) {
@@ -156,32 +159,57 @@ export async function POST(request: Request) {
             const { supabaseAdmin } = await import('@/lib/supabaseClient');
             const adminClient = supabaseAdmin();
             
-              // 管理者権限でワークフローを取得
-              const { data: adminWorkflows, error: adminError } = await adminClient
-                .from('workflows')
-                .select(`
-                  *,
-                  collaborators:workflow_collaborators(
-                    id,
-                    user_id,
-                    permission_type,
-                    added_at,
-                    added_by
-                  )
-                `)
+            // 管理者権限でワークフローを取得
+            let query = adminClient
+              .from('workflows')
+              .select(`
+                *,
+                collaborators:workflow_collaborators(
+                  id,
+                  user_id,
+                  permission_type,
+                  added_at,
+                  added_by
+                )
+              `);
+              
+            // 会社IDが指定されている場合はフィルタリング
+            const companyId = params.company_id as string | undefined;
+            if (companyId) {
+              // 会社IDでフィルタリング
+              const { data: adminWorkflows, error: adminError } = await query
+                .eq('company_id', companyId)
                 .order('updated_at', { ascending: false });
+                
+              if (adminError) {
+                console.error('管理者権限でのワークフロー取得エラー:', adminError);
+                return NextResponse.json({ 
+                  error: `管理者権限でのワークフロー取得エラー: ${adminError.message}` 
+                }, { status: 500 });
+              }
               
-            if (adminError) {
-              console.error('管理者権限でのワークフロー取得エラー:', adminError);
-              
-              // エラーが発生した場合はエラーを返す
-              return NextResponse.json({ 
-                error: `管理者権限でのワークフロー取得エラー: ${adminError.message}` 
-              }, { status: 500 });
-            } else {
-              // 管理者権限で取得したワークフローを返す
               console.log(`管理者権限で取得したワークフロー数: ${adminWorkflows ? adminWorkflows.length : 0}`);
               result = adminWorkflows || [];
+            } else {
+              // 会社IDが指定されていない場合は全て取得してからフィルタリング
+              const { data: adminWorkflows, error: adminError } = await query
+                .order('updated_at', { ascending: false });
+                
+              if (adminError) {
+                console.error('管理者権限でのワークフロー取得エラー:', adminError);
+                return NextResponse.json({ 
+                  error: `管理者権限でのワークフロー取得エラー: ${adminError.message}` 
+                }, { status: 500 });
+              }
+              
+              // 取得したワークフローの中から、company_idがnullでないものだけをフィルタリング
+              if (adminWorkflows) {
+                const filteredWorkflows = adminWorkflows.filter(workflow => workflow.company_id !== null);
+                console.log(`全ワークフロー数: ${adminWorkflows.length}, フィルタリング後のワークフロー数: ${filteredWorkflows.length}`);
+                result = filteredWorkflows;
+              } else {
+                result = [];
+              }
             }
           }
         } catch (error) {

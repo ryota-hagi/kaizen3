@@ -29,6 +29,8 @@ interface Workflow {
   isCompleted?: boolean
   completedAt?: Date
   createdBy?: string // 作成者のユーザーID
+  company_id?: string // 会社ID
+  collaborators?: any[] // 共同編集者情報
 }
 
 export default function Home() {
@@ -143,7 +145,9 @@ export default function Home() {
         },
         body: JSON.stringify({
           operation: 'get_workflows',
-          params: {}
+          params: {
+            company_id: currentUser?.companyId
+          }
         }),
       });
       
@@ -195,7 +199,8 @@ export default function Home() {
         isCompleted: wf.is_completed || false,
         completedAt: wf.completed_at ? new Date(wf.completed_at) : undefined,
         createdBy: wf.created_by,
-        collaborators: wf.collaborators || []
+        collaborators: wf.collaborators || [],
+        company_id: wf.company_id || null
       }));
       
       // 最新順にソート
@@ -282,7 +287,10 @@ export default function Home() {
     // showCompletedがtrueの場合は完了済みも含めて全て表示
     const matchesCompletionStatus = showCompleted || !workflow.isCompleted;
     
-    return matchesSearch && matchesCompletionStatus;
+    // 会社IDが一致するか（nullの場合は除外）
+    const matchesCompanyId = workflow.company_id !== null && workflow.company_id === currentUser?.companyId;
+    
+    return matchesSearch && matchesCompletionStatus && matchesCompanyId;
   });
 
   // ワークフローをグループ化する関数
