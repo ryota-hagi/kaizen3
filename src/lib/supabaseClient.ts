@@ -20,7 +20,47 @@ export const supabase = () => {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true
+        detectSessionInUrl: true,
+        storageKey: 'supabase.auth.token',
+        storage: {
+          getItem: (key) => {
+            if (typeof window === 'undefined') return null;
+            
+            // まずlocalStorageから取得を試みる
+            const localValue = localStorage.getItem(key);
+            if (localValue) return localValue;
+            
+            // 次にsessionStorageから取得を試みる
+            try {
+              return sessionStorage.getItem(key);
+            } catch (e) {
+              console.error('Error accessing sessionStorage:', e);
+              return null;
+            }
+          },
+          setItem: (key, value) => {
+            if (typeof window === 'undefined') return;
+            
+            // localStorageとsessionStorageの両方に保存
+            localStorage.setItem(key, value);
+            try {
+              sessionStorage.setItem(key, value);
+            } catch (e) {
+              console.error('Error setting sessionStorage:', e);
+            }
+          },
+          removeItem: (key) => {
+            if (typeof window === 'undefined') return;
+            
+            // localStorageとsessionStorageの両方から削除
+            localStorage.removeItem(key);
+            try {
+              sessionStorage.removeItem(key);
+            } catch (e) {
+              console.error('Error removing from sessionStorage:', e);
+            }
+          }
+        }
       }
     });
     console.log('► Created new Supabase client instance');
@@ -201,6 +241,27 @@ export const checkInvitationsTable = async () => {
 // セッションの有効性を確認する関数
 export const validateSession = async () => {
   try {
+    // まずlocalStorageとsessionStorageを直接チェック
+    let tokenStr = null;
+    if (typeof window !== 'undefined') {
+      // localStorageをチェック
+      tokenStr = localStorage.getItem('supabase.auth.token');
+      
+      // localStorageになければsessionStorageをチェック
+      if (!tokenStr) {
+        try {
+          tokenStr = sessionStorage.getItem('supabase.auth.token');
+        } catch (e) {
+          console.error('[Supabase] Error accessing sessionStorage:', e);
+        }
+      }
+      
+      if (tokenStr) {
+        console.log('[Supabase] Found auth token in storage');
+      }
+    }
+    
+    // Supabaseクライアントからセッションを取得
     const client = supabase();
     const { data: { session }, error } = await client.auth.getSession();
     
@@ -211,6 +272,33 @@ export const validateSession = async () => {
     
     if (!session) {
       console.log('[Supabase] No active session found during validation');
+      
+      // セッションがないがトークンがある場合は、トークンを使ってセッションを復元
+      if (tokenStr) {
+        try {
+          console.log('[Supabase] Attempting to restore session from token');
+          const parsedToken = JSON.parse(tokenStr);
+          if (parsedToken?.access_token) {
+            const { data, error } = await client.auth.setSession({
+              access_token: parsedToken.access_token,
+              refresh_token: parsedToken.refresh_token
+            });
+            
+            if (error) {
+              console.error('[Supabase] Error restoring session from token:', error);
+              return { valid: false, error };
+            }
+            
+            if (data.session) {
+              console.log('[Supabase] Successfully restored session from token');
+              return { valid: true, session: data.session };
+            }
+          }
+        } catch (e) {
+          console.error('[Supabase] Error parsing or using stored token:', e);
+        }
+      }
+      
       return { valid: false };
     }
     
@@ -219,8 +307,23 @@ export const validateSession = async () => {
     const now = Math.floor(Date.now() / 1000);
     
     if (expiresAt && expiresAt < now) {
-      console.log('[Supabase] Session expired');
-      return { valid: false, expired: true };
+      console.log('[Supabase] Session expired, attempting to refresh');
+      
+      try {
+        // セッションの更新を試みる
+        const { data, error } = await client.auth.refreshSession();
+        
+        if (error || !data.session) {
+          console.error('[Supabase] Failed to refresh session:', error);
+          return { valid: false, expired: true, error };
+        }
+        
+        console.log('[Supabase] Session refreshed successfully');
+        return { valid: true, session: data.session };
+      } catch (refreshError) {
+        console.error('[Supabase] Error refreshing session:', refreshError);
+        return { valid: false, expired: true, error: refreshError };
+      }
     }
     
     console.log('[Supabase] Session is valid');
