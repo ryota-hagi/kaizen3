@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { UserInfo, Employee } from '@/utils/api'
 
 interface UserDetailModalProps {
@@ -29,6 +29,24 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
   generateInviteLink
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md ブレークポイント
+    };
+    
+    // 初期チェック
+    checkIfMobile();
+    
+    // リサイズイベントのリスナーを追加
+    window.addEventListener('resize', checkIfMobile);
+    
+    // クリーンアップ
+    return () => {
+      window.removeEventListener('resize', checkIfMobile);
+    };
+  }, []);
   
   if (!isOpen || !user) return null
   
@@ -45,15 +63,16 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-secondary-500 bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-secondary-200 flex justify-between items-center">
+    <div className="fixed inset-0 bg-secondary-500 bg-opacity-75 flex items-center justify-center z-50 p-0 sm:p-4">
+      <div className={`bg-white shadow-xl w-full overflow-y-auto ${isMobile ? 'h-full max-h-full rounded-none' : 'rounded-lg max-w-2xl mx-4 max-h-[90vh]'}`}>
+        <div className="sticky top-0 z-10 bg-white px-4 sm:px-6 py-4 border-b border-secondary-200 flex justify-between items-center">
           <h3 className="text-lg font-medium text-secondary-900">
             {isEditMode ? 'ユーザー編集' : 'ユーザー詳細'}
           </h3>
           <button
             onClick={onClose}
-            className="text-secondary-400 hover:text-secondary-500"
+            className="text-secondary-400 hover:text-secondary-500 p-2"
+            aria-label="閉じる"
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -61,16 +80,16 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
           </button>
         </div>
         
-        <div className="px-6 py-4">
-          <div className="flex items-center mb-6">
-            <div className="h-16 w-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-2xl">
+        <div className="px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center mb-6">
+            <div className="h-16 w-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-2xl mx-auto sm:mx-0 mb-4 sm:mb-0">
               {user.fullName.charAt(0) || user.email.charAt(0)}
             </div>
-            <div className="ml-4">
+            <div className="ml-0 sm:ml-4 text-center sm:text-left">
               <h4 className="text-xl font-medium text-secondary-900">{user.fullName || user.email}</h4>
               <p className="text-secondary-500">{user.email}</p>
               {user.status === '招待中' && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mt-1">
                   招待中
                 </span>
               )}
@@ -81,27 +100,33 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
           {user.isInvited && inviteLink && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
               <h3 className="text-sm font-medium text-blue-800 mb-2">招待リンク</h3>
-              <div className="flex items-center">
+              <div className="flex flex-col sm:flex-row items-center">
                 <input
                   type="text"
                   value={inviteLink}
                   readOnly
-                  className="flex-1 p-2 text-sm bg-white border border-blue-300 rounded-md"
+                  className="w-full p-2 text-sm bg-white border border-blue-300 rounded-md mb-2 sm:mb-0"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
                 <button
                   type="button"
                   onClick={copyToClipboard}
-                  className="ml-2 p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="w-full sm:w-auto sm:ml-2 p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center"
                 >
                   {copySuccess ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      コピー済み
+                    </>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                    </svg>
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      コピー
+                    </>
                   )}
                 </button>
               </div>
@@ -192,7 +217,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
               <p className="text-sm text-secondary-500">ユーザーID</p>
               <p className="font-medium">{user.id}</p>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1 md:col-span-2">
               <p className="text-sm text-secondary-500">紐づけ従業員</p>
               {isEditMode ? (
                 <select
@@ -219,18 +244,18 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
             </div>
           </div>
           
-          <div className="border-t border-secondary-200 pt-4 flex justify-end space-x-4">
+          <div className="border-t border-secondary-200 pt-4 flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4">
             {isEditMode ? (
               <>
                 <button
                   onClick={() => onToggleEditMode()}
-                  className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
                 >
                   キャンセル
                 </button>
                 <button
                   onClick={onUpdate}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
                 >
                   保存
                 </button>
@@ -239,13 +264,13 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
               <>
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
                 >
                   閉じる
                 </button>
                 <button
                   onClick={onToggleEditMode}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                  className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
                 >
                   編集
                 </button>

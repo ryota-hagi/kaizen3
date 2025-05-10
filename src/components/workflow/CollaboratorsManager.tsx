@@ -31,6 +31,26 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [appUsers, setAppUsers] = useState<any[]>([]);
   
+  // 画面サイズの変更を検知
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768) // md ブレークポイント
+    }
+    
+    // 初期チェック
+    checkIfMobile()
+    
+    // リサイズイベントのリスナーを追加
+    window.addEventListener('resize', checkIfMobile)
+    
+    // クリーンアップ
+    return () => {
+      window.removeEventListener('resize', checkIfMobile)
+    }
+  }, [])
+  
   // app_usersテーブルからユーザー一覧と部署一覧を取得
   useEffect(() => {
     const fetchUsersAndDepartments = async () => {
@@ -97,24 +117,24 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
   const isCreator = currentUser?.id === createdBy;
   
   return (
-    <div className="bg-white rounded-lg shadow p-6 mb-6">
+    <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6">
       <h2 className="text-xl font-semibold mb-4">共同編集者管理</h2>
       
       {/* 現在のアクセスレベル表示 */}
       <div className="mb-4 p-3 bg-blue-50 rounded-md">
         <h3 className="font-medium text-blue-800">現在の共有設定</h3>
-        <div className="flex items-center mt-2">
+        <div className={`${isMobile ? 'flex flex-col space-y-2' : 'flex items-center'} mt-2`}>
           <select
             value={accessLevel}
             onChange={(e) => handleAccessLevelChange(e.target.value)}
-            className="p-2 border rounded"
+            className={`p-2 border rounded ${isMobile ? 'w-full' : ''}`}
             disabled={!isCreator && !canInviteDepartment}
           >
             <option value="user">個別ユーザーのみ</option>
             {canInviteDepartment && <option value="department">部署内で共有</option>}
             {canInviteCompany && <option value="company">会社全体で共有</option>}
           </select>
-          <p className="ml-3 text-sm text-gray-600">
+          <p className={`${isMobile ? 'mt-1' : 'ml-3'} text-sm text-gray-600`}>
             {accessLevel === 'user' && '選択したユーザーのみがアクセスできます'}
             {accessLevel === 'department' && '同じ部署のメンバー全員がアクセスできます'}
             {accessLevel === 'company' && '会社の全メンバーがアクセスできます'}
@@ -125,11 +145,11 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
       {/* 個別ユーザー招待 */}
       <div className="mb-6 p-4 border rounded-md">
         <h3 className="font-medium mb-2">ユーザーを招待</h3>
-        <div className="flex flex-wrap gap-2">
+        <div className={`${isMobile ? 'flex flex-col space-y-2' : 'flex flex-wrap gap-2'}`}>
           <select
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
-            className="flex-1 p-2 border rounded"
+            className={`${isMobile ? 'w-full' : 'flex-1'} p-2 border rounded`}
           >
             <option value="">ユーザーを選択...</option>
             {appUsers
@@ -144,7 +164,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
           <select
             value={permissionType}
             onChange={(e) => setPermissionType(e.target.value as 'edit' | 'view')}
-            className="w-32 p-2 border rounded"
+            className={`${isMobile ? 'w-full' : 'w-32'} p-2 border rounded`}
           >
             <option value="edit">編集可能</option>
             <option value="view">閲覧のみ</option>
@@ -152,7 +172,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
           <button
             onClick={handleAddCollaborator}
             disabled={!selectedUserId || isLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+            className={`${isMobile ? 'w-full' : ''} px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400`}
           >
             招待
           </button>
@@ -173,15 +193,17 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                 (collaboratorUser ? (collaboratorUser.full_name || collaboratorUser.username) : '不明なユーザー');
               
               return (
-                <li key={collab.id} className="py-2 flex justify-between items-center">
-                  <div>
-                    <span className="font-medium">
-                      {displayName}
-                    </span>
-                    <span className="ml-2 text-sm text-gray-500">
-                      {collaboratorUser?.email || ''}
-                    </span>
-                    <span className={`ml-2 px-2 py-0.5 text-xs rounded ${
+                <li key={collab.id} className={`py-2 ${isMobile ? 'flex flex-col space-y-2' : 'flex justify-between items-center'}`}>
+                  <div className={isMobile ? 'space-y-1' : ''}>
+                    <div className="flex flex-wrap items-center">
+                      <span className="font-medium">
+                        {displayName}
+                      </span>
+                      <span className={`${isMobile ? 'ml-0 block text-xs' : 'ml-2'} text-sm text-gray-500`}>
+                        {collaboratorUser?.email || ''}
+                      </span>
+                    </div>
+                    <span className={`${isMobile ? 'mt-1 inline-block' : 'ml-2'} px-2 py-0.5 text-xs rounded ${
                       collab.permissionType === 'edit' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                     }`}>
                       {collab.permissionType === 'edit' ? '編集可能' : '閲覧のみ'}
@@ -190,7 +212,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
                   {(isCreator || currentUser?.role === '管理者') && (
                     <button
                       onClick={() => onRemoveCollaborator(collab.id)}
-                      className="text-red-600 hover:text-red-800"
+                      className={`text-red-600 hover:text-red-800 ${isMobile ? 'py-1 px-2 border border-red-200 rounded text-sm' : ''}`}
                     >
                       削除
                     </button>
@@ -200,7 +222,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
             })}
           </ul>
         ) : (
-          <p className="text-gray-500">共同編集者はまだいません</p>
+          <p className="text-gray-500 p-4 bg-gray-50 rounded-md text-center">共同編集者はまだいません</p>
         )}
       </div>
     </div>

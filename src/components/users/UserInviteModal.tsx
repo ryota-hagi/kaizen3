@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Fragment } from 'react'
+import React, { Fragment, useEffect, useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { UserInviteForm } from '@/components/auth/UserInviteForm'
 
@@ -15,9 +15,33 @@ export const UserInviteModal: React.FC<UserInviteModalProps> = ({
   onClose,
   onSuccess
 }) => {
+  // 画面サイズの変更を検知
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768) // md ブレークポイント
+    }
+    
+    // 初期チェック
+    checkIfMobile()
+    
+    // リサイズイベントのリスナーを追加
+    window.addEventListener('resize', checkIfMobile)
+    
+    // クリーンアップ
+    return () => {
+      window.removeEventListener('resize', checkIfMobile)
+    }
+  }, [])
+
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-10" onClose={onClose}>
+      <Dialog 
+        as="div" 
+        className="relative z-10" 
+        onClose={onClose}
+      >
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -31,7 +55,7 @@ export const UserInviteModal: React.FC<UserInviteModalProps> = ({
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
+          <div className={`flex min-h-full items-center justify-center ${isMobile ? 'p-0' : 'p-4'} text-center`}>
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -41,15 +65,35 @@ export const UserInviteModal: React.FC<UserInviteModalProps> = ({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                <Dialog.Title
-                  as="h3"
-                  className="text-lg font-medium leading-6 text-secondary-900"
-                >
-                  ユーザーを招待
-                </Dialog.Title>
+              <Dialog.Panel 
+                className={`
+                  w-full transform overflow-hidden bg-white text-left align-middle shadow-xl transition-all
+                  ${isMobile ? 'h-full max-h-full rounded-none' : 'max-w-md rounded-2xl m-4'}
+                  ${isMobile ? 'p-4' : 'p-6'}
+                `}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <Dialog.Title
+                    as="h3"
+                    className="text-lg font-medium leading-6 text-secondary-900"
+                  >
+                    ユーザーを招待
+                  </Dialog.Title>
+                  
+                  {isMobile && (
+                    <button
+                      onClick={onClose}
+                      className="text-secondary-400 hover:text-secondary-500 p-2"
+                      aria-label="閉じる"
+                    >
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
                 
-                <div className="mt-4">
+                <div className={isMobile ? 'mt-2' : 'mt-4'}>
                   <UserInviteForm 
                     onClose={onClose} 
                     onError={(message) => {
@@ -59,10 +103,13 @@ export const UserInviteModal: React.FC<UserInviteModalProps> = ({
                   />
                 </div>
                 
-                <div className="mt-4 flex justify-end">
+                <div className={`${isMobile ? 'mt-4 flex justify-center' : 'mt-6 flex justify-end'}`}>
                   <button
                     onClick={onClose}
-                    className="px-4 py-2 bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors"
+                    className={`
+                      bg-secondary-100 text-secondary-700 rounded-md hover:bg-secondary-200 transition-colors
+                      ${isMobile ? 'w-full py-3 text-center' : 'px-4 py-2'}
+                    `}
                   >
                     閉じる
                   </button>
