@@ -111,36 +111,136 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [currentUser]); // currentUser が変更されたときにチェック
 
-  // 認証状態変更リスナーを設定（一度だけ）
+  // 認証状態変更リスナーを設定
   useEffect(() => {
-    // 既にリスナーが設定されている場合は再設定しない
-    if (alreadyInitialised.current) {
-      console.log('[Provider] Auth listener already set up, skipping');
-      return;
+    console.log('[Provider] Setting up auth state change listener');
+    
+    // 既存のリスナーをクリーンアップ
+    let subscription: { unsubscribe: () => void } | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    // ブラウザ環境でのみ実行
+    if (typeof window !== 'undefined') {
+      // セッションの復元を試みる
+      const attemptSessionRestore = async () => {
+        try {
+          // Supabaseクライアントを取得
+          const client = supabase();
+          
+          // セッションの取得を試みる
+          const { data: { session }, error } = await client.auth.getSession();
+          
+          if (error) {
+            console.error('[Provider] Error getting session:', error);
+            return;
+          }
+          
+          if (session) {
+            console.log('[Provider] Found existing session during listener setup');
+            setIsAuthenticated(true);
+            
+            // セッションから会社IDを設定
+            if (session.user?.user_metadata?.company_id) {
+              const cid = session.user.user_metadata.company_id;
+              setCompanyId(cid);
+              console.log('[Provider] Company ID updated from session:', cid);
+            }
+            
+            // ユーザー情報がない場合は取得
+            if (!currentUser) {
+              try {
+                const { data: { user } } = await client.auth.getUser();
+                if (user) {
+                  const userInfo: UserInfo = {
+                    id: user.id,
+                    username: user.email?.split('@')[0] || '',
+                    email: user.email || '',
+                    fullName: user.user_metadata?.full_name || '',
+                    role: user.user_metadata?.role || '一般ユーザー',
+                    status: 'アクティブ',
+                    createdAt: user.created_at || new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                    isInvited: false,
+                    inviteToken: '',
+                    companyId: user.user_metadata?.company_id || ''
+                  };
+                  
+                  // ユーザー情報を設定
+                  setCurrentUser(userInfo);
+                  
+                  // ストレージに保存
+                  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
+                  try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo)); } catch(e){}
+                  
+                  console.log('[Provider] User info restored from session:', userInfo.email);
+                }
+              } catch (error) {
+                console.error('[Provider] Error getting user from session:', error);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[Provider] Error during session restore attempt:', error);
+        }
+      };
+      
+      // セッションの復元を試みる
+      attemptSessionRestore();
+      
+      // 認証状態変更リスナーを設定
+      subscription = setupAuthStateChangeListener(
+        currentUser,
+        setCurrentUser,
+        setUsers,
+        setIsAuthenticated,
+        setCompanyId,
+        alreadyInitialised
+      );
+      
+      // セッションの有効性を定期的にチェック
+      intervalId = setupSessionCheck(
+        setCurrentUser,
+        setIsAuthenticated,
+        setCompanyId
+      );
+      
+      // ページの可視性変更イベントリスナーを追加
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('[Provider] Page became visible, checking session');
+          attemptSessionRestore();
+        }
+      };
+      
+      // ページの可視性変更イベントリスナーを追加
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // ブラウザの更新前イベントリスナーを追加
+      const handleBeforeUnload = () => {
+        // 現在のユーザー情報があれば保存
+        if (currentUser) {
+          console.log('[Provider] Page about to unload, saving user info');
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
+          try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser)); } catch(e){}
+        }
+      };
+      
+      // ブラウザの更新前イベントリスナーを追加
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      // クリーンアップ関数を拡張
+      return () => {
+        console.log('[Provider] Cleaning up auth listeners and event handlers');
+        if (subscription) subscription.unsubscribe();
+        if (intervalId) clearInterval(intervalId);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
     }
-
-    const subscription = setupAuthStateChangeListener(
-      currentUser,
-      setCurrentUser,
-      setUsers,
-      setIsAuthenticated,
-      setCompanyId,
-      alreadyInitialised
-    );
-
-    // セッションの有効性を定期的にチェック
-    const intervalId = setupSessionCheck(
-      setCurrentUser,
-      setIsAuthenticated,
-      setCompanyId
-    );
-
-    return () => {
-      console.log('[Provider] Unsubscribing from onAuthStateChange'); // クリーンアップログ
-      subscription.unsubscribe();
-      clearInterval(intervalId);
-    };
-  }, []); // 空の依存配列で一度だけ実行
+    
+    // ブラウザ環境でない場合は空のクリーンアップ関数を返す
+    return () => {};
+  }, [currentUser]); // currentUserが変更されたときにリスナーを再設定
 
   // コンテキスト値
   const value: UserContextType = {
