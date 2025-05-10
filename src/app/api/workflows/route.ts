@@ -49,8 +49,28 @@ export async function GET(request: Request) {
     return NextResponse.json(data);
   }
   
-  // 全てのワークフローを取得
-  const { data, error } = await client
+  // ユーザー情報を取得して会社IDを取得
+  let companyId = null;
+  try {
+    const { data: { user } } = await client.auth.getUser();
+    if (user) {
+      // ユーザーの会社情報を取得
+      const { data: userData } = await client
+        .from('app_users')
+        .select('company_id')
+        .eq('auth_uid', user.id)
+        .single();
+        
+      if (userData && userData.company_id) {
+        companyId = userData.company_id;
+      }
+    }
+  } catch (error) {
+    console.error('ユーザー情報の取得に失敗しました:', error);
+  }
+
+  // 会社IDに基づいてワークフローを取得
+  let query = client
     .from('workflows')
     .select(`
       *,
@@ -64,6 +84,14 @@ export async function GET(request: Request) {
       creator:app_users!created_by(id, full_name)
     `)
     .order('updated_at', { ascending: false });
+  
+  // 会社IDが取得できた場合は、その会社のワークフローのみを取得
+  // または会社IDがnullのワークフローも含める（サンプルワークフロー用）
+  if (companyId) {
+    query = query.or(`company_id.eq.${companyId},company_id.is.null`);
+  }
+  
+  const { data, error } = await query;
     
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
