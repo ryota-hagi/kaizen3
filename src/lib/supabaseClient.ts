@@ -197,3 +197,36 @@ export const checkInvitationsTable = async () => {
     return { success: false, error, exists: false };
   }
 };
+
+// セッションの有効性を確認する関数
+export const validateSession = async () => {
+  try {
+    const client = supabase();
+    const { data: { session }, error } = await client.auth.getSession();
+    
+    if (error) {
+      console.error('[Supabase] Session validation error:', error);
+      return { valid: false, error };
+    }
+    
+    if (!session) {
+      console.log('[Supabase] No active session found during validation');
+      return { valid: false };
+    }
+    
+    // セッションの有効期限を確認
+    const expiresAt = session.expires_at;
+    const now = Math.floor(Date.now() / 1000);
+    
+    if (expiresAt && expiresAt < now) {
+      console.log('[Supabase] Session expired');
+      return { valid: false, expired: true };
+    }
+    
+    console.log('[Supabase] Session is valid');
+    return { valid: true, session };
+  } catch (error) {
+    console.error('[Supabase] Session validation exception:', error);
+    return { valid: false, error };
+  }
+};

@@ -20,22 +20,30 @@ export const setupAuthStateChangeListener = (
   const { data: authSubscription } = client.auth.onAuthStateChange(async (event, session) => {
     console.log('[Provider] onAuthStateChange event:', event);
     
-    if (alreadyInitialised.current && (event === 'INITIAL_SESSION')) {
-      console.log('[Provider] Already initialized and event is INITIAL_SESSION, skipping.');
-      return; // INITIAL_SESSION は初回以降無視
+    // INITIAL_SESSIONイベントの処理を改善
+    if (event === 'INITIAL_SESSION') {
+      // セッションがある場合は常に処理する（alreadyInitialisedフラグに関わらず）
+      if (session) {
+        console.log('[Provider] Processing INITIAL_SESSION with valid session');
+        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
+        
+        // セッションから会社IDを設定
+        if (session.user?.user_metadata?.company_id) {
+          const cid = session.user.user_metadata.company_id;
+          setCompanyId(cid);
+          console.log('[Provider] Company ID updated from auth event:', cid);
+        }
+        
+        // 初期化済みフラグを設定
+        alreadyInitialised.current = true;
+      }
+      return;
     }
 
-    // SIGNED_IN または 初回のINITIAL_SESSION のみ処理
-    if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && !alreadyInitialised.current)) {
-      if (alreadyInitialised.current) {
-        console.log('[Provider] Already initialized but received SIGNED_IN, processing...');
-        // SIGNED_INの場合は再処理が必要な場合があるためフラグをリセットしない
-      } else {
-        console.log('[Provider] Initializing based on event:', event);
-        alreadyInitialised.current = true; // ここでフラグを立てる
-      }
-
-      console.log('[Provider] Loading user data due to auth event:', event);
+    // SIGNED_INイベントの処理
+    if (event === 'SIGNED_IN') {
+      console.log('[Provider] Processing SIGNED_IN event');
+      
       // loginWithGoogle内でユーザー情報取得・設定・保存を行う
       await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
       
@@ -45,6 +53,9 @@ export const setupAuthStateChangeListener = (
         setCompanyId(cid);
         console.log('[Provider] Company ID updated from auth event:', cid);
       }
+      
+      // 初期化済みフラグを設定
+      alreadyInitialised.current = true;
     } else if (event === 'SIGNED_OUT') {
       console.log('[Provider] User SIGNED_OUT, clearing state.');
       handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);

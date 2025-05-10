@@ -46,14 +46,42 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     console.log('[Provider] useEffect: 初期化処理を実行します');
     setIsInitialized(true);
 
-    // 初期データ読み込みロジックを実行
-    initializeProvider(
-      setCurrentUser,
-      setUsers,
-      setIsAuthenticated,
-      setCompanyId,
-      setUserPasswords
-    );
+    // セッションの検証と復元を強化
+    const restoreSession = async () => {
+      try {
+        // セッションの検証
+        const { validateSession } = await import('@/lib/supabaseClient');
+        const { valid, session } = await validateSession();
+        
+        if (valid && session) {
+          console.log('[Provider] Valid session found during initialization');
+          // 認証状態を設定
+          setIsAuthenticated(true);
+        }
+        
+        // 初期データ読み込みロジックを実行
+        await initializeProvider(
+          setCurrentUser,
+          setUsers,
+          setIsAuthenticated,
+          setCompanyId,
+          setUserPasswords
+        );
+      } catch (error) {
+        console.error('[Provider] Error restoring session:', error);
+        
+        // エラーが発生した場合でも初期化処理は実行
+        await initializeProvider(
+          setCurrentUser,
+          setUsers,
+          setIsAuthenticated,
+          setCompanyId,
+          setUserPasswords
+        );
+      }
+    };
+    
+    restoreSession();
   }, [isInitialized]); // isInitialized を依存配列に追加
 
   // currentUser と companyInfo の不整合チェック

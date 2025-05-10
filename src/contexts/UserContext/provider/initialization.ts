@@ -1,7 +1,7 @@
 import { Dispatch, SetStateAction } from 'react';
 import { UserInfo } from '@/utils/api';
 import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, validateSession } from '@/lib/supabaseClient';
 
 // 初期化処理を行う関数
 export const initializeProvider = async (
@@ -13,20 +13,23 @@ export const initializeProvider = async (
 ) => {
   if (typeof window === 'undefined') return;
 
-  // 1. Supabaseセッションを確認
+  // 1. Supabaseセッションを確認（validateSession関数を使用）
   const client = supabase();
   let sessionUser = null;
   let sessionCompanyId = '';
   try {
-    const { data: { session } } = await client.auth.getSession();
-    if (session) {
-      console.log('[Provider Init] Supabase session found.');
+    // セッション検証を使用
+    const { valid, session, error } = await validateSession();
+    
+    if (valid && session) {
+      console.log('[Provider Init] Valid Supabase session found.');
       sessionUser = session.user;
       sessionCompanyId = session.user?.user_metadata?.company_id ?? '';
-      setCompanyId(sessionCompanyId); // メタデータから会社IDを設定
+      setCompanyId(sessionCompanyId);
+      setIsAuthenticated(true); // 有効なセッションがある場合は認証済みに設定
       console.log('[Provider Init] Company ID from metadata:', sessionCompanyId);
     } else {
-      console.log('[Provider Init] No active Supabase session.');
+      console.log('[Provider Init] No valid Supabase session:', error || 'Session not found');
       
       // セッションがない場合はローカルストレージのユーザー情報をクリア
       localStorage.removeItem(USER_STORAGE_KEY);
