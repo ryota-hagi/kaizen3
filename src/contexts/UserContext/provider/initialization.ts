@@ -14,9 +14,37 @@ export const initializeProvider = async (
 ) => {
   if (typeof window === 'undefined') return;
   
-  // 既に初期化済みの場合は処理をスキップ
+  console.log('[Provider Init] Starting initialization process');
+  
+  // 既に初期化済みの場合でも、セッションチェックは行う
   if (alreadyInitialised?.current) {
-    console.log('[Provider Init] Already initialized, skipping initialization');
+    console.log('[Provider Init] Already initialized, performing minimal session check');
+    
+    try {
+      const client = supabase();
+      const { data: { session }, error } = await client.auth.getSession();
+      
+      if (error) {
+        console.error('[Provider Init] Error checking session:', error);
+        return;
+      }
+      
+      if (session) {
+        console.log('[Provider Init] Valid session found during re-initialization');
+        // 認証状態を確認
+        setIsAuthenticated(true);
+        
+        // セッションから会社IDを設定
+        if (session.user?.user_metadata?.company_id) {
+          const cid = session.user.user_metadata.company_id;
+          setCompanyId(cid);
+          console.log('[Provider Init] Company ID updated from session:', cid);
+        }
+      }
+    } catch (error) {
+      console.error('[Provider Init] Error during minimal session check:', error);
+    }
+    
     return;
   }
 

@@ -23,15 +23,38 @@ export const setupAuthStateChangeListener = (
     
     // INITIAL_SESSIONイベントの処理を改善
     if (event === 'INITIAL_SESSION') {
-      // 既に初期化済みの場合は処理をスキップ
-      if (alreadyInitialised.current) {
-        console.log('[Provider] Skipping INITIAL_SESSION event - already initialized');
-        return;
-      }
+      console.log('[Provider] Processing INITIAL_SESSION event');
       
       // セッションがある場合のみ処理する
       if (session) {
-        console.log('[Provider] Processing INITIAL_SESSION with valid session');
+        console.log('[Provider] INITIAL_SESSION with valid session');
+        
+        // 既に初期化済みの場合は部分的な処理のみ行う
+        if (alreadyInitialised.current) {
+          console.log('[Provider] Already initialized, performing minimal session refresh');
+          
+          // セッションから会社IDを設定
+          if (session.user?.user_metadata?.company_id) {
+            const cid = session.user.user_metadata.company_id;
+            setCompanyId(cid);
+            console.log('[Provider] Company ID updated from auth event:', cid);
+          }
+          
+          // 現在のユーザー情報をチェック
+          if (!currentUser) {
+            console.log('[Provider] No current user but session exists, restoring session');
+            // セッションからユーザー情報を復元
+            await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
+          }
+          
+          return;
+        }
+        
+        // 初期化されていない場合は完全な初期化を行う
+        console.log('[Provider] Full initialization with INITIAL_SESSION');
+        
+        // loginWithGoogle内でユーザー情報取得・設定・保存を行う
+        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
         
         // セッションから会社IDを設定
         if (session.user?.user_metadata?.company_id) {

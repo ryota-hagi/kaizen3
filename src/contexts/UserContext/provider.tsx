@@ -57,6 +57,13 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           console.log('[Provider] Valid session found during initialization');
           // 認証状態を設定
           setIsAuthenticated(true);
+          
+          // セッションから会社IDを設定
+          if (session.user?.user_metadata?.company_id) {
+            const cid = session.user.user_metadata.company_id;
+            setCompanyId(cid);
+            console.log('[Provider] Company ID updated from session:', cid);
+          }
         }
         
         // 初期データ読み込みロジックを実行（alreadyInitialisedフラグを渡す）
