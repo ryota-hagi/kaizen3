@@ -156,20 +156,20 @@ export async function POST(request: Request) {
             const { supabaseAdmin } = await import('@/lib/supabaseClient');
             const adminClient = supabaseAdmin();
             
-            // 管理者権限でワークフローを取得
-            const { data: adminWorkflows, error: adminError } = await adminClient
-              .from('workflows')
-              .select(`
-                *,
-                collaborators:workflow_collaborators(
-                  id,
-                  user_id,
-                  permission_type,
-                  added_at,
-                  added_by
-                )
-              `)
-              .order('updated_at', { ascending: false });
+              // 管理者権限でワークフローを取得
+              const { data: adminWorkflows, error: adminError } = await adminClient
+                .from('workflows')
+                .select(`
+                  *,
+                  collaborators:workflow_collaborators(
+                    id,
+                    user_id,
+                    permission_type,
+                    added_at,
+                    added_by
+                  )
+                `)
+                .order('updated_at', { ascending: false });
               
             if (adminError) {
               console.error('管理者権限でのワークフロー取得エラー:', adminError);
