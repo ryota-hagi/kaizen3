@@ -58,68 +58,91 @@ export async function POST(request: Request) {
         
       case 'get_workflows':
         try {
-          // 認証情報がある場合は直接Supabaseクライアントを使用
+          // ユーザー情報を取得
+          let userCompanyId = null;
+          
           if (user) {
-            console.log('認証情報を使用してワークフローを取得します');
-            const { data: workflows, error: workflowsError } = await supabaseClient
-              .from('workflows')
-              .select(`
-                *,
-                collaborators:workflow_collaborators(
-                  id,
-                  user_id,
-                  permission_type,
-                  added_at,
-                  added_by
-                ),
-                creator:app_users!created_by(id, full_name)
-              `)
-              .order('updated_at', { ascending: false });
+            // ユーザーの会社IDを取得
+            const { data: userData, error: userError } = await supabaseClient
+              .from('app_users')
+              .select('company_id, role')
+              .eq('auth_uid', user.id)
+              .single();
               
-            if (workflowsError) {
-              console.error('ワークフロー取得エラー:', workflowsError);
-              throw new Error(`ワークフロー取得エラー: ${workflowsError.message}`);
-            }
-            
-            result = workflows;
-          } else {
-            // 認証情報がない場合はRLSを無効化してデータを取得
-            console.log('RLSを無効化してデータを取得します');
-            
-            // 管理者権限でSupabaseクライアントを作成
-            const { supabaseAdmin } = await import('@/lib/supabaseClient');
-            const adminClient = supabaseAdmin();
-            
-            // 管理者権限でワークフローを取得
-            const { data: adminWorkflows, error: adminError } = await adminClient
-              .from('workflows')
-              .select(`
-                *,
-                collaborators:workflow_collaborators(
-                  id,
-                  user_id,
-                  permission_type,
-                  added_at,
-                  added_by
-                )
-              `)
-              .order('updated_at', { ascending: false });
-              
-            if (adminError) {
-              console.error('管理者権限でのワークフロー取得エラー:', adminError);
-              
-              // エラーが発生した場合はエラーを返す
+            if (userError) {
+              console.error('ユーザー情報取得エラー:', userError);
               return NextResponse.json({ 
-                error: `管理者権限でのワークフロー取得エラー: ${adminError.message}` 
+                error: `ユーザー情報取得エラー: ${userError.message}` 
               }, { status: 500 });
-            } else {
-              // 管理者権限で取得したワークフローを返す
-              result = adminWorkflows;
-              
-              // 新しく作成したワークフローも含める
-              // サーバーサイドではlocalStorageは使用できないため、
-              // クライアント側でローカルストレージとマージする必要がある
             }
+            
+            if (userData) {
+              userCompanyId = userData.company_id;
+              
+              // 管理者の場合は会社IDに基づいてワークフローを取得
+              if (userData.role === 'admin' && userCompanyId) {
+                console.log('管理者として会社IDに基づいてワークフローを取得:', userCompanyId);
+                const { data: workflows, error: workflowsError } = await supabaseClient
+                  .from('workflows')
+                  .select(`
+                    *,
+                    collaborators:workflow_collaborators(
+                      id,
+                      user_id,
+                      permission_type,
+                      added_at,
+                      added_by
+                    ),
+                    creator:app_users!created_by(id, full_name)
+                  `)
+                  .eq('company_id', userCompanyId)
+                  .order('updated_at', { ascending: false });
+                  
+                if (workflowsError) {
+                  console.error('ワークフロー取得エラー:', workflowsError);
+                  return NextResponse.json({ 
+                    error: `ワークフロー取得エラー: ${workflowsError.message}` 
+                  }, { status: 500 });
+                }
+                
+                result = workflows;
+              } else {
+                // 管理者以外はRLSポリシーに基づいてワークフローを取得
+                console.log('RLSポリシーに基づいてワークフローを取得');
+                const { data: workflows, error: workflowsError } = await supabaseClient
+                  .from('workflows')
+                  .select(`
+                    *,
+                    collaborators:workflow_collaborators(
+                      id,
+                      user_id,
+                      permission_type,
+                      added_at,
+                      added_by
+                    ),
+                    creator:app_users!created_by(id, full_name)
+                  `)
+                  .order('updated_at', { ascending: false });
+                  
+                if (workflowsError) {
+                  console.error('ワークフロー取得エラー:', workflowsError);
+                  return NextResponse.json({ 
+                    error: `ワークフロー取得エラー: ${workflowsError.message}` 
+                  }, { status: 500 });
+                }
+                
+                result = workflows;
+              }
+            } else {
+              console.error('ユーザー情報が見つかりません');
+              return NextResponse.json({ 
+                error: 'ユーザー情報が見つかりません' 
+              }, { status: 404 });
+            }
+          } else {
+            // 認証情報がない場合は空の配列を返す
+            console.log('認証情報がないため、空の配列を返します');
+            result = [];
           }
         } catch (error) {
           console.error('ワークフロー取得中にエラーが発生しました:', error);
