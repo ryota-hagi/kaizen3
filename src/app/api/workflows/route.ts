@@ -86,9 +86,8 @@ export async function GET(request: Request) {
     .order('updated_at', { ascending: false });
   
   // 会社IDが取得できた場合は、その会社のワークフローのみを取得
-  // または会社IDがnullのワークフローも含める（サンプルワークフロー用）
   if (companyId) {
-    query = query.or(`company_id.eq.${companyId},company_id.is.null`);
+    query = query.eq('company_id', companyId);
   }
   
   const { data, error } = await query;
