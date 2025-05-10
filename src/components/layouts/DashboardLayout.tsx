@@ -111,16 +111,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, comp
     <div className="min-h-screen bg-secondary-50 flex flex-col md:flex-row">
       {/* モバイル用ヘッダー */}
       <div className="md:hidden bg-white border-b border-secondary-200 p-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-primary-600">Kaizen</h1>
-        <button
-          onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-          className="text-secondary-500 hover:text-secondary-700 p-2"
-          aria-label="メニューを開く"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
+        <div className="flex items-center">
+          <button
+            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            className="text-secondary-500 hover:text-secondary-700 p-2 mr-2"
+            aria-label="メニューを開く"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold text-primary-600">Kaizen</h1>
+        </div>
+        <div>
+          {/* 右側に必要なアクションボタンがあれば追加 */}
+        </div>
       </div>
       
       {/* モバイル用オーバーレイ */}

@@ -383,7 +383,54 @@ export default function MyPage() {
         
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="border-b border-secondary-200">
-            <div className="flex space-x-8 px-6">
+            {/* モバイル用タブ */}
+            <div className="md:hidden grid grid-cols-2 gap-2 p-2">
+              <button
+                className={`py-2 px-3 text-sm font-medium rounded-md ${
+                  activeTab === 'profile'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
+                }`}
+                onClick={() => setActiveTab('profile')}
+              >
+                プロフィール
+              </button>
+              <button
+                className={`py-2 px-3 text-sm font-medium rounded-md ${
+                  activeTab === 'company'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
+                }`}
+                onClick={() => setActiveTab('company')}
+              >
+                会社情報
+              </button>
+              {isAdmin && (
+                <button
+                  className={`py-2 px-3 text-sm font-medium rounded-md ${
+                    activeTab === 'employees'
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
+                  }`}
+                  onClick={() => setActiveTab('employees')}
+                >
+                  従業員情報
+                </button>
+              )}
+              <button
+                className={`py-2 px-3 text-sm font-medium rounded-md ${
+                  activeTab === 'templates'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
+                }`}
+                onClick={() => setActiveTab('templates')}
+              >
+                テンプレート
+              </button>
+            </div>
+            
+            {/* デスクトップ用タブ */}
+            <div className="hidden md:flex space-x-8 px-6">
               <button
                 className={`py-4 font-medium ${
                   activeTab === 'profile'

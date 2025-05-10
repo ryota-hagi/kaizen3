@@ -46,7 +46,7 @@ export const WorkflowEditorForm: React.FC<WorkflowEditorFormProps> = ({
           <svg className="w-5 h-5 mr-1 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          <span className="truncate">フロー名</span>
+          <span className="whitespace-nowrap">フロー名</span>
         </label>
         <input
           type="text"
@@ -63,7 +63,7 @@ export const WorkflowEditorForm: React.FC<WorkflowEditorFormProps> = ({
           <svg className="w-5 h-5 mr-1 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7"></path>
           </svg>
-          <span className="truncate">説明</span>
+          <span className="whitespace-nowrap">説明</span>
         </label>
         <textarea
           id="workflowDescription"
@@ -80,7 +80,7 @@ export const WorkflowEditorForm: React.FC<WorkflowEditorFormProps> = ({
             <svg className="w-5 h-5 mr-1 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
             </svg>
-            <span className="truncate">アクセスレベル</span>
+            <span className="whitespace-nowrap">アクセスレベル</span>
           </label>
           <select
             id="accessLevel"
@@ -100,7 +100,7 @@ export const WorkflowEditorForm: React.FC<WorkflowEditorFormProps> = ({
                 <p><span className="font-medium">全社共有:</span> 会社全体で閲覧できます</p>
               </div>
             ) : (
-              <p>
+              <p className="whitespace-normal">
                 個人用: 自分だけが閲覧・編集できます / 部署内共有: 同じ部署のメンバーが閲覧できます / 全社共有: 会社全体で閲覧できます
               </p>
             )}
