@@ -17,15 +17,21 @@ export const setupAuthStateChangeListener = (
   const client = supabase();
   console.log('[Provider] Setting up onAuthStateChange listener');
   
+  // 既存のリスナーがある場合は再設定しない
   const { data: authSubscription } = client.auth.onAuthStateChange(async (event, session) => {
     console.log('[Provider] onAuthStateChange event:', event);
     
     // INITIAL_SESSIONイベントの処理を改善
     if (event === 'INITIAL_SESSION') {
-      // セッションがある場合は常に処理する（alreadyInitialisedフラグに関わらず）
+      // 既に初期化済みの場合は処理をスキップ
+      if (alreadyInitialised.current) {
+        console.log('[Provider] Skipping INITIAL_SESSION event - already initialized');
+        return;
+      }
+      
+      // セッションがある場合のみ処理する
       if (session) {
         console.log('[Provider] Processing INITIAL_SESSION with valid session');
-        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
         
         // セッションから会社IDを設定
         if (session.user?.user_metadata?.company_id) {

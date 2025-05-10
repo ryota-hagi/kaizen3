@@ -102,8 +102,14 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [currentUser]); // currentUser が変更されたときにチェック
 
-  // 認証状態変更リスナーを設定
+  // 認証状態変更リスナーを設定（一度だけ）
   useEffect(() => {
+    // 既にリスナーが設定されている場合は再設定しない
+    if (alreadyInitialised.current) {
+      console.log('[Provider] Auth listener already set up, skipping');
+      return;
+    }
+
     const subscription = setupAuthStateChangeListener(
       currentUser,
       setCurrentUser,
@@ -125,7 +131,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       subscription.unsubscribe();
       clearInterval(intervalId);
     };
-  }, [currentUser]); // currentUserの変更でも再実行が必要なロジックがあるため、一旦残す
+  }, []); // 空の依存配列で一度だけ実行
 
   // コンテキスト値
   const value: UserContextType = {

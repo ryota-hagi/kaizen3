@@ -25,8 +25,14 @@ export const initializeProvider = async (
       console.log('[Provider Init] Valid Supabase session found.');
       sessionUser = session.user;
       sessionCompanyId = session.user?.user_metadata?.company_id ?? '';
-      setCompanyId(sessionCompanyId);
-      setIsAuthenticated(true); // 有効なセッションがある場合は認証済みに設定
+      
+      // 状態更新をバッチ処理
+      const updates = () => {
+        setCompanyId(sessionCompanyId);
+        setIsAuthenticated(true); // 有効なセッションがある場合は認証済みに設定
+      };
+      updates();
+      
       console.log('[Provider Init] Company ID from metadata:', sessionCompanyId);
     } else {
       console.log('[Provider Init] No valid Supabase session:', error || 'Session not found');
@@ -36,9 +42,14 @@ export const initializeProvider = async (
       sessionStorage.removeItem(USER_STORAGE_KEY);
       console.log('[Provider Init] Cleared user data from storage due to no active session.');
       
-      setCurrentUser(null);
-      setIsAuthenticated(false);
-      setCompanyId('');
+      // 状態更新をバッチ処理
+      const updates = () => {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setCompanyId('');
+      };
+      updates();
+      
       return; // セッションがない場合は早期リターン
     }
   } catch (error) {
