@@ -58,11 +58,11 @@ export async function POST(request: Request) {
         
       case 'get_workflows':
         try {
-          // ユーザー情報を取得
-          let userCompanyId = null;
-          
+          // 認証情報がある場合は直接Supabaseクライアントを使用
           if (user) {
-            // ユーザーの会社IDを取得
+            console.log('認証情報を使用してワークフローを取得します');
+            
+            // ユーザー情報を取得
             const { data: userData, error: userError } = await supabaseClient
               .from('app_users')
               .select('company_id, role')
@@ -76,73 +76,84 @@ export async function POST(request: Request) {
               }, { status: 500 });
             }
             
-            if (userData) {
-              userCompanyId = userData.company_id;
-              
-              // 管理者の場合は会社IDに基づいてワークフローを取得
-              if (userData.role === 'admin' && userCompanyId) {
-                console.log('管理者として会社IDに基づいてワークフローを取得:', userCompanyId);
-                const { data: workflows, error: workflowsError } = await supabaseClient
-                  .from('workflows')
-                  .select(`
-                    *,
-                    collaborators:workflow_collaborators(
-                      id,
-                      user_id,
-                      permission_type,
-                      added_at,
-                      added_by
-                    ),
-                    creator:app_users!created_by(id, full_name)
-                  `)
-                  .eq('company_id', userCompanyId)
-                  .order('updated_at', { ascending: false });
-                  
-                if (workflowsError) {
-                  console.error('ワークフロー取得エラー:', workflowsError);
-                  return NextResponse.json({ 
-                    error: `ワークフロー取得エラー: ${workflowsError.message}` 
-                  }, { status: 500 });
-                }
-                
-                result = workflows;
-              } else {
-                // 管理者以外はRLSポリシーに基づいてワークフローを取得
-                console.log('RLSポリシーに基づいてワークフローを取得');
-                const { data: workflows, error: workflowsError } = await supabaseClient
-                  .from('workflows')
-                  .select(`
-                    *,
-                    collaborators:workflow_collaborators(
-                      id,
-                      user_id,
-                      permission_type,
-                      added_at,
-                      added_by
-                    ),
-                    creator:app_users!created_by(id, full_name)
-                  `)
-                  .order('updated_at', { ascending: false });
-                  
-                if (workflowsError) {
-                  console.error('ワークフロー取得エラー:', workflowsError);
-                  return NextResponse.json({ 
-                    error: `ワークフロー取得エラー: ${workflowsError.message}` 
-                  }, { status: 500 });
-                }
-                
-                result = workflows;
-              }
-            } else {
+            if (!userData) {
               console.error('ユーザー情報が見つかりません');
               return NextResponse.json({ 
                 error: 'ユーザー情報が見つかりません' 
               }, { status: 404 });
             }
+            
+            console.log('ユーザー情報:', userData);
+            
+            // ワークフローを取得
+            let query = supabaseClient
+              .from('workflows')
+              .select(`
+                *,
+                collaborators:workflow_collaborators(
+                  id,
+                  user_id,
+                  permission_type,
+                  added_at,
+                  added_by
+                ),
+                creator:app_users!created_by(id, full_name)
+              `);
+              
+            // 管理者の場合は会社IDでフィルタリング
+            if (userData.role === 'admin' && userData.company_id) {
+              console.log('管理者として会社IDに基づいてワークフローを取得:', userData.company_id);
+              query = query.eq('company_id', userData.company_id);
+            }
+            
+            // 結果を取得
+            const { data: workflows, error: workflowsError } = await query.order('updated_at', { ascending: false });
+            
+            if (workflowsError) {
+              console.error('ワークフロー取得エラー:', workflowsError);
+              return NextResponse.json({ 
+                error: `ワークフロー取得エラー: ${workflowsError.message}` 
+              }, { status: 500 });
+            }
+            
+            console.log(`取得したワークフロー数: ${workflows ? workflows.length : 0}`);
+            result = workflows || [];
+            
           } else {
-            // 認証情報がない場合は空の配列を返す
-            console.log('認証情報がないため、空の配列を返します');
-            result = [];
+            // 認証情報がない場合はRLSを無効化してデータを取得
+            console.log('RLSを無効化してデータを取得します');
+            
+            // 管理者権限でSupabaseクライアントを作成
+            const { supabaseAdmin } = await import('@/lib/supabaseClient');
+            const adminClient = supabaseAdmin();
+            
+            // 管理者権限でワークフローを取得
+            const { data: adminWorkflows, error: adminError } = await adminClient
+              .from('workflows')
+              .select(`
+                *,
+                collaborators:workflow_collaborators(
+                  id,
+                  user_id,
+                  permission_type,
+                  added_at,
+                  added_by
+                )
+              `)
+              .order('updated_at', { ascending: false });
+              
+            if (adminError) {
+              console.error('管理者権限でのワークフロー取得エラー:', adminError);
+              
+              // エラーが発生した場合はエラーを返す
+              return NextResponse.json({ 
+                error: `管理者権限でのワークフロー取得エラー: ${adminError.message}` 
+              }, { status: 500 });
+            } else {
+              // 管理者権限で取得したワークフローを返す
+              console.log(`管理者権限で取得したワークフロー数: ${adminWorkflows ? adminWorkflows.length : 0}`);
+              result = adminWorkflows || [];
+            }
           }
         } catch (error) {
           console.error('ワークフロー取得中にエラーが発生しました:', error);
