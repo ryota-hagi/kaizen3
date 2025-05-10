@@ -15,9 +15,43 @@ export const setupAuthStateChangeListener = (
   alreadyInitialised: { current: boolean }
 ) => {
   const client = supabase();
-  console.log('[Provider] Setting up onAuthStateChange listener');
+  console.log('[Provider] Setting up auth state change listener');
   
-  // 既存のリスナーがある場合は再設定しない
+  // セッション情報をストレージに明示的に保存する関数
+  const saveSessionToStorage = (session: any) => {
+    if (!session) return;
+    
+    try {
+      // トークンデータを保存
+      const tokenData = {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        expires_in: session.expires_in || 3600,
+        token_type: session.token_type || 'bearer',
+        provider_token: session.provider_token,
+        provider_refresh_token: session.provider_refresh_token
+      };
+      
+      // ローカルストレージとセッションストレージの両方に保存
+      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
+      
+      // セッション情報全体も保存
+      const sessionData = {
+        session: session,
+        user: session.user
+      };
+      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
+      
+      console.log('[Provider] Session data explicitly saved to storage');
+    } catch (storageError) {
+      console.error('[Provider] Error saving session data to storage:', storageError);
+    }
+  };
+  
+  // 認証状態変更リスナーを設定
   const { data: authSubscription } = client.auth.onAuthStateChange(async (event, session) => {
     console.log('[Provider] onAuthStateChange event:', event);
     
@@ -28,6 +62,9 @@ export const setupAuthStateChangeListener = (
       // セッションがある場合は認証状態を設定
       if (session) {
         console.log('[Provider] INITIAL_SESSION with valid session');
+        
+        // セッション情報をストレージに明示的に保存
+        saveSessionToStorage(session);
         
         // 認証状態を設定
         setIsAuthenticated(true);
@@ -168,6 +205,11 @@ export const setupAuthStateChangeListener = (
     if (event === 'SIGNED_IN') {
       console.log('[Provider] Processing SIGNED_IN event');
       
+      // セッション情報をストレージに明示的に保存
+      if (session) {
+        saveSessionToStorage(session);
+      }
+      
       // 既に初期化済みの場合は重複処理を防止
       if (!alreadyInitialised.current) {
         // loginWithGoogle内でユーザー情報取得・設定・保存を行う
@@ -206,7 +248,9 @@ export const setupAuthStateChangeListener = (
       console.log('[Provider] Token refreshed, updating session.');
       // トークンが更新された場合、セッションを更新
       if (session) {
-        // 必要に応じてセッション情報を更新
+        // セッション情報をストレージに明示的に保存
+        saveSessionToStorage(session);
+        
         console.log('[Provider] Session updated after token refresh.');
       } else {
         console.warn('[Provider] Token refreshed but no session found.');
@@ -228,6 +272,40 @@ export const setupSessionCheck = (
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
   setCompanyId: Dispatch<SetStateAction<string>>
 ) => {
+  // セッション情報をストレージに明示的に保存する関数
+  const saveSessionToStorage = (session: any) => {
+    if (!session) return;
+    
+    try {
+      // トークンデータを保存
+      const tokenData = {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        expires_in: session.expires_in || 3600,
+        token_type: session.token_type || 'bearer',
+        provider_token: session.provider_token,
+        provider_refresh_token: session.provider_refresh_token
+      };
+      
+      // ローカルストレージとセッションストレージの両方に保存
+      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
+      
+      // セッション情報全体も保存
+      const sessionData = {
+        session: session,
+        user: session.user
+      };
+      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
+      
+      console.log('[SessionCheck] Session data explicitly saved to storage');
+    } catch (storageError) {
+      console.error('[SessionCheck] Error saving session data to storage:', storageError);
+    }
+  };
+
   // 5分ごとにセッションをチェック
   const intervalId = setInterval(async () => {
     try {
@@ -240,8 +318,88 @@ export const setupSessionCheck = (
       }
       
       if (!session) {
-        console.log('[SessionCheck] No active session found, logging out.');
+        console.log('[SessionCheck] No active session found, attempting to restore');
+        
+        // ローカルストレージからトークンを取得して復元を試みる
+        try {
+          // まずlocalStorageをチェック
+          let tokenStr = localStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token');
+          
+          // localStorageになければsessionStorageをチェック
+          if (!tokenStr) {
+            try {
+              tokenStr = sessionStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token');
+            } catch (e) {
+              console.error('[SessionCheck] Error accessing sessionStorage:', e);
+            }
+          }
+          
+          if (tokenStr) {
+            console.log('[SessionCheck] Found auth token in storage, attempting to restore');
+            
+            try {
+              const parsedToken = JSON.parse(tokenStr);
+              if (parsedToken?.access_token && parsedToken?.refresh_token) {
+                console.log('[SessionCheck] Setting session from stored token');
+                
+                const { data, error } = await client.auth.setSession({
+                  access_token: parsedToken.access_token,
+                  refresh_token: parsedToken.refresh_token
+                });
+                
+                if (error) {
+                  console.error('[SessionCheck] Error restoring session from token:', error);
+                  // 無効なトークンの場合はストレージから削除
+                  localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
+                  try { sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token'); } catch(e){}
+                  
+                  // ログアウト処理
+                  handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
+                } else if (data.session) {
+                  console.log('[SessionCheck] Successfully restored session from token');
+                  
+                  // セッション情報をストレージに明示的に保存
+                  saveSessionToStorage(data.session);
+                  
+                  return; // 成功したら終了
+                }
+              }
+            } catch (e) {
+              console.error('[SessionCheck] Error parsing stored token:', e);
+            }
+          }
+        } catch (storageError) {
+          console.error('[SessionCheck] Error accessing storage:', storageError);
+        }
+        
+        // 復元に失敗した場合はログアウト処理
+        console.log('[SessionCheck] Session restoration failed, logging out');
         handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
+      } else {
+        // セッションの有効期限を確認
+        const expiresAt = session.expires_at;
+        const now = Math.floor(Date.now() / 1000);
+        
+        // 有効期限が30分以内の場合は更新（余裕を持たせる）
+        if (expiresAt && expiresAt < now + 30 * 60) {
+          console.log('[SessionCheck] Session expiring soon, refreshing');
+          
+          try {
+            // セッションの更新を試みる
+            const { data, error } = await client.auth.refreshSession();
+            
+            if (error) {
+              console.error('[SessionCheck] Failed to refresh session:', error);
+            } else if (data.session) {
+              console.log('[SessionCheck] Session refreshed successfully');
+              
+              // セッション情報をストレージに明示的に保存
+              saveSessionToStorage(data.session);
+            }
+          } catch (refreshError) {
+            console.error('[SessionCheck] Error refreshing session:', refreshError);
+          }
+        }
       }
     } catch (error) {
       console.error('[SessionCheck] Exception checking session:', error);

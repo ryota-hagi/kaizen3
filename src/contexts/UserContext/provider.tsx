@@ -215,13 +215,49 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       // ページの可視性変更イベントリスナーを追加
       document.addEventListener('visibilitychange', handleVisibilityChange);
       
+      // Supabaseクライアントを取得
+      const client = supabase();
+      
       // ブラウザの更新前イベントリスナーを追加
-      const handleBeforeUnload = () => {
+      const handleBeforeUnload = async () => {
         // 現在のユーザー情報があれば保存
         if (currentUser) {
           console.log('[Provider] Page about to unload, saving user info');
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
           try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser)); } catch(e){}
+          
+          // 現在のセッション情報も保存
+          try {
+            const { data: { session } } = await client.auth.getSession();
+            if (session) {
+              console.log('[Provider] Saving session data before unload');
+              
+              // トークンデータを保存
+              const tokenData = {
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+                expires_at: session.expires_at,
+                expires_in: session.expires_in || 3600,
+                token_type: session.token_type || 'bearer',
+                provider_token: session.provider_token,
+                provider_refresh_token: session.provider_refresh_token
+              };
+              
+              // ローカルストレージとセッションストレージの両方に保存
+              localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+              try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
+              
+              // セッション情報全体も保存
+              const sessionData = {
+                session: session,
+                user: session.user
+              };
+              localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+              try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
+            }
+          } catch (error) {
+            console.error('[Provider] Error saving session before unload:', error);
+          }
         }
       };
       

@@ -21,43 +21,137 @@ export const supabase = () => {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        storageKey: 'supabase.auth.token',
+        storageKey: 'sb-czuedairowlwfgbjmfbg-auth-token', // 明示的にストレージキーを指定
         storage: {
           getItem: (key) => {
             if (typeof window === 'undefined') return null;
             
             // まずlocalStorageから取得を試みる
             const localValue = localStorage.getItem(key);
-            if (localValue) return localValue;
+            if (localValue) {
+              console.log('[Supabase Storage] Retrieved token from localStorage');
+              return localValue;
+            }
             
             // 次にsessionStorageから取得を試みる
             try {
-              return sessionStorage.getItem(key);
+              const sessionValue = sessionStorage.getItem(key);
+              if (sessionValue) {
+                console.log('[Supabase Storage] Retrieved token from sessionStorage');
+                // sessionStorageから取得した場合はlocalStorageにも保存
+                try {
+                  localStorage.setItem(key, sessionValue);
+                  console.log('[Supabase Storage] Copied token from sessionStorage to localStorage');
+                } catch (e) {
+                  console.error('[Supabase Storage] Error copying to localStorage:', e);
+                }
+                return sessionValue;
+              }
             } catch (e) {
-              console.error('Error accessing sessionStorage:', e);
-              return null;
+              console.error('[Supabase Storage] Error accessing sessionStorage:', e);
             }
+            
+            // auth-dataキーからトークンを取得を試みる
+            const dataKey = key.replace('-auth-token', '-auth-data');
+            try {
+              const dataValue = localStorage.getItem(dataKey);
+              if (dataValue) {
+                console.log('[Supabase Storage] Retrieved session data from localStorage');
+                try {
+                  const parsedData = JSON.parse(dataValue);
+                  if (parsedData.session) {
+                    const tokenData = {
+                      access_token: parsedData.session.access_token,
+                      refresh_token: parsedData.session.refresh_token,
+                      expires_at: parsedData.session.expires_at,
+                      expires_in: parsedData.session.expires_in,
+                      token_type: parsedData.session.token_type,
+                      provider_token: parsedData.session.provider_token,
+                      provider_refresh_token: parsedData.session.provider_refresh_token
+                    };
+                    const tokenStr = JSON.stringify(tokenData);
+                    
+                    // トークンデータをストレージに保存
+                    try {
+                      localStorage.setItem(key, tokenStr);
+                      sessionStorage.setItem(key, tokenStr);
+                      console.log('[Supabase Storage] Restored token from session data');
+                    } catch (e) {
+                      console.error('[Supabase Storage] Error saving restored token:', e);
+                    }
+                    
+                    return tokenStr;
+                  }
+                } catch (e) {
+                  console.error('[Supabase Storage] Error parsing session data:', e);
+                }
+              }
+            } catch (e) {
+              console.error('[Supabase Storage] Error accessing auth-data:', e);
+            }
+            
+            console.log('[Supabase Storage] No token found in storage');
+            return null;
           },
           setItem: (key, value) => {
             if (typeof window === 'undefined') return;
             
             // localStorageとsessionStorageの両方に保存
-            localStorage.setItem(key, value);
+            try {
+              localStorage.setItem(key, value);
+              console.log('[Supabase Storage] Token saved to localStorage');
+            } catch (e) {
+              console.error('[Supabase Storage] Error setting localStorage:', e);
+            }
+            
             try {
               sessionStorage.setItem(key, value);
+              console.log('[Supabase Storage] Token saved to sessionStorage');
             } catch (e) {
-              console.error('Error setting sessionStorage:', e);
+              console.error('[Supabase Storage] Error setting sessionStorage:', e);
+            }
+            
+            // 保存したトークンの内容をログに出力（デバッグ用）
+            try {
+              const parsed = JSON.parse(value);
+              const expiresAt = parsed.expires_at ? new Date(parsed.expires_at * 1000).toISOString() : 'unknown';
+              console.log(`[Supabase Storage] Token saved with expiry: ${expiresAt}`);
+            } catch (e) {
+              console.error('[Supabase Storage] Error parsing token for logging:', e);
             }
           },
           removeItem: (key) => {
             if (typeof window === 'undefined') return;
             
             // localStorageとsessionStorageの両方から削除
-            localStorage.removeItem(key);
+            try {
+              localStorage.removeItem(key);
+              console.log('[Supabase Storage] Token removed from localStorage');
+            } catch (e) {
+              console.error('[Supabase Storage] Error removing from localStorage:', e);
+            }
+            
             try {
               sessionStorage.removeItem(key);
+              console.log('[Supabase Storage] Token removed from sessionStorage');
             } catch (e) {
-              console.error('Error removing from sessionStorage:', e);
+              console.error('[Supabase Storage] Error removing from sessionStorage:', e);
+            }
+            
+            // auth-dataキーも削除
+            const dataKey = key.replace('-auth-token', '-auth-data');
+            try {
+              localStorage.removeItem(dataKey);
+              console.log('[Supabase Storage] Session data removed from localStorage');
+            } catch (e) {
+              console.error('[Supabase Storage] Error removing session data from localStorage:', e);
+            }
+            
+            try {
+              sessionStorage.removeItem(dataKey);
+              console.log('[Supabase Storage] Session data removed from sessionStorage');
+            } catch (e) {
+              console.error('[Supabase Storage] Error removing session data from sessionStorage:', e);
             }
           }
         }
@@ -243,17 +337,59 @@ export const validateSession = async () => {
   try {
     // まずlocalStorageとsessionStorageを直接チェック
     let tokenStr = null;
+    let sessionData = null;
+    const storageKey = 'sb-czuedairowlwfgbjmfbg-auth-token'; // 明示的にストレージキーを指定
+    const dataKey = 'sb-czuedairowlwfgbjmfbg-auth-data'; // セッションデータのキー
+    
     if (typeof window !== 'undefined') {
       // localStorageをチェック
-      tokenStr = localStorage.getItem('supabase.auth.token');
+      tokenStr = localStorage.getItem(storageKey);
       
       // localStorageになければsessionStorageをチェック
       if (!tokenStr) {
         try {
-          tokenStr = sessionStorage.getItem('supabase.auth.token');
+          tokenStr = sessionStorage.getItem(storageKey);
         } catch (e) {
           console.error('[Supabase] Error accessing sessionStorage:', e);
         }
+      }
+      
+      // auth-dataキーをチェック（トークンの有無に関わらず）
+      try {
+        const dataValue = localStorage.getItem(dataKey);
+        if (dataValue) {
+          console.log('[Supabase] Found session data in localStorage');
+          try {
+            sessionData = JSON.parse(dataValue);
+            
+            // トークンがなければauth-dataからトークンを復元
+            if (!tokenStr && sessionData.session) {
+              const tokenData = {
+                access_token: sessionData.session.access_token,
+                refresh_token: sessionData.session.refresh_token,
+                expires_at: sessionData.session.expires_at,
+                expires_in: sessionData.session.expires_in || 3600,
+                token_type: sessionData.session.token_type || 'bearer',
+                provider_token: sessionData.session.provider_token,
+                provider_refresh_token: sessionData.session.provider_refresh_token
+              };
+              tokenStr = JSON.stringify(tokenData);
+              
+              // トークンデータをストレージに保存
+              try {
+                localStorage.setItem(storageKey, tokenStr);
+                sessionStorage.setItem(storageKey, tokenStr);
+                console.log('[Supabase] Restored token from session data');
+              } catch (e) {
+                console.error('[Supabase] Error saving restored token:', e);
+              }
+            }
+          } catch (e) {
+            console.error('[Supabase] Error parsing session data:', e);
+          }
+        }
+      } catch (e) {
+        console.error('[Supabase] Error accessing auth-data:', e);
       }
       
       if (tokenStr) {
