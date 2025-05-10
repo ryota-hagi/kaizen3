@@ -172,6 +172,8 @@ export default function CallbackClient() {
               
               // 招待が有効な場合、ユーザー情報を更新して招待を完了
               addDebugInfo('Google認証後にユーザー情報を更新中...')
+              
+              // 通常の更新関数を使用
               const updateSuccess = await updateUserAfterGoogleSignIn({
                 companyId: invitedUser.companyId,
                 role: invitedUser.role || '一般ユーザー',
@@ -183,9 +185,9 @@ export default function CallbackClient() {
                 sessionStorage.removeItem('invite_token')
                 addDebugInfo('招待トークンをクリアしました')
                 
-                // ダッシュボードにリダイレクト
-                addDebugInfo('招待されたユーザーをダッシュボードにリダイレクトします')
-                router.push('/dashboard')
+                // ルートパスにリダイレクト
+                addDebugInfo('招待されたユーザーをルートパスにリダイレクトします')
+                router.push('/')
                 return
               } else {
                 addDebugInfo('招待後のユーザー更新に失敗しました')
@@ -298,9 +300,9 @@ export default function CallbackClient() {
           const effectiveCompanyId = companyIdFromMetadata || companyIdFromDatabase;
           
           if (effectiveCompanyId) {
-            // 会社IDがある場合はダッシュボードへ
-            addDebugInfo(`有効な会社ID ${effectiveCompanyId} でダッシュボードにリダイレクトします`)
-            router.push('/dashboard')
+            // 会社IDがある場合はルートパスへ
+            addDebugInfo(`有効な会社ID ${effectiveCompanyId} でルートパスにリダイレクトします`)
+            router.push('/')
           } else {
             // 会社IDがない場合は会社登録ページへ
             addDebugInfo('会社IDが見つからないため、会社登録ページにリダイレクトします')

@@ -1,5 +1,6 @@
 // 認証関連の関数をエクスポート
 export * from './auth';
+export * from './optimizedAuth';
 
 // ユーザー管理関連の関数をエクスポート
 export * from './user';
