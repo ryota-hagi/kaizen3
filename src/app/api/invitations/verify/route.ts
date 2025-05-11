@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// 明示的に動的ルートとして設定
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     // URLからトークンを取得
