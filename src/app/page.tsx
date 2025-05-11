@@ -43,7 +43,15 @@ export default function Home() {
   const [companyInfo, setCompanyInfo] = useState<any>(null)
   const [employees, setEmployees] = useState<any[]>([])
   const router = useRouter()
-  const { users, getUserById, currentUser } = useUser()
+  const { users, getUserById, currentUser, isAuthenticated } = useUser()
+  
+  // 認証状態をチェックし、未ログインならリダイレクト
+  useEffect(() => {
+    if (!isAuthenticated && !currentUser) {
+      console.log('未ログイン状態を検出しました。ログインページにリダイレクトします。')
+      router.replace('/auth/login')
+    }
+  }, [isAuthenticated, currentUser, router])
   
   // 会社情報と従業員情報を取得
   useEffect(() => {

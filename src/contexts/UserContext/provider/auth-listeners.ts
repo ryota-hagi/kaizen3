@@ -281,8 +281,9 @@ export const setupSessionCheck = (
       const tokenData = {
         access_token: session.access_token,
         refresh_token: session.refresh_token,
-        expires_at: session.expires_at,
-        expires_in: session.expires_in || 3600,
+        // 有効期限を延長（現在時刻から24時間）
+        expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
+        expires_in: 24 * 60 * 60, // 24時間
         token_type: session.token_type || 'bearer',
         provider_token: session.provider_token,
         provider_refresh_token: session.provider_refresh_token
@@ -294,20 +295,24 @@ export const setupSessionCheck = (
       
       // セッション情報全体も保存
       const sessionData = {
-        session: session,
+        session: {
+          ...session,
+          expires_at: tokenData.expires_at,
+          expires_in: tokenData.expires_in
+        },
         user: session.user
       };
       localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
       try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
       
-      console.log('[SessionCheck] Session data explicitly saved to storage');
+      console.log('[SessionCheck] Session data explicitly saved to storage with extended expiry');
     } catch (storageError) {
       console.error('[SessionCheck] Error saving session data to storage:', storageError);
     }
   };
 
-  // 5分ごとにセッションをチェック
-  const intervalId = setInterval(async () => {
+  // セッションチェック関数
+  const checkSession = async () => {
     try {
       const client = supabase();
       const { data: { session }, error } = await client.auth.getSession();
@@ -334,6 +339,35 @@ export const setupSessionCheck = (
             }
           }
           
+          // auth-dataキーからトークンを取得を試みる
+          if (!tokenStr) {
+            try {
+              const dataStr = localStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-data');
+              if (dataStr) {
+                const parsedData = JSON.parse(dataStr);
+                if (parsedData?.session?.access_token && parsedData?.session?.refresh_token) {
+                  console.log('[SessionCheck] Extracted token from auth-data');
+                  const tokenData = {
+                    access_token: parsedData.session.access_token,
+                    refresh_token: parsedData.session.refresh_token,
+                    expires_at: parsedData.session.expires_at,
+                    expires_in: parsedData.session.expires_in || 3600,
+                    token_type: parsedData.session.token_type || 'bearer',
+                    provider_token: parsedData.session.provider_token,
+                    provider_refresh_token: parsedData.session.provider_refresh_token
+                  };
+                  tokenStr = JSON.stringify(tokenData);
+                  
+                  // トークンデータをストレージに保存
+                  localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', tokenStr);
+                  try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', tokenStr); } catch(e){}
+                }
+              }
+            } catch (e) {
+              console.error('[SessionCheck] Error extracting token from auth-data:', e);
+            }
+          }
+          
           if (tokenStr) {
             console.log('[SessionCheck] Found auth token in storage, attempting to restore');
             
@@ -349,12 +383,42 @@ export const setupSessionCheck = (
                 
                 if (error) {
                   console.error('[SessionCheck] Error restoring session from token:', error);
-                  // 無効なトークンの場合はストレージから削除
-                  localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
-                  try { sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token'); } catch(e){}
                   
-                  // ログアウト処理
-                  handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
+                  // リフレッシュトークンでの復元を試みる
+                  if (parsedToken.refresh_token) {
+                    try {
+                      console.log('[SessionCheck] Attempting to refresh session with refresh token');
+                      const refreshResult = await client.auth.refreshSession({
+                        refresh_token: parsedToken.refresh_token
+                      });
+                      
+                      if (refreshResult.error) {
+                        console.error('[SessionCheck] Failed to refresh with token:', refreshResult.error);
+                        // 無効なトークンの場合はストレージから削除
+                        localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
+                        try { sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token'); } catch(e){}
+                        
+                        // ログアウト処理
+                        handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
+                      } else if (refreshResult.data.session) {
+                        console.log('[SessionCheck] Successfully refreshed session with refresh token');
+                        
+                        // セッション情報をストレージに明示的に保存
+                        saveSessionToStorage(refreshResult.data.session);
+                        
+                        return; // 成功したら終了
+                      }
+                    } catch (refreshError) {
+                      console.error('[SessionCheck] Error during refresh attempt:', refreshError);
+                    }
+                  } else {
+                    // 無効なトークンの場合はストレージから削除
+                    localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
+                    try { sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token'); } catch(e){}
+                    
+                    // ログアウト処理
+                    handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
+                  }
                 } else if (data.session) {
                   console.log('[SessionCheck] Successfully restored session from token');
                   
@@ -380,8 +444,8 @@ export const setupSessionCheck = (
         const expiresAt = session.expires_at;
         const now = Math.floor(Date.now() / 1000);
         
-        // 有効期限が30分以内の場合は更新（余裕を持たせる）
-        if (expiresAt && expiresAt < now + 30 * 60) {
+        // 有効期限が60分以内の場合は更新（余裕を持たせる）
+        if (expiresAt && expiresAt < now + 60 * 60) {
           console.log('[SessionCheck] Session expiring soon, refreshing');
           
           try {
@@ -390,6 +454,32 @@ export const setupSessionCheck = (
             
             if (error) {
               console.error('[SessionCheck] Failed to refresh session:', error);
+              
+              // エラーの種類によって処理を分ける
+              if (error.message.includes('expired') || error.message.includes('invalid')) {
+                console.log('[SessionCheck] Token expired or invalid, attempting recovery');
+                
+                // ローカルストレージからリフレッシュトークンを取得して復元を試みる
+                try {
+                  const tokenStr = localStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token');
+                  if (tokenStr) {
+                    const parsedToken = JSON.parse(tokenStr);
+                    if (parsedToken?.refresh_token) {
+                      const refreshResult = await client.auth.refreshSession({
+                        refresh_token: parsedToken.refresh_token
+                      });
+                      
+                      if (!refreshResult.error && refreshResult.data.session) {
+                        console.log('[SessionCheck] Successfully recovered session with refresh token');
+                        saveSessionToStorage(refreshResult.data.session);
+                        return;
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error('[SessionCheck] Error during recovery attempt:', e);
+                }
+              }
             } else if (data.session) {
               console.log('[SessionCheck] Session refreshed successfully');
               
@@ -399,12 +489,22 @@ export const setupSessionCheck = (
           } catch (refreshError) {
             console.error('[SessionCheck] Error refreshing session:', refreshError);
           }
+        } else {
+          // セッションが有効な場合でも、定期的にストレージに保存して有効期限を延長
+          console.log('[SessionCheck] Session valid, updating storage with extended expiry');
+          saveSessionToStorage(session);
         }
       }
     } catch (error) {
       console.error('[SessionCheck] Exception checking session:', error);
     }
-  }, 5 * 60 * 1000); // 5分ごと
+  };
+
+  // 初回実行
+  checkSession();
+  
+  // 2分ごとにセッションをチェック（頻度を上げる）
+  const intervalId = setInterval(checkSession, 2 * 60 * 1000);
   
   return intervalId;
 };
