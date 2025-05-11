@@ -23,6 +23,7 @@ export const supabase = () => {
         detectSessionInUrl: true,
         storageKey: 'sb-czuedairowlwfgbjmfbg-auth-token', // 明示的にストレージキーを指定
         // セッションの有効期限を延長（24時間）
+        flowType: 'implicit',
         debug: true, // デバッグログを有効化
         storage: {
           getItem: (key) => {
