@@ -503,8 +503,23 @@ export const setupSessionCheck = (
   // 初回実行
   checkSession();
   
-  // 2分ごとにセッションをチェック（頻度を上げる）
-  const intervalId = setInterval(checkSession, 2 * 60 * 1000);
+  // 1分ごとにセッションをチェック（頻度をさらに上げる）
+  const intervalId = setInterval(checkSession, 60 * 1000);
   
-  return intervalId;
+  // ページの可視性変更時にもセッションをチェック
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      console.log('[SessionCheck] Page became visible, checking session');
+      checkSession();
+    }
+  };
+  
+  // ページの可視性変更イベントリスナーを追加
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  // クリーンアップ関数を返す
+  return () => {
+    clearInterval(intervalId);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
 };

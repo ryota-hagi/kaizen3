@@ -64,6 +64,73 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
             setCompanyId(cid);
             console.log('[Provider] Company ID updated from session:', cid);
           }
+          
+          // セッションからユーザー情報を取得して設定
+          try {
+            const client = supabase();
+            const { data: { user } } = await client.auth.getUser();
+            
+            if (user) {
+              // ユーザー情報を構築
+              const userInfo: UserInfo = {
+                id: user.id,
+                username: user.email?.split('@')[0] || '',
+                email: user.email || '',
+                fullName: user.user_metadata?.full_name || '',
+                role: user.user_metadata?.role || '一般ユーザー',
+                status: 'アクティブ',
+                createdAt: user.created_at || new Date().toISOString(),
+                lastLogin: new Date().toISOString(),
+                isInvited: false,
+                inviteToken: '',
+                companyId: user.user_metadata?.company_id || ''
+              };
+              
+              // ユーザー情報を設定
+              setCurrentUser(userInfo);
+              
+              // ストレージに保存
+              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
+              try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo)); } catch(e){}
+              
+              console.log('[Provider] User info set from session:', userInfo.email);
+              
+              // 初期化済みフラグを設定
+              alreadyInitialised.current = true;
+            }
+          } catch (userError) {
+            console.error('[Provider] Error getting user from session:', userError);
+          }
+        }
+        
+        // ローカルストレージからユーザー情報を復元を試みる
+        if (!alreadyInitialised.current) {
+          try {
+            const storedUserStr = localStorage.getItem(USER_STORAGE_KEY);
+            if (storedUserStr) {
+              const storedUser = JSON.parse(storedUserStr) as UserInfo;
+              console.log('[Provider] Found stored user, attempting to restore session');
+              
+              // ユーザー情報を設定
+              setCurrentUser(storedUser);
+              setIsAuthenticated(true);
+              setCompanyId(storedUser.companyId || '');
+              
+              console.log('[Provider] User restored from storage:', storedUser.email);
+              
+              // セッションの復元を試みる
+              const client = supabase();
+              const { data, error } = await client.auth.refreshSession();
+              
+              if (!error && data.session) {
+                console.log('[Provider] Successfully refreshed session from storage');
+                // 初期化済みフラグを設定
+                alreadyInitialised.current = true;
+              }
+            }
+          } catch (storageError) {
+            console.error('[Provider] Error restoring from storage:', storageError);
+          }
         }
         
         // 初期データ読み込みロジックを実行（alreadyInitialisedフラグを渡す）
@@ -117,7 +184,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     
     // 既存のリスナーをクリーンアップ
     let subscription: { unsubscribe: () => void } | null = null;
-    let intervalId: NodeJS.Timeout | null = null;
+    let sessionCheckCleanup: (() => void) | null = null;
     
     // ブラウザ環境でのみ実行
     if (typeof window !== 'undefined') {
@@ -198,7 +265,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       );
       
       // セッションの有効性を定期的にチェック
-      intervalId = setupSessionCheck(
+      sessionCheckCleanup = setupSessionCheck(
         setCurrentUser,
         setIsAuthenticated,
         setCompanyId
@@ -268,7 +335,7 @@ export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       return () => {
         console.log('[Provider] Cleaning up auth listeners and event handlers');
         if (subscription) subscription.unsubscribe();
-        if (intervalId) clearInterval(intervalId);
+        if (sessionCheckCleanup) sessionCheckCleanup();
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('beforeunload', handleBeforeUnload);
       };

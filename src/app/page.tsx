@@ -47,10 +47,42 @@ export default function Home() {
   
   // 認証状態をチェックし、未ログインならリダイレクト
   useEffect(() => {
-    if (!isAuthenticated && !currentUser) {
-      console.log('未ログイン状態を検出しました。ログインページにリダイレクトします。')
-      router.replace('/auth/login')
-    }
+    const checkAuthAndRedirect = async () => {
+      try {
+        // セッションを明示的に検証
+        const { validateSession } = await import('@/lib/supabaseClient');
+        const { valid, session } = await validateSession();
+        
+        if (valid && session) {
+          console.log('有効なセッションを検出しました。リダイレクトをスキップします。');
+          return;
+        }
+        
+        // ローカルストレージからユーザー情報を取得
+        const storedUserStr = localStorage.getItem('kaizen_user');
+        if (storedUserStr) {
+          try {
+            const storedUser = JSON.parse(storedUserStr);
+            if (storedUser && storedUser.id) {
+              console.log('ストレージからユーザー情報を復元しました。リダイレクトをスキップします。');
+              return;
+            }
+          } catch (e) {
+            console.error('ストレージからのユーザー情報の解析エラー:', e);
+          }
+        }
+        
+        // 認証状態をチェック
+        if (!isAuthenticated && !currentUser) {
+          console.log('未ログイン状態を検出しました。ログインページにリダイレクトします。');
+          router.replace('/auth/login');
+        }
+      } catch (error) {
+        console.error('認証チェック中にエラーが発生しました:', error);
+      }
+    };
+    
+    checkAuthAndRedirect();
   }, [isAuthenticated, currentUser, router])
   
   // 会社情報と従業員情報を取得
