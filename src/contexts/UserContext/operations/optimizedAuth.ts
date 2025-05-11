@@ -74,6 +74,52 @@ export const optimizedLoginWithGoogle = async (
       companyId: companyIdFromMetadata || companyIdFromDatabase || existingUser?.companyId || ''
     };
     
+    // セッション情報を明示的に保存する関数
+    const saveSessionToStorage = async () => {
+      try {
+        // 現在のセッションを取得
+        const { data: { session: currentSession } } = await client.auth.getSession();
+        
+        if (currentSession) {
+          console.log('[Supabase] Saving session information to storage with extended expiry');
+          
+          // トークンデータを保存（有効期限を24時間に延長）
+          const tokenData = {
+            access_token: currentSession.access_token,
+            refresh_token: currentSession.refresh_token,
+            expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24時間
+            expires_in: 24 * 60 * 60, // 24時間
+            token_type: currentSession.token_type || 'bearer',
+            provider_token: currentSession.provider_token,
+            provider_refresh_token: currentSession.provider_refresh_token
+          };
+          
+          // ローカルストレージとセッションストレージの両方に保存
+          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
+          
+          // セッション情報全体も保存
+          const sessionData = {
+            session: {
+              ...currentSession,
+              expires_at: tokenData.expires_at,
+              expires_in: tokenData.expires_in
+            },
+            user: currentSession.user
+          };
+          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
+          
+          console.log('[Supabase] Session information saved with extended expiry');
+        }
+      } catch (storageError) {
+        console.error('[Supabase] Error saving session data to storage:', storageError);
+      }
+    };
+    
+    // セッション情報を保存
+    await saveSessionToStorage();
+    
     // ユーザー情報を保存
     setCurrentUser(userInfo);
     setIsAuthenticated(true);
@@ -251,6 +297,52 @@ export const optimizedUpdateUserAfterGoogleSignIn = async (
     }
     
     console.log('[updateUserAfterGoogleSignIn] Updating user with company ID:', updatedUserInfo.companyId);
+    
+    // セッション情報を明示的に保存する関数
+    const saveSessionToStorage = async () => {
+      try {
+        // 現在のセッションを取得
+        const { data: { session: currentSession } } = await client.auth.getSession();
+        
+        if (currentSession) {
+          console.log('[updateUserAfterGoogleSignIn] Saving session information to storage with extended expiry');
+          
+          // トークンデータを保存（有効期限を24時間に延長）
+          const tokenData = {
+            access_token: currentSession.access_token,
+            refresh_token: currentSession.refresh_token,
+            expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24時間
+            expires_in: 24 * 60 * 60, // 24時間
+            token_type: currentSession.token_type || 'bearer',
+            provider_token: currentSession.provider_token,
+            provider_refresh_token: currentSession.provider_refresh_token
+          };
+          
+          // ローカルストレージとセッションストレージの両方に保存
+          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
+          
+          // セッション情報全体も保存
+          const sessionData = {
+            session: {
+              ...currentSession,
+              expires_at: tokenData.expires_at,
+              expires_in: tokenData.expires_in
+            },
+            user: currentSession.user
+          };
+          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
+          
+          console.log('[updateUserAfterGoogleSignIn] Session information saved with extended expiry');
+        }
+      } catch (storageError) {
+        console.error('[updateUserAfterGoogleSignIn] Error saving session data to storage:', storageError);
+      }
+    };
+    
+    // セッション情報を保存
+    await saveSessionToStorage();
     
     // ユーザー情報を保存
     setCurrentUser(updatedUserInfo);

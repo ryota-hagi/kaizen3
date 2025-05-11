@@ -211,12 +211,80 @@ export default function CallbackClient() {
           }
         }
         
+        // セッション情報を明示的に保存する関数
+        const saveSessionToStorage = async () => {
+          try {
+            // 現在のセッションを取得
+            const { data: { session } } = await client.auth.getSession();
+            
+            if (session) {
+              addDebugInfo('セッション情報をストレージに明示的に保存します');
+              
+              // トークンデータを保存（有効期限を24時間に延長）
+              const tokenData = {
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+                expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24時間
+                expires_in: 24 * 60 * 60, // 24時間
+                token_type: session.token_type || 'bearer',
+                provider_token: session.provider_token,
+                provider_refresh_token: session.provider_refresh_token
+              };
+              
+              // ローカルストレージとセッションストレージの両方に保存
+              localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+              try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
+              
+              // セッション情報全体も保存
+              const sessionData = {
+                session: {
+                  ...session,
+                  expires_at: tokenData.expires_at,
+                  expires_in: tokenData.expires_in
+                },
+                user: session.user
+              };
+              localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+              try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
+              
+              addDebugInfo('セッション情報を延長された有効期限で保存しました');
+              
+              // ユーザー情報も保存
+              if (session.user) {
+                const userInfo = {
+                  id: session.user.id,
+                  username: session.user.email?.split('@')[0] || '',
+                  email: session.user.email || '',
+                  fullName: session.user.user_metadata?.full_name || '',
+                  role: session.user.user_metadata?.role || '一般ユーザー',
+                  status: 'アクティブ',
+                  createdAt: session.user.created_at || new Date().toISOString(),
+                  lastLogin: new Date().toISOString(),
+                  isInvited: false,
+                  inviteToken: '',
+                  companyId: session.user.user_metadata?.company_id || ''
+                };
+                
+                localStorage.setItem('kaizen_user', JSON.stringify(userInfo));
+                try { sessionStorage.setItem('kaizen_user', JSON.stringify(userInfo)); } catch(e){}
+                
+                addDebugInfo('ユーザー情報をストレージに保存しました');
+              }
+            }
+          } catch (storageError) {
+            addDebugInfo(`セッション保存エラー: ${storageError}`);
+          }
+        };
+        
         // 通常のログイン
         addDebugInfo('通常のログインプロセスを開始します')
         const success = await loginWithGoogle()
         
         if (success) {
           addDebugInfo('Googleログインに成功しました')
+          
+          // セッション情報を明示的に保存
+          await saveSessionToStorage();
           
           // ユーザーが既存かどうかを確認
           const { data: refreshedUserData } = await client.auth.getUser()
