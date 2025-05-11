@@ -40,14 +40,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
     const isInvite = searchParams.get('invite') === 'true'
     
     if (inviteToken) {
-      // ローカルストレージに招待トークンを保存
+      // ローカルストレージとセッションストレージの両方に招待トークンを保存
       localStorage.setItem('invite_token', inviteToken)
+      try { sessionStorage.setItem('invite_token', inviteToken) } catch(e){}
       console.log('招待トークンを保存しました:', inviteToken)
     }
     
     // 招待フラグがある場合は保存
     if (isInvite) {
       localStorage.setItem('is_invite', 'true')
+      try { sessionStorage.setItem('is_invite', 'true') } catch(e){}
       console.log('招待フラグを保存しました')
     }
   }, [searchParams])
@@ -64,14 +66,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       const isInvite = searchParams.get('invite') === 'true'
       
       if (inviteToken) {
-        // ローカルストレージに招待トークンを保存
+        // ローカルストレージとセッションストレージの両方に招待トークンを保存
         localStorage.setItem('invite_token', inviteToken)
+        try { sessionStorage.setItem('invite_token', inviteToken) } catch(e){}
         console.log('招待トークンを保存しました:', inviteToken)
       }
       
       // 招待フラグがある場合は保存
       if (isInvite) {
         localStorage.setItem('is_invite', 'true')
+        try { sessionStorage.setItem('is_invite', 'true') } catch(e){}
         console.log('招待フラグを保存しました')
       }
       
@@ -80,10 +84,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         ? `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/accept-invite/callback`
         : `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/callback`;
       
+      // セッションの有効期限を延長するためのカスタムオプション
       const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo
+          redirectTo,
+          queryParams: {
+            // 有効期限を24時間に設定
+            expires_in: (24 * 60 * 60).toString()
+          }
         }
       })
       
