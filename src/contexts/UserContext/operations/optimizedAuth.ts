@@ -1,15 +1,233 @@
+/**
+ * 認証関連の最適化された操作を提供するモジュール
+ * 
+ * このモジュールは以下の機能を提供します：
+ * 1. Google認証でのログイン処理
+ * 2. ログアウト処理
+ * 3. セッションの検証
+ * 4. ユーザー情報の更新
+ */
+
+import { Dispatch, SetStateAction } from 'react';
 import { UserInfo, UserStatus } from '@/utils/api';
-import { loadUserDataFromLocalStorage, USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
-import { supabase } from '@/lib/supabaseClient';
+import { 
+  supabase, 
+  saveSessionToStorage, 
+  saveUserToDatabase, 
+  getUserFromDatabase,
+  validateSession,
+  clearAuthStorage
+} from '@/lib/supabaseClient';
+import { USER_STORAGE_KEY, USERS_STORAGE_KEY, loadUserDataFromLocalStorage } from '../utils';
 import { isEqual } from '@/utils/deepEqual';
 import { fetchAndCacheCompanyInfo } from '@/utils/companyInfo';
 
-// Supabaseを使用した最適化されたログイン処理
-export const optimizedLoginWithGoogle = async (
-  setCurrentUser: React.Dispatch<React.SetStateAction<UserInfo | null>>,
-  setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
-  setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
-): Promise<boolean> => {
+// デバッグモード（本番環境ではfalseに設定）
+const DEBUG = false;
+
+// ログ出力関数（デバッグモードが有効な場合のみ出力）
+const log = (message: string, data?: any) => {
+  if (!DEBUG) return;
+  if (data) {
+    console.log(message, data);
+  } else {
+    console.log(message);
+  }
+};
+
+/**
+ * ストレージ操作を抽象化したオブジェクト
+ */
+const storage = {
+  // メモリキャッシュ
+  _cache: new Map<string, string>(),
+  
+  // ユーザー情報をストレージから読み込む
+  loadUserInfo: (): UserInfo | null => {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // まずメモリキャッシュから取得
+      const cachedData = storage._cache.get(USER_STORAGE_KEY);
+      if (cachedData) {
+        return JSON.parse(cachedData);
+      }
+      
+      // 次にlocalStorageから取得
+      const userInfoStr = localStorage.getItem(USER_STORAGE_KEY);
+      if (userInfoStr) {
+        // キャッシュに保存
+        storage._cache.set(USER_STORAGE_KEY, userInfoStr);
+        return JSON.parse(userInfoStr);
+      }
+      
+      // 最後にsessionStorageから取得
+      const sessionData = sessionStorage.getItem(USER_STORAGE_KEY);
+      if (sessionData) {
+        // キャッシュに保存
+        storage._cache.set(USER_STORAGE_KEY, sessionData);
+        return JSON.parse(sessionData);
+      }
+    } catch (error) {
+      log('[Storage] Failed to parse user from storage');
+    }
+    
+    return null;
+  },
+  
+  // ユーザー情報をストレージに保存
+  saveUserInfo: (userInfo: UserInfo): void => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const userInfoStr = JSON.stringify(userInfo);
+      
+      // まずメモリキャッシュに保存
+      storage._cache.set(USER_STORAGE_KEY, userInfoStr);
+      
+      // localStorageに保存
+      localStorage.setItem(USER_STORAGE_KEY, userInfoStr);
+      
+      // sessionStorageにも保存
+      try {
+        sessionStorage.setItem(USER_STORAGE_KEY, userInfoStr);
+      } catch (e) {
+        // sessionStorageへの保存に失敗しても続行
+      }
+    } catch (error) {
+      log('[Storage] Failed to save user to storage');
+    }
+  },
+  
+  // ユーザーリストをストレージに保存
+  saveUsersList: (users: UserInfo[]): void => {
+    if (typeof window === 'undefined') return;
+    
+    const usersToSave = users.map(u => ({ user: u, password: '' }));
+    
+    try {
+      const usersStr = JSON.stringify(usersToSave);
+      
+      // まずメモリキャッシュに保存
+      storage._cache.set(USERS_STORAGE_KEY, usersStr);
+      
+      // localStorageに保存
+      localStorage.setItem(USERS_STORAGE_KEY, usersStr);
+      
+      // sessionStorageにも保存
+      try {
+        sessionStorage.setItem(USERS_STORAGE_KEY, usersStr);
+      } catch (e) {
+        // sessionStorageへの保存に失敗しても続行
+      }
+    } catch (error) {
+      log('[Storage] Failed to save users list to storage');
+    }
+  },
+  
+  // アイテムを取得
+  getItem: (key: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    
+    // まずメモリキャッシュから取得
+    if (storage._cache.has(key)) {
+      return storage._cache.get(key) || null;
+    }
+    
+    try {
+      // 次にlocalStorageから取得
+      const localValue = localStorage.getItem(key);
+      if (localValue) {
+        // キャッシュに保存
+        storage._cache.set(key, localValue);
+        return localValue;
+      }
+      
+      // 最後にsessionStorageから取得
+      const sessionValue = sessionStorage.getItem(key);
+      if (sessionValue) {
+        // キャッシュに保存
+        storage._cache.set(key, sessionValue);
+        return sessionValue;
+      }
+      
+      return null;
+    } catch (e) {
+      return null;
+    }
+  },
+  
+  // アイテムを保存
+  setItem: (key: string, value: string): void => {
+    if (typeof window === 'undefined') return;
+    
+    // まずメモリキャッシュに保存
+    storage._cache.set(key, value);
+    
+    try {
+      // localStorageに保存
+      localStorage.setItem(key, value);
+      
+      // sessionStorageにも保存
+      try {
+        sessionStorage.setItem(key, value);
+      } catch (e) {
+        // sessionStorageへの保存に失敗しても続行
+      }
+    } catch (e) {
+      // すべてのストレージ操作に失敗した場合はログ出力
+      if (DEBUG) console.error('[Storage] Failed to save data:', e);
+    }
+  },
+  
+  // アイテムを削除
+  removeItem: (key: string): void => {
+    if (typeof window === 'undefined') return;
+    
+    // メモリキャッシュから削除
+    storage._cache.delete(key);
+    
+    try {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } catch (e) {
+      // エラーは無視
+    }
+  },
+  
+  // ユーザー関連のストレージをクリア
+  clearUserStorage: (): void => {
+    if (typeof window === 'undefined') return;
+    
+    clearAuthStorage(); // Supabase認証関連のストレージをクリア
+    
+    try {
+      storage.removeItem(USER_STORAGE_KEY);
+      storage.removeItem(USERS_STORAGE_KEY);
+    } catch (error) {
+      // エラーは無視
+    }
+  },
+  
+  // キャッシュをクリア
+  clearCache: (): void => {
+    storage._cache.clear();
+  }
+};
+
+/**
+ * 最適化されたGoogle認証ログイン処理
+ * 
+ * @param setCurrentUser ユーザー情報を更新する関数
+ * @param setUsers ユーザーリストを更新する関数
+ * @param setIsAuthenticated 認証状態を更新する関数
+ * @returns 処理結果とユーザー情報
+ */
+export const loginWithGoogle = async (
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setUsers: Dispatch<SetStateAction<UserInfo[]>>,
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>
+): Promise<{ success: boolean; user?: UserInfo; error?: any }> => {
   try {
     const client = supabase();
     
@@ -17,37 +235,32 @@ export const optimizedLoginWithGoogle = async (
     const { data: { session }, error: sessionError } = await client.auth.getSession();
     
     if (sessionError) {
-      console.error('[Supabase] Session error:', sessionError);
-      return false;
+      log('[Auth] Session error:', sessionError);
+      return { success: false, error: sessionError };
     }
     
     if (!session) {
-      console.log('[Supabase] No active session');
-      return false;
+      log('[Auth] No session found');
+      return { success: false, error: 'No session found' };
     }
+    
+    // セッション情報をストレージに保存（有効期限を延長）
+    await saveSessionToStorage(session, true);
+    log('[Auth] Session saved with extended expiry');
     
     // ユーザー情報を取得
     const { data: { user }, error: userError } = await client.auth.getUser();
     
     if (userError || !user) {
-      console.error('[Supabase] User error:', userError);
-      return false;
+      log('[Auth] User error:', userError);
+      return { success: false, error: userError || 'User not found' };
     }
     
     // app_usersテーブルからユーザー情報を取得
-    let dbUserInfo = null;
-    try {
-      const { getUserFromDatabase } = await import('@/lib/supabaseClient');
-      const result = await getUserFromDatabase(user.id);
-      if (result.success && result.data) {
-        console.log('[Supabase] User found in database:', result.data);
-        dbUserInfo = result.data;
-      }
-    } catch (error) {
-      console.error('[Supabase] Error importing getUserFromDatabase:', error);
-    }
+    const dbResult = await getUserFromDatabase(user.id);
+    const dbUserInfo = dbResult.success ? dbResult.data : null;
     
-    // ローカルストレージからユーザーリストを取得
+    // ローカルストレージからユーザーリストを取得（キャッシュ利用）
     const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({ users: [] }));
     
     // ユーザーIDで既存ユーザーを検索
@@ -74,307 +287,258 @@ export const optimizedLoginWithGoogle = async (
       companyId: companyIdFromMetadata || companyIdFromDatabase || existingUser?.companyId || ''
     };
     
-    // セッション情報を明示的に保存する関数
-    const saveSessionToStorage = async () => {
-      try {
-        // 現在のセッションを取得
-        const { data: { session: currentSession } } = await client.auth.getSession();
-        
-        if (currentSession) {
-          console.log('[Supabase] Saving session information to storage with extended expiry');
-          
-          // トークンデータを保存（有効期限を24時間に延長）
-          const tokenData = {
-            access_token: currentSession.access_token,
-            refresh_token: currentSession.refresh_token,
-            expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24時間
-            expires_in: 24 * 60 * 60, // 24時間
-            token_type: currentSession.token_type || 'bearer',
-            provider_token: currentSession.provider_token,
-            provider_refresh_token: currentSession.provider_refresh_token
-          };
-          
-          // ローカルストレージとセッションストレージの両方に保存
-          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
-          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
-          
-          // セッション情報全体も保存
-          const sessionData = {
-            session: {
-              ...currentSession,
-              expires_at: tokenData.expires_at,
-              expires_in: tokenData.expires_in
-            },
-            user: currentSession.user
-          };
-          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
-          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
-          
-          console.log('[Supabase] Session information saved with extended expiry');
-        }
-      } catch (storageError) {
-        console.error('[Supabase] Error saving session data to storage:', storageError);
-      }
-    };
-    
-    // セッション情報を保存
-    await saveSessionToStorage();
-    
     // ユーザー情報を保存
     setCurrentUser(userInfo);
     setIsAuthenticated(true);
     
-    // app_usersテーブルにユーザー情報を保存（データベースに存在しない場合のみ）
-    if (!dbUserInfo) {
-      try {
-        const { saveUserToDatabase } = await import('@/lib/supabaseClient');
-        const result = await saveUserToDatabase(user.id, userInfo);
+    // app_usersテーブルにユーザー情報を保存（非同期で実行）
+    saveUserToDatabase(user.id, userInfo)
+      .then(result => {
         if (!result.success) {
-          console.error('[Supabase] Failed to save user to database:', result.error);
+          log('[Auth] Warning: Failed to save user to database:', result.error);
         } else {
-          console.log('[Supabase] User saved to database successfully');
+          log('[Auth] User saved to database');
         }
-      } catch (error) {
-        console.error('[Supabase] Error importing saveUserToDatabase:', error);
-      }
+      })
+      .catch(error => {
+        log('[Auth] Exception saving user to database:', error);
+      });
+    
+    // ローカルストレージに保存
+    storage.saveUserInfo(userInfo);
+    
+    // ユーザーリストを更新（メモリ内のみ）
+    const existingUserIndex = currentUsers.findIndex(u => u.id === userInfo.id);
+    
+    let updatedUsers;
+    if (existingUserIndex >= 0) {
+      // 既存ユーザーを更新
+      const updatedUser: UserInfo = {
+        ...currentUsers[existingUserIndex],
+        lastLogin: new Date().toISOString(),
+        fullName: userInfo.fullName,
+        email: userInfo.email,
+        status: 'アクティブ' as UserStatus,
+        companyId: userInfo.companyId,
+        isInvited: false
+      };
+      updatedUsers = [...currentUsers];
+      updatedUsers[existingUserIndex] = updatedUser;
+      
+      // 現在のユーザー情報も更新
+      setCurrentUser(updatedUser);
+    } else {
+      // 新規ユーザーを追加
+      updatedUsers = [...currentUsers, userInfo];
     }
     
-    // ローカルストレージとセッションストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
-      
-      try {
-        sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
-      } catch (e) {
-        console.error('[Supabase] Failed to save to sessionStorage:', e);
-      }
-      
-      // ユーザーリストを更新
-      const existingUserIndex = currentUsers.findIndex(u => u.id === userInfo.id);
-      
-      let updatedUsers;
-      if (existingUserIndex >= 0) {
-        // 既存ユーザーを更新
-        const updatedUser: UserInfo = {
-          ...currentUsers[existingUserIndex],
-          lastLogin: new Date().toISOString(),
-          fullName: userInfo.fullName,
-          email: userInfo.email,
-          status: 'アクティブ' as UserStatus,
-          companyId: userInfo.companyId,
-          isInvited: false
-        };
-        updatedUsers = [...currentUsers];
-        updatedUsers[existingUserIndex] = updatedUser;
-        
-        // 現在のユーザー情報も更新
-        setCurrentUser(updatedUser);
-      } else {
-        // 新規ユーザーを追加
-        updatedUsers = [...currentUsers, userInfo];
-      }
-      
-      setUsers(updatedUsers);
-      
-      // 前回保存したデータと比較して変更がある場合のみ保存
-      const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
-      
-      // ローカルストレージから現在のデータを取得
-      const currentSavedData = localStorage.getItem(USERS_STORAGE_KEY);
-      const currentParsedData = currentSavedData ? JSON.parse(currentSavedData) : [];
-      
-      // 変更を検出
-      if (!isEqual(currentParsedData, usersToSave)) {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        
-        try {
-          sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        } catch (e) {
-          console.error('[Supabase] Failed to save users to sessionStorage:', e);
-        }
-        console.log('[Supabase] User data updated and saved');
-      } else {
-        console.log('[Supabase] No changes detected, skipping save');
-      }
+    setUsers(updatedUsers);
+    
+    // 前回保存したデータと比較して変更がある場合のみ保存（非同期で実行）
+    const usersToSave = updatedUsers.map(u => ({ user: u, password: '' }));
+    
+    // ローカルストレージから現在のデータを取得
+    const currentSavedData = storage.getItem(USERS_STORAGE_KEY);
+    const currentParsedData = currentSavedData ? JSON.parse(currentSavedData) : [];
+    
+    // 変更を検出
+    if (!isEqual(currentParsedData, usersToSave)) {
+      // 非同期で保存
+      setTimeout(() => {
+        storage.saveUsersList(updatedUsers);
+        log('[Auth] Users list updated in storage');
+      }, 0);
+    } else {
+      log('[Auth] No changes in users list, skipping storage update');
     }
     
-    // 会社情報を取得してキャッシュ（必要な場合のみ）
+    // 会社情報を取得してキャッシュ（非同期で実行）
     if (userInfo.companyId) {
-      await fetchAndCacheCompanyInfo(userInfo.companyId);
+      fetchAndCacheCompanyInfo(userInfo.companyId)
+        .then(() => {
+          log('[Auth] Company info cached for ID:', userInfo.companyId);
+        })
+        .catch(error => {
+          log('[Auth] Warning: Failed to cache company info:', error);
+        });
     }
 
-    return true;
+    return { success: true, user: userInfo };
   } catch (error) {
-    console.error('[Supabase] Login error:', error);
-    return false;
+    log('[Auth] Login error:', error);
+    return { success: false, error };
   }
 };
 
-// 最適化されたユーザー登録処理（Googleログイン後のユーザー情報更新用）
-export const optimizedUpdateUserAfterGoogleSignIn = async (
-  userData: Partial<UserInfo>,
-  setCurrentUser: React.Dispatch<React.SetStateAction<UserInfo | null>>,
-  setUsers: React.Dispatch<React.SetStateAction<UserInfo[]>>,
-  setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>
-): Promise<boolean> => {
+/**
+ * 最適化されたログアウト処理
+ * 
+ * @param setCurrentUser ユーザー情報を更新する関数
+ * @param setIsAuthenticated 認証状態を更新する関数
+ * @param setCompanyId 会社IDを更新する関数
+ * @returns 処理結果
+ */
+export const logout = async (
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
+  setCompanyId: Dispatch<SetStateAction<string>>
+): Promise<{ success: boolean; error?: any }> => {
   try {
+    // まずローカルの状態をクリア（UI応答性向上のため）
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setCompanyId('');
+    
+    // ストレージをクリア
+    storage.clearUserStorage();
+    log('[Auth] User storage cleared');
+    
+    // Supabaseからログアウト（非同期で実行）
     const client = supabase();
-    
-    // 現在のセッションを取得
-    const { data: { session }, error: sessionError } = await client.auth.getSession();
-    
-    if (sessionError || !session) {
-      console.error('[Supabase] Session error:', sessionError);
-      return false;
-    }
-    
-    // ユーザー情報を取得
-    const { data: { user }, error: userError } = await client.auth.getUser();
-    
-    if (userError || !user) {
-      console.error('[Supabase] User error:', userError);
-      return false;
-    }
-
-    // 招待ユーザーの場合、会社IDが必須
-    const isInvitedUser = userData.isInvited || userData.status === '招待中';
-    if (isInvitedUser && (!userData.companyId || userData.companyId.trim() === '')) {
-      console.error('[updateUserAfterGoogleSignIn] Company ID is required for invited users');
-      return false;
-    }
-
-    console.log('[updateUserAfterGoogleSignIn] Processing user with data:', userData);
-    
-    // 既存のユーザー情報を取得
-    const { users: currentUsers } = loadUserDataFromLocalStorage(setUsers, () => ({ users: [] }));
-    
-    // Supabaseのユーザーメタデータを更新
-    try {
-      const { error } = await client.auth.updateUser({
-        data: {
-          company_id: userData.companyId,
-          role: userData.role || '一般ユーザー',
-          status: 'アクティブ',
-          isInvited: false
+    client.auth.signOut()
+      .then(({ error }) => {
+        if (error) {
+          log('[Auth] Error signing out from Supabase:', error);
+        } else {
+          log('[Auth] Signed out from Supabase');
         }
+      })
+      .catch(error => {
+        log('[Auth] Exception signing out from Supabase:', error);
       });
+    
+    return { success: true };
+  } catch (error) {
+    log('[Auth] Logout error:', error);
+    
+    // エラーが発生しても、ローカルの状態とストレージはクリアする
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setCompanyId('');
+    storage.clearUserStorage();
+    
+    return { success: false, error };
+  }
+};
+
+/**
+ * セッションの検証
+ * 
+ * @returns 検証結果とユーザー情報
+ */
+export const validateUserSession = async (): Promise<{ valid: boolean; user?: any; error?: any }> => {
+  try {
+    // キャッシュを使用して高速化
+    const cachedUserInfo = storage.loadUserInfo();
+    if (cachedUserInfo) {
+      // キャッシュからユーザー情報が取得できた場合は、セッションの検証のみ行う
+      const { valid } = await validateSession();
       
-      if (error) {
-        console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
-      } else {
-        console.log('[updateUserAfterGoogleSignIn] User metadata updated successfully with company ID:', userData.companyId);
+      if (valid) {
+        log('[Auth] Session validation successful (using cached user info)');
+        return { valid: true, user: { id: cachedUserInfo.id, email: cachedUserInfo.email } };
       }
-    } catch (error) {
-      console.error('[updateUserAfterGoogleSignIn] Error updating user metadata:', error);
     }
     
-    // UserInfo形式に変換して更新
+    // キャッシュがない場合や無効な場合は、完全な検証を行う
+    const { valid, session, error } = await validateSession();
+    
+    if (error) {
+      log('[Auth] Session validation error:', error);
+      return { valid: false, error };
+    }
+    
+    if (!valid || !session) {
+      log('[Auth] Session validation failed');
+      return { valid: false, error: 'Session validation failed' };
+    }
+    
+    log('[Auth] Session validation successful');
+    return { valid: true, user: session.user };
+  } catch (error) {
+    log('[Auth] Session validation exception:', error);
+    return { valid: false, error };
+  }
+};
+
+/**
+ * ユーザー情報の更新
+ * 
+ * @param userData 更新するユーザー情報
+ * @param currentUser 現在のユーザー情報
+ * @param setCurrentUser ユーザー情報を更新する関数
+ * @param setUsers ユーザーリストを更新する関数
+ * @returns 処理結果と更新されたユーザー情報
+ */
+export const updateUserInfo = async (
+  userData: Partial<UserInfo>,
+  currentUser: UserInfo | null,
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setUsers: Dispatch<SetStateAction<UserInfo[]>>
+): Promise<{ success: boolean; user?: UserInfo; error?: any }> => {
+  try {
+    if (!currentUser) {
+      log('[Auth] No current user to update');
+      return { success: false, error: 'No current user to update' };
+    }
+    
+    // 更新されたユーザー情報
     const updatedUserInfo: UserInfo = {
-      id: user.id,
-      username: user.email?.split('@')[0] || '',
-      email: user.email || '',
-      fullName: user.user_metadata?.full_name || '',
-      role: userData.role || currentUsers.find(u => u.id === user.id)?.role || '一般ユーザー',
-      status: 'アクティブ' as UserStatus,
-      createdAt: currentUsers.find(u => u.id === user.id)?.createdAt || (user.created_at as string) || new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      isInvited: false,
-      inviteToken: userData.inviteToken || currentUsers.find(u => u.id === user.id)?.inviteToken || '',
-      companyId: userData.companyId || user.user_metadata?.company_id || currentUsers.find(u => u.id === user.id)?.companyId || ''
+      ...currentUser,
+      ...userData,
+      lastLogin: new Date().toISOString()
     };
     
-    // app_usersテーブルにユーザー情報を保存
-    try {
-      const { saveUserToDatabase } = await import('@/lib/supabaseClient');
-      const result = await saveUserToDatabase(user.id, updatedUserInfo);
-      if (!result.success) {
-        console.error('[updateUserAfterGoogleSignIn] Failed to save user to database:', result.error);
-      } else {
-        console.log('[updateUserAfterGoogleSignIn] User saved to database successfully');
-      }
-    } catch (error) {
-      console.error('[updateUserAfterGoogleSignIn] Error importing saveUserToDatabase:', error);
-    }
-    
-    console.log('[updateUserAfterGoogleSignIn] Updating user with company ID:', updatedUserInfo.companyId);
-    
-    // セッション情報を明示的に保存する関数
-    const saveSessionToStorage = async () => {
-      try {
-        // 現在のセッションを取得
-        const { data: { session: currentSession } } = await client.auth.getSession();
-        
-        if (currentSession) {
-          console.log('[updateUserAfterGoogleSignIn] Saving session information to storage with extended expiry');
-          
-          // トークンデータを保存（有効期限を24時間に延長）
-          const tokenData = {
-            access_token: currentSession.access_token,
-            refresh_token: currentSession.refresh_token,
-            expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24時間
-            expires_in: 24 * 60 * 60, // 24時間
-            token_type: currentSession.token_type || 'bearer',
-            provider_token: currentSession.provider_token,
-            provider_refresh_token: currentSession.provider_refresh_token
-          };
-          
-          // ローカルストレージとセッションストレージの両方に保存
-          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
-          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
-          
-          // セッション情報全体も保存
-          const sessionData = {
-            session: {
-              ...currentSession,
-              expires_at: tokenData.expires_at,
-              expires_in: tokenData.expires_in
-            },
-            user: currentSession.user
-          };
-          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
-          try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
-          
-          console.log('[updateUserAfterGoogleSignIn] Session information saved with extended expiry');
-        }
-      } catch (storageError) {
-        console.error('[updateUserAfterGoogleSignIn] Error saving session data to storage:', storageError);
-      }
-    };
-    
-    // セッション情報を保存
-    await saveSessionToStorage();
-    
-    // ユーザー情報を保存
+    // まずUIを更新（応答性向上のため）
     setCurrentUser(updatedUserInfo);
-    setIsAuthenticated(true);
     
-    // ローカルストレージとセッションストレージに保存
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUserInfo));
-      
-      try {
-        sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUserInfo));
-      } catch (e) {
-        console.error('[Supabase] Failed to save to sessionStorage:', e);
+    // ローカルストレージに保存
+    storage.saveUserInfo(updatedUserInfo);
+    
+    // Supabaseのユーザーメタデータを更新（非同期で実行）
+    const client = supabase();
+    client.auth.updateUser({
+      data: {
+        ...userData,
+        company_id: userData.companyId || currentUser.companyId
       }
-    }
+    })
+      .then(({ error }) => {
+        if (error) {
+          log('[Auth] Error updating user metadata:', error);
+        } else {
+          log('[Auth] User metadata updated in Supabase');
+        }
+      })
+      .catch(error => {
+        log('[Auth] Exception updating user metadata:', error);
+      });
+    
+    // app_usersテーブルにユーザー情報を保存（非同期で実行）
+    saveUserToDatabase(currentUser.id, updatedUserInfo)
+      .then(result => {
+        if (!result.success) {
+          log('[Auth] Warning: Failed to update user in database:', result.error);
+        } else {
+          log('[Auth] User info updated in database');
+        }
+      })
+      .catch(error => {
+        log('[Auth] Exception updating user in database:', error);
+      });
     
     // ユーザーリストを更新
     setUsers(prev => {
-      const idx = prev.findIndex(u => u.id === user.id);
+      const idx = prev.findIndex(u => u.id === currentUser.id);
+      
       if (idx === -1) {
         // 新規ユーザーを追加
         const newUsers = [...prev, updatedUserInfo];
         
-        // ローカルストレージに保存
-        const usersToSave = newUsers.map(u => ({ user: u, password: '' }));
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        
-        try {
-          sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-        } catch (e) {
-          console.error('[Supabase] Failed to save users to sessionStorage:', e);
-        }
+        // 非同期でローカルストレージに保存
+        setTimeout(() => {
+          storage.saveUsersList(newUsers);
+        }, 0);
         
         return newUsers;
       }
@@ -383,23 +547,37 @@ export const optimizedUpdateUserAfterGoogleSignIn = async (
       const next = [...prev];
       next[idx] = updatedUserInfo;
       
-      // ローカルストレージに保存
-      const usersToSave = next.map(u => ({ user: u, password: '' }));
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
+      // 非同期でローカルストレージに保存
+      setTimeout(() => {
+        storage.saveUsersList(next);
+      }, 0);
       
-      try {
-        sessionStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersToSave));
-      } catch (e) {
-        console.error('[Supabase] Failed to save users to sessionStorage:', e);
-      }
-      
-      console.log('[updateUserAfterGoogleSignIn] User data updated and saved');
       return next;
     });
     
-    return true;
+    // 会社情報を更新（非同期で実行）
+    if (userData.companyId && userData.companyId !== currentUser.companyId) {
+      fetchAndCacheCompanyInfo(userData.companyId)
+        .then(() => {
+          log('[Auth] Company info cached for new ID:', userData.companyId);
+        })
+        .catch(error => {
+          log('[Auth] Warning: Failed to cache company info:', error);
+        });
+    }
+    
+    return { success: true, user: updatedUserInfo };
   } catch (error) {
-    console.error('[Supabase] Update user error:', error);
-    return false;
+    log('[Auth] Update user error:', error);
+    return { success: false, error };
   }
+};
+
+/**
+ * ユーザー情報をストレージから取得
+ * 
+ * @returns ユーザー情報
+ */
+export const getUserInfoFromStorage = (): UserInfo | null => {
+  return storage.loadUserInfo();
 };
