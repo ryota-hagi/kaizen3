@@ -84,15 +84,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         ? `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/accept-invite/callback`
         : `${process.env.NEXT_PUBLIC_URL || window.location.origin}/auth/callback`;
       
-      // セッションの有効期限を延長するためのカスタムオプション
+      // 通常のOAuth認証を実行
       const { data, error } = await client.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo,
-          queryParams: {
-            // 有効期限を24時間に設定
-            expires_in: (24 * 60 * 60).toString()
-          }
+          redirectTo
         }
       })
       
