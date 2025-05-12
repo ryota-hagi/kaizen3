@@ -1,11 +1,106 @@
+/**
+ * 認証状態変更リスナーとセッションチェックの設定を行うモジュール
+ * 
+ * このモジュールは以下の機能を提供します：
+ * 1. 認証状態変更リスナーの設定と管理
+ * 2. セッションの有効性を定期的にチェックする機能
+ */
+
 import { Dispatch, SetStateAction } from 'react';
 import { UserInfo } from '@/utils/api';
-import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
-import { supabase } from '@/lib/supabaseClient';
-import { loginWithGoogle } from '../operations/auth';
-import { handleSessionExpired } from './initialization';
+import { USER_STORAGE_KEY } from '../utils';
+import { 
+  supabase, 
+  saveSessionToStorage, 
+  refreshSession, 
+  extendSessionExpiry,
+  getUserFromDatabase,
+  saveUserToDatabase,
+  clearAuthStorage
+} from '@/lib/supabaseClient';
 
-// 認証状態変更リスナーを設定する関数
+// デバッグモードを無効化（ログ出力を完全に抑制）
+const DEBUG = false;
+
+// ログ出力関数（デバッグモードが有効な場合のみ出力）
+const log = (message: string, data?: any) => {
+  if (!DEBUG) return;
+  if (data) {
+    console.log(message, data);
+  } else {
+    console.log(message);
+  }
+};
+
+/**
+ * ストレージ操作を抽象化したオブジェクト
+ */
+const storage = {
+  // メモリキャッシュ
+  _cache: new Map<string, any>(),
+  // ユーザー情報をストレージから読み込む
+  loadUserInfo: (): UserInfo | null => {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      const userInfoStr = localStorage.getItem(USER_STORAGE_KEY);
+      if (userInfoStr) {
+        return JSON.parse(userInfoStr);
+      }
+      
+      const sessionUserInfoStr = sessionStorage.getItem(USER_STORAGE_KEY);
+      if (sessionUserInfoStr) {
+        return JSON.parse(sessionUserInfoStr);
+      }
+    } catch (error) {
+      log('[Storage] Failed to parse user from storage');
+    }
+    
+    return null;
+  },
+  
+  // ユーザー情報をストレージに保存
+  saveUserInfo: (userInfo: UserInfo): void => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const userInfoStr = JSON.stringify(userInfo);
+      localStorage.setItem(USER_STORAGE_KEY, userInfoStr);
+      
+      try {
+        sessionStorage.setItem(USER_STORAGE_KEY, userInfoStr);
+      } catch (e) {
+        // sessionStorageへの保存に失敗しても続行
+      }
+    } catch (error) {
+      log('[Storage] Failed to save user to storage');
+    }
+  },
+  
+  // ユーザー情報をストレージから削除
+  removeUserInfo: (): void => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      localStorage.removeItem(USER_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+    } catch (error) {
+      // エラーは無視
+    }
+  }
+};
+
+/**
+ * 認証状態変更リスナーを設定する関数
+ * 
+ * @param currentUser 現在のユーザー情報
+ * @param setCurrentUser ユーザー情報を更新する関数
+ * @param setUsers ユーザーリストを更新する関数
+ * @param setIsAuthenticated 認証状態を更新する関数
+ * @param setCompanyId 会社IDを更新する関数
+ * @param alreadyInitialised 初期化済みフラグ
+ * @returns 認証状態変更リスナーの購読オブジェクト
+ */
 export const setupAuthStateChangeListener = (
   currentUser: UserInfo | null,
   setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
@@ -15,302 +110,277 @@ export const setupAuthStateChangeListener = (
   alreadyInitialised: { current: boolean }
 ) => {
   const client = supabase();
-  console.log('[Provider] Setting up auth state change listener');
-  
-  // セッション情報をストレージに明示的に保存する関数
-  const saveSessionToStorage = (session: any) => {
-    if (!session) return;
-    
-    try {
-      // トークンデータを保存
-      const tokenData = {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at: session.expires_at,
-        expires_in: session.expires_in || 3600,
-        token_type: session.token_type || 'bearer',
-        provider_token: session.provider_token,
-        provider_refresh_token: session.provider_refresh_token
-      };
-      
-      // ローカルストレージとセッションストレージの両方に保存
-      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
-      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
-      
-      // セッション情報全体も保存
-      const sessionData = {
-        session: session,
-        user: session.user
-      };
-      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
-      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
-      
-      console.log('[Provider] Session data explicitly saved to storage');
-    } catch (storageError) {
-      console.error('[Provider] Error saving session data to storage:', storageError);
-    }
-  };
   
   // 認証状態変更リスナーを設定
   const { data: authSubscription } = client.auth.onAuthStateChange(async (event, session) => {
-    console.log('[Provider] onAuthStateChange event:', event);
+    log(`[Provider] onAuthStateChange event: ${event}`);
     
-    // INITIAL_SESSIONイベントの処理を改善
-    if (event === 'INITIAL_SESSION') {
-      console.log('[Provider] Processing INITIAL_SESSION event');
-      
-      // セッションがある場合は認証状態を設定
-      if (session) {
-        console.log('[Provider] INITIAL_SESSION with valid session');
+    // イベント処理を簡素化
+    switch (event) {
+      case 'INITIAL_SESSION':
+        await handleInitialSession(
+          session, 
+          currentUser, 
+          setCurrentUser, 
+          setIsAuthenticated, 
+          setCompanyId, 
+          alreadyInitialised
+        );
+        break;
         
-        // セッション情報をストレージに明示的に保存
-        saveSessionToStorage(session);
+      case 'SIGNED_IN':
+        await handleSignedIn(session, setCompanyId);
+        break;
         
-        // 認証状態を設定
-        setIsAuthenticated(true);
+      case 'SIGNED_OUT':
+        handleSignedOut(setCurrentUser, setIsAuthenticated, setCompanyId, alreadyInitialised);
+        break;
         
-        // セッションから会社IDを設定
-        if (session.user?.user_metadata?.company_id) {
-          const cid = session.user.user_metadata.company_id;
-          setCompanyId(cid);
-          console.log('[Provider] Company ID updated from auth event:', cid);
-        }
+      case 'TOKEN_REFRESHED':
+        await handleTokenRefreshed(session, setCurrentUser, setIsAuthenticated, setCompanyId);
+        break;
         
-        // 既に初期化済みの場合は部分的な処理のみ行う
-        if (alreadyInitialised.current) {
-          console.log('[Provider] Already initialized, performing minimal session refresh');
-          
-          // 現在のユーザー情報をチェック
-          if (!currentUser) {
-            console.log('[Provider] No current user but session exists, restoring user info');
-            
-            try {
-              // セッションからユーザー情報を復元
-              const { data: { user } } = await client.auth.getUser();
-              
-              if (user) {
-                // ユーザー情報を構築
-                const userInfo: UserInfo = {
-                  id: user.id,
-                  username: user.email?.split('@')[0] || '',
-                  email: user.email || '',
-                  fullName: user.user_metadata?.full_name || '',
-                  role: user.user_metadata?.role || '一般ユーザー',
-                  status: 'アクティブ',
-                  createdAt: user.created_at || new Date().toISOString(),
-                  lastLogin: new Date().toISOString(),
-                  isInvited: false,
-                  inviteToken: '',
-                  companyId: user.user_metadata?.company_id || ''
-                };
-                
-                // ユーザー情報を設定
-                setCurrentUser(userInfo);
-                setIsAuthenticated(true);
-                
-                // ストレージに保存
-                localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
-                try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo)); } catch(e){}
-                
-                console.log('[Provider] Successfully restored user from session:', userInfo.email);
-              }
-            } catch (error) {
-              console.error('[Provider] Error restoring user from session:', error);
-            }
-          } else {
-            console.log('[Provider] Current user exists, keeping current state');
-          }
-          
-          return;
-        }
-        
-        // 初期化されていない場合は完全な初期化を行う
-        console.log('[Provider] Full initialization with INITIAL_SESSION');
-        
-        try {
-          // セッションからユーザー情報を取得
-          const { data: { user } } = await client.auth.getUser();
-          
-          if (user) {
-            // ユーザー情報を構築
-            const userInfo: UserInfo = {
-              id: user.id,
-              username: user.email?.split('@')[0] || '',
-              email: user.email || '',
-              fullName: user.user_metadata?.full_name || '',
-              role: user.user_metadata?.role || '一般ユーザー',
-              status: 'アクティブ',
-              createdAt: user.created_at || new Date().toISOString(),
-              lastLogin: new Date().toISOString(),
-              isInvited: false,
-              inviteToken: '',
-              companyId: user.user_metadata?.company_id || ''
-            };
-            
-            // ユーザー情報を設定
-            setCurrentUser(userInfo);
-            setIsAuthenticated(true);
-            setCompanyId(userInfo.companyId);
-            
-            // ストレージに保存
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
-            try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo)); } catch(e){}
-            
-            console.log('[Provider] Successfully initialized user from session:', userInfo.email);
-            
-            // 初期化済みフラグを設定
-            alreadyInitialised.current = true;
-          }
-        } catch (error) {
-          console.error('[Provider] Error initializing user from session:', error);
-        }
-      } else {
-        console.log('[Provider] INITIAL_SESSION with no session');
-        
-        // セッションがない場合でも、ローカルストレージからユーザー情報を復元を試みる
-        try {
-          const storedUserStr = localStorage.getItem(USER_STORAGE_KEY);
-          if (storedUserStr) {
-            const storedUser = JSON.parse(storedUserStr) as UserInfo;
-            console.log('[Provider] Found stored user, attempting to restore session');
-            
-            // セッションの復元を試みる
-            const { data, error } = await client.auth.refreshSession();
-            
-            if (error) {
-              console.error('[Provider] Failed to restore session:', error);
-              // セッションの復元に失敗した場合はストレージをクリア
-              localStorage.removeItem(USER_STORAGE_KEY);
-              try { sessionStorage.removeItem(USER_STORAGE_KEY); } catch(e){}
-            } else if (data.session) {
-              console.log('[Provider] Successfully restored session from storage');
-              // セッションの復元に成功した場合はユーザー情報を設定
-              setCurrentUser(storedUser);
-              setIsAuthenticated(true);
-              setCompanyId(storedUser.companyId || '');
-              
-              // 初期化済みフラグを設定
-              alreadyInitialised.current = true;
-            }
-          }
-        } catch (error) {
-          console.error('[Provider] Error restoring from storage:', error);
-        }
-      }
-      
-      return;
-    }
-
-    // SIGNED_INイベントの処理
-    if (event === 'SIGNED_IN') {
-      console.log('[Provider] Processing SIGNED_IN event');
-      
-      // セッション情報をストレージに明示的に保存
-      if (session) {
-        saveSessionToStorage(session);
-      }
-      
-      // 既に初期化済みの場合は重複処理を防止
-      if (!alreadyInitialised.current) {
-        // loginWithGoogle内でユーザー情報取得・設定・保存を行う
-        await loginWithGoogle(setCurrentUser, setUsers, setIsAuthenticated);
-        
-        // セッションから会社IDを設定
-        if (session?.user?.user_metadata?.company_id) {
-          const cid = session.user.user_metadata.company_id;
-          setCompanyId(cid);
-          console.log('[Provider] Company ID updated from auth event:', cid);
-        }
-        
-        // 初期化済みフラグを設定
-        alreadyInitialised.current = true;
-      } else {
-        console.log('[Provider] Skipping duplicate SIGNED_IN processing - already initialized');
-      }
-    } else if (event === 'SIGNED_OUT') {
-      console.log('[Provider] User SIGNED_OUT, clearing state.');
-      handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
-      alreadyInitialised.current = false; // ログアウトしたら初期化フラグをリセット
-    } else if (event === 'USER_UPDATED') {
-      console.log('[Provider] User data UPDATED in Supabase.');
-      if (session?.user && currentUser && session.user.id === currentUser.id) {
-        const metaCompanyId = session.user.user_metadata?.company_id ?? '';
-        if (metaCompanyId !== currentUser.companyId) {
-          console.log('[Provider] Updating companyId based on USER_UPDATED event.');
-          const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
-          setCurrentUser(updatedCurrentUser);
-          setCompanyId(metaCompanyId);
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser));
-          try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrentUser)); } catch(e){}
-        }
-      }
-    } else if (event === 'TOKEN_REFRESHED') {
-      console.log('[Provider] Token refreshed, updating session.');
-      // トークンが更新された場合、セッションを更新
-      if (session) {
-        // セッション情報をストレージに明示的に保存
-        saveSessionToStorage(session);
-        
-        console.log('[Provider] Session updated after token refresh.');
-      } else {
-        console.warn('[Provider] Token refreshed but no session found.');
-        // セッションがない場合はログアウト処理
-        handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
-      }
-    } else if (event === 'PASSWORD_RECOVERY') {
-      console.log('[Provider] Password recovery event received.');
-      // パスワードリカバリーイベントの処理（必要に応じて）
+      case 'USER_UPDATED':
+        handleUserUpdated(session, currentUser, setCurrentUser, setCompanyId);
+        break;
     }
   });
 
   return authSubscription.subscription;
 };
 
-// セッションの有効性を定期的にチェックする関数
+/**
+ * INITIAL_SESSIONイベントを処理する関数
+ */
+async function handleInitialSession(
+  session: any,
+  currentUser: UserInfo | null,
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
+  setCompanyId: Dispatch<SetStateAction<string>>,
+  alreadyInitialised: { current: boolean }
+) {
+  log('[Provider] Processing INITIAL_SESSION event');
+  
+  if (!session) return;
+  
+  // セッション情報を保存
+  await saveSessionToStorage(session);
+  log('[Provider] Session data explicitly saved to storage');
+  setIsAuthenticated(true);
+  
+  // 会社IDを設定
+  if (session.user?.user_metadata?.company_id) {
+    setCompanyId(session.user.user_metadata.company_id);
+  }
+  
+  // 既に初期化済みの場合は最小限の処理
+  if (alreadyInitialised.current) {
+    log('[Provider] Already initialized, performing minimal session refresh');
+    if (currentUser) {
+      log('[Provider] Current user exists, keeping current state');
+    } else {
+      // セッションからユーザー情報を復元
+      await restoreUserFromSession(session, setCurrentUser);
+    }
+  } else {
+    // 完全な初期化を実行
+    log('[Provider] Full initialization with INITIAL_SESSION');
+    await initializeUserFromSession(
+      session, 
+      setCurrentUser, 
+      setIsAuthenticated, 
+      setCompanyId, 
+      alreadyInitialised
+    );
+  }
+}
+
+/**
+ * セッションからユーザー情報を復元する関数
+ */
+async function restoreUserFromSession(
+  session: any,
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>
+) {
+  try {
+    const client = supabase();
+    const { data: { user } } = await client.auth.getUser();
+    
+    if (user) {
+      const userInfo: UserInfo = {
+        id: user.id,
+        username: user.email?.split('@')[0] || '',
+        email: user.email || '',
+        fullName: user.user_metadata?.full_name || '',
+        role: user.user_metadata?.role || '一般ユーザー',
+        status: 'アクティブ',
+        createdAt: user.created_at || new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        isInvited: false,
+        inviteToken: '',
+        companyId: user.user_metadata?.company_id || ''
+      };
+      
+      setCurrentUser(userInfo);
+      storage.saveUserInfo(userInfo);
+    }
+  } catch (error) {
+    log('[Auth] Error restoring user from session:', error);
+  }
+}
+
+/**
+ * セッションからユーザー情報を初期化する関数
+ */
+async function initializeUserFromSession(
+  session: any,
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
+  setCompanyId: Dispatch<SetStateAction<string>>,
+  alreadyInitialised: { current: boolean }
+) {
+  try {
+    const client = supabase();
+    const { data: { user } } = await client.auth.getUser();
+    
+    if (user) {
+      // データベースからユーザー情報を取得
+      const dbResult = await getUserFromDatabase(user.id);
+      const dbUser = dbResult.success ? dbResult.data : null;
+      
+      const userInfo: UserInfo = {
+        id: user.id,
+        username: user.email?.split('@')[0] || '',
+        email: user.email || '',
+        fullName: user.user_metadata?.full_name || dbUser?.full_name || '',
+        role: user.user_metadata?.role || dbUser?.role || '一般ユーザー',
+        status: 'アクティブ',
+        createdAt: user.created_at || new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        isInvited: false,
+        inviteToken: '',
+        companyId: user.user_metadata?.company_id || (dbUser?.company_id as string) || ''
+      };
+      
+      setCurrentUser(userInfo);
+      setIsAuthenticated(true);
+      setCompanyId(userInfo.companyId);
+      storage.saveUserInfo(userInfo);
+      
+      // データベースにユーザー情報を保存/更新
+      await saveUserToDatabase(user.id, userInfo);
+      
+      log(`[Provider] Successfully initialized user from session: ${userInfo.email}`);
+      alreadyInitialised.current = true;
+    }
+  } catch (error) {
+    log('[Auth] Error initializing user from session:', error);
+  }
+}
+
+/**
+ * SIGNED_INイベントを処理する関数
+ */
+async function handleSignedIn(
+  session: any,
+  setCompanyId: Dispatch<SetStateAction<string>>
+) {
+  log('[Provider] Processing SIGNED_IN event');
+  
+  if (!session) return;
+  
+  // セッション情報を保存
+  await saveSessionToStorage(session);
+  log('[Provider] Session data explicitly saved to storage');
+  
+  // 会社IDを設定
+  if (session.user?.user_metadata?.company_id) {
+    log('[Provider] Company ID updated from auth event:', session.user.user_metadata.company_id);
+    setCompanyId(session.user.user_metadata.company_id);
+  }
+}
+
+/**
+ * SIGNED_OUTイベントを処理する関数
+ */
+function handleSignedOut(
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
+  setCompanyId: Dispatch<SetStateAction<string>>,
+  alreadyInitialised: { current: boolean }
+) {
+  log('[Provider] Processing SIGNED_OUT event');
+  
+  // ストレージをクリア
+  clearAuthStorage();
+  storage.removeUserInfo();
+  
+  // 状態をクリア
+  setCurrentUser(null);
+  setIsAuthenticated(false);
+  setCompanyId('');
+  alreadyInitialised.current = false;
+}
+
+/**
+ * TOKEN_REFRESHEDイベントを処理する関数
+ */
+async function handleTokenRefreshed(
+  session: any,
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
+  setCompanyId: Dispatch<SetStateAction<string>>
+) {
+  log('[Provider] Token refreshed, updating session.');
+  
+  if (session) {
+    await saveSessionToStorage(session);
+    log('[Provider] Session updated after token refresh.');
+  } else {
+    // セッションがない場合はログアウト処理
+    clearAuthStorage();
+    storage.removeUserInfo();
+    
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setCompanyId('');
+  }
+}
+
+/**
+ * USER_UPDATEDイベントを処理する関数
+ */
+function handleUserUpdated(
+  session: any,
+  currentUser: UserInfo | null,
+  setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
+  setCompanyId: Dispatch<SetStateAction<string>>
+) {
+  if (session?.user && currentUser && session.user.id === currentUser.id) {
+    const metaCompanyId = session.user.user_metadata?.company_id ?? '';
+    if (metaCompanyId !== currentUser.companyId) {
+      const updatedCurrentUser = { ...currentUser, companyId: metaCompanyId };
+      setCurrentUser(updatedCurrentUser);
+      setCompanyId(metaCompanyId);
+      storage.saveUserInfo(updatedCurrentUser);
+    }
+  }
+}
+
+/**
+ * セッションの有効性を定期的にチェックする関数
+ * 
+ * @param setCurrentUser ユーザー情報を更新する関数
+ * @param setIsAuthenticated 認証状態を更新する関数
+ * @param setCompanyId 会社IDを更新する関数
+ * @returns クリーンアップ関数
+ */
 export const setupSessionCheck = (
   setCurrentUser: Dispatch<SetStateAction<UserInfo | null>>,
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>,
   setCompanyId: Dispatch<SetStateAction<string>>
 ) => {
-  // セッション情報をストレージに明示的に保存する関数
-  const saveSessionToStorage = (session: any) => {
-    if (!session) return;
-    
-    try {
-      // トークンデータを保存
-      const tokenData = {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        // 有効期限を延長（現在時刻から24時間）
-        expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
-        expires_in: 24 * 60 * 60, // 24時間
-        token_type: session.token_type || 'bearer',
-        provider_token: session.provider_token,
-        provider_refresh_token: session.provider_refresh_token
-      };
-      
-      // ローカルストレージとセッションストレージの両方に保存
-      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
-      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
-      
-      // セッション情報全体も保存
-      const sessionData = {
-        session: {
-          ...session,
-          expires_at: tokenData.expires_at,
-          expires_in: tokenData.expires_in
-        },
-        user: session.user
-      };
-      localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
-      try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
-      
-      console.log('[SessionCheck] Session data explicitly saved to storage with extended expiry');
-    } catch (storageError) {
-      console.error('[SessionCheck] Error saving session data to storage:', storageError);
-    }
-  };
-
   // セッションチェック関数
   const checkSession = async () => {
     try {
@@ -318,208 +388,71 @@ export const setupSessionCheck = (
       const { data: { session }, error } = await client.auth.getSession();
       
       if (error) {
-        console.error('[SessionCheck] Error checking session:', error);
+        log('[SessionCheck] Error checking session:', error);
         return;
       }
       
       if (!session) {
-        console.log('[SessionCheck] No active session found, attempting to restore');
+        // セッションがない場合はログアウト処理
+        log('[SessionCheck] No session found, logging out');
+        clearAuthStorage();
+        storage.removeUserInfo();
         
-        // ローカルストレージからトークンを取得して復元を試みる
-        try {
-          // まずlocalStorageをチェック
-          let tokenStr = localStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token');
-          
-          // localStorageになければsessionStorageをチェック
-          if (!tokenStr) {
-            try {
-              tokenStr = sessionStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token');
-            } catch (e) {
-              console.error('[SessionCheck] Error accessing sessionStorage:', e);
-            }
-          }
-          
-          // auth-dataキーからトークンを取得を試みる
-          if (!tokenStr) {
-            try {
-              const dataStr = localStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-data');
-              if (dataStr) {
-                const parsedData = JSON.parse(dataStr);
-                if (parsedData?.session?.access_token && parsedData?.session?.refresh_token) {
-                  console.log('[SessionCheck] Extracted token from auth-data');
-                  const tokenData = {
-                    access_token: parsedData.session.access_token,
-                    refresh_token: parsedData.session.refresh_token,
-                    expires_at: parsedData.session.expires_at,
-                    expires_in: parsedData.session.expires_in || 3600,
-                    token_type: parsedData.session.token_type || 'bearer',
-                    provider_token: parsedData.session.provider_token,
-                    provider_refresh_token: parsedData.session.provider_refresh_token
-                  };
-                  tokenStr = JSON.stringify(tokenData);
-                  
-                  // トークンデータをストレージに保存
-                  localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', tokenStr);
-                  try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', tokenStr); } catch(e){}
-                }
-              }
-            } catch (e) {
-              console.error('[SessionCheck] Error extracting token from auth-data:', e);
-            }
-          }
-          
-          if (tokenStr) {
-            console.log('[SessionCheck] Found auth token in storage, attempting to restore');
-            
-            try {
-              const parsedToken = JSON.parse(tokenStr);
-              if (parsedToken?.access_token && parsedToken?.refresh_token) {
-                console.log('[SessionCheck] Setting session from stored token');
-                
-                const { data, error } = await client.auth.setSession({
-                  access_token: parsedToken.access_token,
-                  refresh_token: parsedToken.refresh_token
-                });
-                
-                if (error) {
-                  console.error('[SessionCheck] Error restoring session from token:', error);
-                  
-                  // リフレッシュトークンでの復元を試みる
-                  if (parsedToken.refresh_token) {
-                    try {
-                      console.log('[SessionCheck] Attempting to refresh session with refresh token');
-                      const refreshResult = await client.auth.refreshSession({
-                        refresh_token: parsedToken.refresh_token
-                      });
-                      
-                      if (refreshResult.error) {
-                        console.error('[SessionCheck] Failed to refresh with token:', refreshResult.error);
-                        // 無効なトークンの場合はストレージから削除
-                        localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
-                        try { sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token'); } catch(e){}
-                        
-                        // ログアウト処理
-                        handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
-                      } else if (refreshResult.data.session) {
-                        console.log('[SessionCheck] Successfully refreshed session with refresh token');
-                        
-                        // セッション情報をストレージに明示的に保存
-                        saveSessionToStorage(refreshResult.data.session);
-                        
-                        return; // 成功したら終了
-                      }
-                    } catch (refreshError) {
-                      console.error('[SessionCheck] Error during refresh attempt:', refreshError);
-                    }
-                  } else {
-                    // 無効なトークンの場合はストレージから削除
-                    localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
-                    try { sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token'); } catch(e){}
-                    
-                    // ログアウト処理
-                    handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
-                  }
-                } else if (data.session) {
-                  console.log('[SessionCheck] Successfully restored session from token');
-                  
-                  // セッション情報をストレージに明示的に保存
-                  saveSessionToStorage(data.session);
-                  
-                  return; // 成功したら終了
-                }
-              }
-            } catch (e) {
-              console.error('[SessionCheck] Error parsing stored token:', e);
-            }
-          }
-        } catch (storageError) {
-          console.error('[SessionCheck] Error accessing storage:', storageError);
-        }
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setCompanyId('');
+        return;
+      }
+      
+      // セッションの有効期限を確認
+      const expiresAt = session.expires_at;
+      const now = Math.floor(Date.now() / 1000);
+      
+      // 有効期限が60分以内の場合は更新（余裕を持たせる）
+      if (expiresAt && expiresAt < now + 60 * 60) {
+        log('[SessionCheck] Session expiring soon, refreshing');
+        const result = await refreshSession();
         
-        // 復元に失敗した場合はログアウト処理
-        console.log('[SessionCheck] Session restoration failed, logging out');
-        handleSessionExpired(setCurrentUser, setIsAuthenticated, setCompanyId);
-      } else {
-        // セッションの有効期限を確認
-        const expiresAt = session.expires_at;
-        const now = Math.floor(Date.now() / 1000);
-        
-        // 有効期限が60分以内の場合は更新（余裕を持たせる）
-        if (expiresAt && expiresAt < now + 60 * 60) {
-          console.log('[SessionCheck] Session expiring soon, refreshing');
-          
-          try {
-            // セッションの更新を試みる
-            const { data, error } = await client.auth.refreshSession();
-            
-            if (error) {
-              console.error('[SessionCheck] Failed to refresh session:', error);
-              
-              // エラーの種類によって処理を分ける
-              if (error.message.includes('expired') || error.message.includes('invalid')) {
-                console.log('[SessionCheck] Token expired or invalid, attempting recovery');
-                
-                // ローカルストレージからリフレッシュトークンを取得して復元を試みる
-                try {
-                  const tokenStr = localStorage.getItem('sb-czuedairowlwfgbjmfbg-auth-token');
-                  if (tokenStr) {
-                    const parsedToken = JSON.parse(tokenStr);
-                    if (parsedToken?.refresh_token) {
-                      const refreshResult = await client.auth.refreshSession({
-                        refresh_token: parsedToken.refresh_token
-                      });
-                      
-                      if (!refreshResult.error && refreshResult.data.session) {
-                        console.log('[SessionCheck] Successfully recovered session with refresh token');
-                        saveSessionToStorage(refreshResult.data.session);
-                        return;
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.error('[SessionCheck] Error during recovery attempt:', e);
-                }
-              }
-            } else if (data.session) {
-              console.log('[SessionCheck] Session refreshed successfully');
-              
-              // セッション情報をストレージに明示的に保存
-              saveSessionToStorage(data.session);
-            }
-          } catch (refreshError) {
-            console.error('[SessionCheck] Error refreshing session:', refreshError);
-          }
+        if (!result.success) {
+          log('[SessionCheck] Failed to refresh session');
         } else {
-          // セッションが有効な場合でも、定期的にストレージに保存して有効期限を延長
-          console.log('[SessionCheck] Session valid, updating storage with extended expiry');
-          saveSessionToStorage(session);
+          log('[SessionCheck] Session refreshed successfully');
+          log('[SessionCheck] Session data explicitly saved to storage with extended expiry');
         }
+      } else {
+        // セッションが有効な場合でも、定期的にストレージに保存して有効期限を延長
+        log('[SessionCheck] Session valid, updating storage with extended expiry');
+        await extendSessionExpiry();
+        log('[SessionCheck] Session data explicitly saved to storage with extended expiry');
       }
     } catch (error) {
-      console.error('[SessionCheck] Exception checking session:', error);
+      log('[SessionCheck] Exception checking session:', error);
     }
   };
 
   // 初回実行
   checkSession();
   
-  // 1分ごとにセッションをチェック（頻度をさらに上げる）
-  const intervalId = setInterval(checkSession, 60 * 1000);
+  // 15分ごとにセッションをチェック（頻度を下げて最適化）
+  const intervalId = setInterval(checkSession, 15 * 60 * 1000);
   
   // ページの可視性変更時にもセッションをチェック
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
-      console.log('[SessionCheck] Page became visible, checking session');
       checkSession();
     }
   };
   
   // ページの可視性変更イベントリスナーを追加
-  document.addEventListener('visibilitychange', handleVisibilityChange);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
   
   // クリーンアップ関数を返す
   return () => {
     clearInterval(intervalId);
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
   };
 };
