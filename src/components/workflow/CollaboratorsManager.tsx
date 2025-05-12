@@ -117,7 +117,7 @@ export const CollaboratorsManager: React.FC<CollaboratorsManagerProps> = ({
   const isCreator = currentUser?.id === createdBy;
   
   return (
-    <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6 w-full mx-auto">
+    <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-6 w-full">
       <h2 className="text-xl font-semibold mb-4">共同編集者管理</h2>
       
       {/* 現在のアクセスレベル表示 */}
