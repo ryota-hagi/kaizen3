@@ -8,7 +8,7 @@
 
 import { Dispatch, SetStateAction } from 'react';
 import { UserInfo } from '@/utils/api';
-import { USER_STORAGE_KEY } from '../utils';
+import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { 
   supabase, 
   saveSessionToStorage, 
@@ -59,6 +59,35 @@ const storage = {
     return null;
   },
   
+  // ユーザーリストをストレージから読み込む
+  loadUsersList: (): { users: UserInfo[], passwords: Record<string, string> } => {
+    if (typeof window === 'undefined') return { users: [], passwords: {} };
+    
+    let users: UserInfo[] = [];
+    let passwords: Record<string, string> = {};
+    
+    try {
+      const storedUsersStr = localStorage.getItem(USERS_STORAGE_KEY);
+      if (storedUsersStr) {
+        const parsedData = JSON.parse(storedUsersStr) as { user: UserInfo, password?: string }[];
+        // nullチェックを追加
+        users = parsedData.map(item => item.user).filter(user => user != null);
+        
+        // パスワード情報も復元
+        passwords = parsedData.reduce((acc, item) => {
+          if (item.user && item.user.id && item.password) {
+            acc[item.user.id] = item.password;
+          }
+          return acc;
+        }, {} as Record<string, string>);
+      }
+    } catch (error) {
+      log('[Storage] Failed to parse users from localStorage');
+    }
+    
+    return { users, passwords };
+  },
+  
   // ユーザー情報をストレージに保存
   saveUserInfo: (userInfo: UserInfo): void => {
     if (typeof window === 'undefined') return;
@@ -77,6 +106,26 @@ const storage = {
     }
   },
   
+  // ユーザーリストをストレージに保存
+  saveUsersList: (users: UserInfo[]): void => {
+    if (typeof window === 'undefined') return;
+    
+    const usersToSave = users.map(u => ({ user: u }));
+    
+    try {
+      const usersStr = JSON.stringify(usersToSave);
+      localStorage.setItem(USERS_STORAGE_KEY, usersStr);
+      
+      try {
+        sessionStorage.setItem(USERS_STORAGE_KEY, usersStr);
+      } catch (e) {
+        // sessionStorageへの保存に失敗しても続行
+      }
+    } catch (error) {
+      // エラーは無視
+    }
+  },
+  
   // ユーザー情報をストレージから削除
   removeUserInfo: (): void => {
     if (typeof window === 'undefined') return;
@@ -84,6 +133,28 @@ const storage = {
     try {
       localStorage.removeItem(USER_STORAGE_KEY);
       sessionStorage.removeItem(USER_STORAGE_KEY);
+    } catch (error) {
+      // エラーは無視
+    }
+  },
+  
+  // ユーザー関連のストレージをクリア
+  clearUserStorage: (): void => {
+    if (typeof window === 'undefined') return;
+    
+    clearAuthStorage(); // Supabase認証関連のストレージをクリア
+    
+    try {
+      // メモリキャッシュをクリア
+      storage._cache.delete(USER_STORAGE_KEY);
+      storage._cache.delete(USERS_STORAGE_KEY);
+      
+      // ストレージをクリア
+      localStorage.removeItem(USER_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+      
+      localStorage.removeItem(USERS_STORAGE_KEY);
+      sessionStorage.removeItem(USERS_STORAGE_KEY);
     } catch (error) {
       // エラーは無視
     }
