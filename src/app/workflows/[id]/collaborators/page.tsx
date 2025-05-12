@@ -114,35 +114,32 @@ export default function CollaboratorsPage() {
   }, [workflowId]);
   
   useEffect(() => {
-    // ローカルストレージからワークフローを取得
-    const loadWorkflows = () => {
-      const storedWorkflows = localStorage.getItem('workflows')
-      if (storedWorkflows) {
-        try {
-          const parsedWorkflows = JSON.parse(storedWorkflows)
-          // 指定されたIDのワークフローを検索
-          const foundWorkflow = parsedWorkflows.find((wf: any) => wf.id === workflowId)
-          
-          if (foundWorkflow) {
-            setWorkflow(foundWorkflow)
-          } else {
-            // ワークフローが見つからない場合はダッシュボードにリダイレクト
-            router.push('/')
-          }
-        } catch (error) {
-          console.error('ワークフローの解析エラー:', error)
-          router.push('/')
+    // Supabaseからワークフローを取得
+    const fetchWorkflow = async () => {
+      try {
+        const response = await fetch(`/api/workflows?id=${workflowId}`);
+        
+        if (!response.ok) {
+          throw new Error(`ワークフローの取得に失敗しました: ${response.statusText}`);
         }
-      } else {
-        // ワークフローがない場合はダッシュボードにリダイレクト
-        router.push('/')
+        
+        const data = await response.json();
+        setWorkflow(data);
+      } catch (error) {
+        console.error('ワークフローの取得エラー:', error);
+        alert('ワークフローの取得に失敗しました: ' + (error instanceof Error ? error.message : 'Load failed'));
+        router.push('/');
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false)
-    }
+    };
     
-    loadWorkflows()
-  }, [workflowId, router])
+    if (workflowId) {
+      fetchWorkflow();
+    } else {
+      setLoading(false);
+    }
+  }, [workflowId, router]);
   
   if (loading) {
     return (
@@ -201,26 +198,44 @@ export default function CollaboratorsPage() {
             accessLevel={workflow.accessLevel || 'user'}
             onAccessLevelChange={async (newLevel) => {
               try {
-                // ローカルストレージからワークフローを取得
-                const storedWorkflows = localStorage.getItem('workflows');
-                if (storedWorkflows) {
-                  const parsedWorkflows = JSON.parse(storedWorkflows);
-                  const index = parsedWorkflows.findIndex((wf: any) => wf.id === workflow.id);
-                  if (index !== -1) {
-                    parsedWorkflows[index].accessLevel = newLevel;
-                    localStorage.setItem('workflows', JSON.stringify(parsedWorkflows));
-                    
-                    // 状態を更新
-                    setWorkflow({
-                      ...workflow,
-                      accessLevel: newLevel
-                    });
-                    return true;
-                  }
+                // APIを呼び出してワークフローのアクセスレベルを更新
+                const response = await fetch(`/api/workflows`, {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    id: workflow.id,
+                    name: workflow.name,
+                    description: workflow.description,
+                    steps: workflow.steps,
+                    isImproved: workflow.is_improved,
+                    originalId: workflow.original_id,
+                    isCompleted: workflow.is_completed,
+                    accessLevel: newLevel,
+                    version: workflow.version
+                  }),
+                });
+                
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  console.error('API response error:', errorData);
+                  throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
                 }
-                return false;
+                
+                const result = await response.json();
+                console.log('Updated workflow access level:', result);
+                
+                // 状態を更新
+                setWorkflow({
+                  ...workflow,
+                  access_level: newLevel
+                });
+                
+                return true;
               } catch (error) {
                 console.error('アクセスレベル更新エラー:', error);
+                alert(`アクセスレベルの更新に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
                 return false;
               }
             }}

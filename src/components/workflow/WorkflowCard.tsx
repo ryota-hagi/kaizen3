@@ -150,7 +150,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({
             return (
               <div className="ml-2">
                 <button 
-                  onClick={() => router.push(`/workflows/${workflow.id}`)}
+                  onClick={() => router.push(`/workflows/${workflow.id}/collaborators`)}
                   className="text-primary-600 hover:text-primary-800 text-xs font-medium bg-primary-50 hover:bg-primary-100 rounded-md px-2 py-1 transition-colors duration-150"
                 >
                   + 共同編集者を追加
