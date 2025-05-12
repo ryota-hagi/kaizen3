@@ -11,13 +11,160 @@ import { UserInfo } from '@/utils/api';
 import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { 
   supabase, 
-  saveSessionToStorage, 
-  refreshSession, 
-  extendSessionExpiry,
   getUserFromDatabase,
-  saveUserToDatabase,
-  clearAuthStorage
+  saveUserToDatabase
 } from '../../../lib/supabaseClient';
+
+// 必要な関数を直接実装
+const clearAuthStorage = () => {
+  if (typeof window === 'undefined') return;
+  
+  // Supabase認証関連のストレージをクリア
+  const AUTH_TOKEN_KEY = 'sb-czuedairowlwfgbjmfbg-auth-token';
+  const AUTH_DATA_KEY = 'sb-czuedairowlwfgbjmfbg-auth-data';
+  const SESSION_CACHE_KEY = 'sb-session-cache';
+  
+  try {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_DATA_KEY);
+    localStorage.removeItem(SESSION_CACHE_KEY);
+    
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_DATA_KEY);
+    sessionStorage.removeItem(SESSION_CACHE_KEY);
+  } catch (error) {
+    // エラーは無視
+  }
+};
+
+// セッション情報をストレージに保存する関数
+const saveSessionToStorage = async (session: any, extendExpiry = false) => {
+  if (!session) return;
+  
+  try {
+    // 現在のUNIXタイムスタンプ（秒）
+    const now = Math.floor(Date.now() / 1000);
+    
+    // 有効期限を計算
+    const expiresAt = extendExpiry 
+      ? now + 24 * 60 * 60 // 24時間
+      : session.expires_at;
+    
+    const expiresIn = extendExpiry 
+      ? 24 * 60 * 60 
+      : session.expires_in || 3600;
+    
+    // トークンデータを保存
+    const tokenData = {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: expiresAt,
+      expires_in: expiresIn,
+      token_type: session.token_type || 'bearer',
+      provider_token: session.provider_token,
+      provider_refresh_token: session.provider_refresh_token
+    };
+    
+    // ストレージに保存
+    const AUTH_TOKEN_KEY = 'sb-czuedairowlwfgbjmfbg-auth-token';
+    const AUTH_DATA_KEY = 'sb-czuedairowlwfgbjmfbg-auth-data';
+    const SESSION_CACHE_KEY = 'sb-session-cache';
+    
+    localStorage.setItem(AUTH_TOKEN_KEY, JSON.stringify(tokenData));
+    
+    // セッション情報全体も保存
+    const sessionData = {
+      session: {
+        ...session,
+        expires_at: expiresAt,
+        expires_in: expiresIn
+      },
+      user: session.user,
+      timestamp: now // 保存時刻を記録
+    };
+    localStorage.setItem(AUTH_DATA_KEY, JSON.stringify(sessionData));
+    
+    // セッションキャッシュも更新
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+      valid: true,
+      timestamp: now,
+      expiresAt
+    }));
+    
+    try {
+      sessionStorage.setItem(AUTH_TOKEN_KEY, JSON.stringify(tokenData));
+      sessionStorage.setItem(AUTH_DATA_KEY, JSON.stringify(sessionData));
+      sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+        valid: true,
+        timestamp: now,
+        expiresAt
+      }));
+    } catch (e) {
+      // sessionStorageへの保存に失敗しても続行
+    }
+  } catch (error) {
+    console.error('[Auth] Error saving session data:', error);
+  }
+};
+
+// セッションを更新する関数
+const refreshSession = async () => {
+  try {
+    const client = supabase();
+    
+    // 現在のセッションを取得
+    const { data: { session: currentSession } } = await client.auth.getSession();
+    
+    // 現在のセッションがない場合は更新できない
+    if (!currentSession) {
+      // セッションキャッシュを無効化
+      const SESSION_CACHE_KEY = 'sb-session-cache';
+      localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+        valid: false,
+        timestamp: Math.floor(Date.now() / 1000)
+      }));
+      
+      return { success: false, error: 'No current session' };
+    }
+    
+    // セッションを更新
+    const { data, error } = await client.auth.refreshSession();
+    
+    if (error) {
+      return { success: false, error };
+    }
+    
+    if (data.session) {
+      // セッション情報をストレージに保存
+      await saveSessionToStorage(data.session, true);
+      
+      return { success: true, session: data.session };
+    }
+    
+    return { success: false };
+  } catch (error) {
+    return { success: false, error };
+  }
+};
+
+// セッションの有効期限を延長する関数
+const extendSessionExpiry = async () => {
+  try {
+    const client = supabase();
+    const { data: { session }, error } = await client.auth.getSession();
+    
+    if (error || !session) {
+      return { success: false, error };
+    }
+    
+    // セッション情報をストレージに保存（有効期限を延長）
+    await saveSessionToStorage(session, true);
+    
+    return { success: true, session };
+  } catch (error) {
+    return { success: false, error };
+  }
+};
 
 // デバッグモードを無効化（ログ出力を完全に抑制）
 const DEBUG = false;

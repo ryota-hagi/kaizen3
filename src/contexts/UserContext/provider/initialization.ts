@@ -12,11 +12,141 @@ import { UserInfo } from '@/utils/api';
 import { USER_STORAGE_KEY, USERS_STORAGE_KEY } from '../utils';
 import { 
   supabase, 
-  validateSession, 
-  clearAuthStorage,
   getUserFromDatabase,
   saveUserToDatabase
 } from '../../../lib/supabaseClient';
+
+// 必要な関数を直接実装
+const clearAuthStorage = () => {
+  if (typeof window === 'undefined') return;
+  
+  // Supabase認証関連のストレージをクリア
+  const AUTH_TOKEN_KEY = 'sb-czuedairowlwfgbjmfbg-auth-token';
+  const AUTH_DATA_KEY = 'sb-czuedairowlwfgbjmfbg-auth-data';
+  const SESSION_CACHE_KEY = 'sb-session-cache';
+  
+  try {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_DATA_KEY);
+    localStorage.removeItem(SESSION_CACHE_KEY);
+    
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_DATA_KEY);
+    sessionStorage.removeItem(SESSION_CACHE_KEY);
+  } catch (error) {
+    // エラーは無視
+  }
+};
+
+// セッションの検証
+const validateSession = async () => {
+  try {
+    // キャッシュを確認
+    const SESSION_CACHE_KEY = 'sb-session-cache';
+    const sessionCacheStr = localStorage.getItem(SESSION_CACHE_KEY);
+    if (sessionCacheStr) {
+      try {
+        const sessionCache = JSON.parse(sessionCacheStr);
+        const now = Math.floor(Date.now() / 1000);
+        
+        // キャッシュが有効で、最後の確認から5分以内の場合はキャッシュを使用
+        if (sessionCache.valid && sessionCache.timestamp > now - 5 * 60) {
+          // セッションの有効期限が60分以上残っている場合はキャッシュを使用
+          if (sessionCache.expiresAt > now + 60 * 60) {
+            // Supabaseクライアントからセッションを取得
+            const client = supabase();
+            const { data: { session } } = await client.auth.getSession();
+            
+            if (session) {
+              return { valid: true, session };
+            }
+          }
+        }
+      } catch (e) {
+        // キャッシュの解析エラーは無視
+      }
+    }
+    
+    // Supabaseクライアントからセッションを取得
+    const client = supabase();
+    const { data: { session }, error } = await client.auth.getSession();
+    
+    if (error) {
+      return { valid: false, error };
+    }
+    
+    if (!session) {
+      // セッションがない場合はストレージからトークンを取得して復元を試みる
+      const AUTH_TOKEN_KEY = 'sb-czuedairowlwfgbjmfbg-auth-token';
+      const tokenStr = localStorage.getItem(AUTH_TOKEN_KEY);
+      
+      if (tokenStr) {
+        try {
+          const parsedToken = JSON.parse(tokenStr);
+          if (parsedToken?.access_token) {
+            const { data, error } = await client.auth.setSession({
+              access_token: parsedToken.access_token,
+              refresh_token: parsedToken.refresh_token
+            });
+            
+            if (error) {
+              // セッションキャッシュを無効化
+              localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+                valid: false,
+                timestamp: Math.floor(Date.now() / 1000)
+              }));
+              
+              return { valid: false, error };
+            }
+            
+            if (data.session) {
+              // セッションキャッシュを更新
+              localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+                valid: true,
+                timestamp: Math.floor(Date.now() / 1000),
+                expiresAt: data.session.expires_at
+              }));
+              
+              return { valid: true, session: data.session };
+            }
+          }
+        } catch (e) {
+          // エラーは無視
+        }
+      }
+      
+      // セッションキャッシュを無効化
+      localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+        valid: false,
+        timestamp: Math.floor(Date.now() / 1000)
+      }));
+      
+      return { valid: false };
+    }
+    
+    // セッションの有効期限を確認
+    const expiresAt = session.expires_at;
+    const now = Math.floor(Date.now() / 1000);
+    
+    // セッションキャッシュを更新
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+      valid: true,
+      timestamp: now,
+      expiresAt
+    }));
+    
+    return { valid: true, session };
+  } catch (error) {
+    // セッションキャッシュを無効化
+    const SESSION_CACHE_KEY = 'sb-session-cache';
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+      valid: false,
+      timestamp: Math.floor(Date.now() / 1000)
+    }));
+    
+    return { valid: false, error };
+  }
+};
 
 // デバッグモードを無効化（ログ出力を完全に抑制）
 const DEBUG = false;
