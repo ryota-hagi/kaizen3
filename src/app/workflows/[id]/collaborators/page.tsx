@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { DashboardLayout } from '../../../../components/layouts/DashboardLayout'
 import { CollaboratorsManager } from '../../../../components/workflow/CollaboratorsManager'
 import { ChatInterface } from '../../../../components/chat/ChatInterface'
@@ -343,12 +344,12 @@ export default function CollaboratorsPage() {
           />
           
           <div className="mt-6 flex justify-end">
-            <button 
+            <Link 
+              href={`/workflows/${workflowId}`}
               className="btn btn-primary"
-              onClick={() => router.push(`/workflows/${workflowId}`)}
             >
               業務フロー詳細に戻る
-            </button>
+            </Link>
           </div>
         </div>
 
