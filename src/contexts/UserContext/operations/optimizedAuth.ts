@@ -10,19 +10,22 @@
 
 import { Dispatch, SetStateAction } from 'react';
 import { UserInfo, UserStatus } from '@/utils/api';
+// 必要な関数をインポート
 import { 
-  supabase, 
-  saveSessionToStorage, 
-  saveUserToDatabase, 
+  supabase,
+  saveUserToDatabase,
   getUserFromDatabase,
   validateSession,
-  clearAuthStorage
+  clearAuthStorage,
+  saveSessionToStorage,
+  refreshSession,
+  extendSessionExpiry
 } from '@/lib/supabaseClient';
 import { USER_STORAGE_KEY, USERS_STORAGE_KEY, loadUserDataFromLocalStorage } from '../utils';
 import { isEqual } from '@/utils/deepEqual';
 import { fetchAndCacheCompanyInfo } from '@/utils/companyInfo';
 
-// デバッグモード（本番環境ではfalseに設定）
+// デバッグモードを無効化（ログ出力を抑制）
 const DEBUG = false;
 
 // ログ出力関数（デバッグモードが有効な場合のみ出力）
