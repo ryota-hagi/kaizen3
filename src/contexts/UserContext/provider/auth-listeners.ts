@@ -385,7 +385,7 @@ function handleSignedOut(
   
   // ストレージをクリア
   clearAuthStorage();
-  storage.removeUserInfo();
+  storage.clearUserStorage();
   
   // 状態をクリア
   setCurrentUser(null);
@@ -411,7 +411,7 @@ async function handleTokenRefreshed(
   } else {
     // セッションがない場合はログアウト処理
     clearAuthStorage();
-    storage.removeUserInfo();
+    storage.clearUserStorage();
     
     setCurrentUser(null);
     setIsAuthenticated(false);
@@ -467,7 +467,7 @@ export const setupSessionCheck = (
         // セッションがない場合はログアウト処理
         log('[SessionCheck] No session found, logging out');
         clearAuthStorage();
-        storage.removeUserInfo();
+        storage.clearUserStorage();
         
         setCurrentUser(null);
         setIsAuthenticated(false);
