@@ -51,9 +51,9 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({
   if (!workflow) return null
 
   return (
-    <div className="bg-white rounded-lg shadow-md border border-secondary-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-md border border-secondary-200 overflow-hidden">
       {/* カードヘッダー */}
-      <div className="border-l-4 border-primary-500 px-4 py-3 bg-primary-50">
+      <div className="px-4 py-3">
         <div className="flex justify-between items-start">
           <Link 
             href={`/workflows/${workflow.id}`}

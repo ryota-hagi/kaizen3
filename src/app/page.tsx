@@ -386,9 +386,9 @@ export default function Home() {
               <WorkflowEditor workflowId={activeWorkflow} onClose={() => setActiveWorkflow(null)} />
             ) : (
               <>
-                <div className="flex justify-between items-center mb-6">
-                  <div className="flex items-center flex-1">
-                    <div className="max-w-md mr-4">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex-1">
+                    <div className="max-w-md">
                       <input
                         type="text"
                         placeholder="業務フローを検索..."
@@ -397,7 +397,7 @@ export default function Home() {
                         className="w-full px-4 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
-                    <div className="flex items-center">
+                    <div className="flex items-center mt-2 md:hidden">
                       <input
                         type="checkbox"
                         id="showCompleted"
@@ -410,8 +410,20 @@ export default function Home() {
                       </label>
                     </div>
                   </div>
+                  <div className="hidden md:flex items-center">
+                    <input
+                      type="checkbox"
+                      id="showCompletedDesktop"
+                      checked={showCompleted}
+                      onChange={(e) => setShowCompleted(e.target.checked)}
+                      className="mr-2"
+                    />
+                    <label htmlFor="showCompletedDesktop" className="text-sm text-secondary-600 mr-4">
+                      完了済みを表示
+                    </label>
+                  </div>
                   <button 
-                    className="btn btn-primary ml-4"
+                    className="btn btn-primary"
                     onClick={() => setActiveWorkflow('new')}
                   >
                     新規作成
