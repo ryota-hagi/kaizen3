@@ -20,9 +20,12 @@ export default function CallbackClient() {
   const [loading, setLoading] = useState(true)
   const [debugInfo, setDebugInfo] = useState<string[]>([])
   
-  // デバッグ情報を追加する関数
+  // デバッグフラグ（本番環境では無効化）
+  const DEBUG = false;
+  
+  // デバッグ情報を追加する関数（コンソールログは必要な場合のみ出力）
   const addDebugInfo = (info: string) => {
-    console.log(info)
+    if (DEBUG) console.log(info)
     setDebugInfo(prev => [...prev, info])
   }
   
@@ -382,7 +385,7 @@ export default function CallbackClient() {
           setLoading(false)
         }
       } catch (err) {
-        console.error('Callback error:', err)
+        if (DEBUG) console.error('Callback error:', err)
         addDebugInfo(`コールバックエラー: ${err}`)
         setError('認証処理中にエラーが発生しました')
         setLoading(false)

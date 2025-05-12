@@ -5,6 +5,19 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 
+// デバッグモードを無効化（ログ出力を抑制）
+const DEBUG = false;
+
+// ログ出力関数（デバッグモードが有効な場合のみ出力）
+const log = (message: string, data?: any) => {
+  if (!DEBUG) return;
+  if (data) {
+    console.log(message, data);
+  } else {
+    console.log(message);
+  }
+};
+
 interface LoginFormProps {
   onSuccess?: () => void
 }
@@ -43,14 +56,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       // ローカルストレージとセッションストレージの両方に招待トークンを保存
       localStorage.setItem('invite_token', inviteToken)
       try { sessionStorage.setItem('invite_token', inviteToken) } catch(e){}
-      console.log('招待トークンを保存しました:', inviteToken)
+      log('招待トークンを保存しました:', inviteToken)
     }
     
     // 招待フラグがある場合は保存
     if (isInvite) {
       localStorage.setItem('is_invite', 'true')
       try { sessionStorage.setItem('is_invite', 'true') } catch(e){}
-      console.log('招待フラグを保存しました')
+      log('招待フラグを保存しました')
     }
   }, [searchParams])
   
@@ -69,14 +82,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         // ローカルストレージとセッションストレージの両方に招待トークンを保存
         localStorage.setItem('invite_token', inviteToken)
         try { sessionStorage.setItem('invite_token', inviteToken) } catch(e){}
-        console.log('招待トークンを保存しました:', inviteToken)
+        log('招待トークンを保存しました:', inviteToken)
       }
       
       // 招待フラグがある場合は保存
       if (isInvite) {
         localStorage.setItem('is_invite', 'true')
         try { sessionStorage.setItem('is_invite', 'true') } catch(e){}
-        console.log('招待フラグを保存しました')
+        log('招待フラグを保存しました')
       }
       
       // 招待からのログインかどうかでリダイレクト先を変更
@@ -94,11 +107,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       
       if (error) {
         setError('ログイン中にエラーが発生しました')
-        console.error('Google login error:', error)
+        if (DEBUG) console.error('Google login error:', error)
       }
     } catch (err) {
       setError('ログイン中にエラーが発生しました')
-      console.error('Login error:', err)
+      if (DEBUG) console.error('Login error:', err)
     } finally {
       setLoading(false)
     }
