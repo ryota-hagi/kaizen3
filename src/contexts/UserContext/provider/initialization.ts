@@ -16,7 +16,7 @@ import {
   clearAuthStorage,
   getUserFromDatabase,
   saveUserToDatabase
-} from '@/lib/supabaseClient';
+} from '../../../lib/supabaseClient';
 
 // デバッグモードを無効化（ログ出力を完全に抑制）
 const DEBUG = false;
