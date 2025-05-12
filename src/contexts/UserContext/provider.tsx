@@ -1,13 +1,19 @@
 'use client'
 
-import React, { useState, useEffect, ReactNode, useRef } from 'react'
+/**
+ * UserContextProvider - ユーザー認証と状態管理のためのコンテキストプロバイダー
+ * 
+ * このコンポーネントは以下の機能を提供します：
+ * 1. ユーザー認証状態の管理
+ * 2. ユーザー情報の管理
+ * 3. 会社情報の管理
+ * 4. 認証関連の操作（ログイン、ログアウト、ユーザー情報更新など）
+ */
+
+import React, { useState, useEffect, ReactNode, useRef, useCallback } from 'react'
 import { UserInfo } from '@/utils/api';
 import { UserContext, UserContextType } from './context';
-import { USER_STORAGE_KEY } from './utils';
 import {
-  loginWithGoogle,
-  logout,
-  updateUserAfterGoogleSignIn,
   updateUserProfile,
   getUserById,
   deleteUser,
@@ -18,403 +24,283 @@ import {
   verifyInviteToken,
   completeInvitation
 } from './operations/index';
-import { supabase } from '@/lib/supabaseClient';
+import { 
+  loginWithGoogle,
+  logout,
+  updateUserInfo
+} from './operations/optimizedAuth';
 import { 
   initializeProvider, 
+  handleSessionExpired
+} from './provider/initialization';
+import {
   setupAuthStateChangeListener,
   setupSessionCheck
-} from './provider/index';
+} from './provider/auth-listeners';
 
-// プロバイダーコンポーネント
+// デバッグモード（本番環境ではfalseに設定）
+const DEBUG = false;
+
+// ログ出力関数（デバッグモードが有効な場合のみ出力）
+const log = (message: string, data?: any) => {
+  if (!DEBUG) return;
+  if (data) {
+    console.log(message, data);
+  } else {
+    console.log(message);
+  }
+};
+
+/**
+ * UserContextProvider - ユーザー認証と状態管理のためのコンテキストプロバイダー
+ */
 export const UserContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<UserInfo | null>(null); // 初期値はnull
-  const [users, setUsers] = useState<UserInfo[]>([]); // 初期値は空配列
-  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({}); // 初期値は空オブジェクト
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); // 初期値はfalse
-  const [isInitialized, setIsInitialized] = useState<boolean>(false); // 初期化フラグ
-  const [companyId, setCompanyId] = useState<string>(''); // 追加: 会社ID
-  const alreadyInitialised = useRef(false); // 初期化フラグ
+  // 状態管理
+  const [currentUser, setCurrentUser] = useState<UserInfo | null>(null);
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [companyId, setCompanyId] = useState<string>('');
+  
+  // 初期化済みフラグ（複数回の初期化を防止）
+  const alreadyInitialised = useRef(false);
 
-  // 初期化時にローカルストレージとセッションストレージからデータを読み込む（マウント時のみ実行）
+  // 初期化処理 - アプリケーション起動時に一度だけ実行
   useEffect(() => {
     // 初期化処理が複数回実行されないようにフラグを確認
-    if (isInitialized) {
-      console.log('[Provider] useEffect: 既に初期化済みのため、処理をスキップします');
-      return;
-    }
+    if (isInitialized) return;
 
-    console.log('[Provider] useEffect: 初期化処理を実行します');
+    log('[Provider] useEffect: 初期化処理を実行します');
     setIsInitialized(true);
 
-    // セッションの検証と復元を強化
-    const restoreSession = async () => {
-      try {
-        // セッションの検証
-        const { validateSession } = await import('@/lib/supabaseClient');
-        const { valid, session } = await validateSession();
-        
-        if (valid && session) {
-          console.log('[Provider] Valid session found during initialization');
-          // 認証状態を設定
-          setIsAuthenticated(true);
-          
-          // セッションから会社IDを設定
-          if (session.user?.user_metadata?.company_id) {
-            const cid = session.user.user_metadata.company_id;
-            setCompanyId(cid);
-            console.log('[Provider] Company ID updated from session:', cid);
-          }
-          
-          // セッションからユーザー情報を取得して設定
-          try {
-            const client = supabase();
-            const { data: { user } } = await client.auth.getUser();
-            
-            if (user) {
-              // ユーザー情報を構築
-              const userInfo: UserInfo = {
-                id: user.id,
-                username: user.email?.split('@')[0] || '',
-                email: user.email || '',
-                fullName: user.user_metadata?.full_name || '',
-                role: user.user_metadata?.role || '一般ユーザー',
-                status: 'アクティブ',
-                createdAt: user.created_at || new Date().toISOString(),
-                lastLogin: new Date().toISOString(),
-                isInvited: false,
-                inviteToken: '',
-                companyId: user.user_metadata?.company_id || ''
-              };
-              
-              // ユーザー情報を設定
-              setCurrentUser(userInfo);
-              
-              // ストレージに保存
-              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
-              try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo)); } catch(e){}
-              
-              console.log('[Provider] User info set from session:', userInfo.email);
-              
-              // 初期化済みフラグを設定
-              alreadyInitialised.current = true;
-            }
-          } catch (userError) {
-            console.error('[Provider] Error getting user from session:', userError);
-          }
-        }
-        
-        // ローカルストレージからユーザー情報を復元を試みる
-        if (!alreadyInitialised.current) {
-          try {
-            const storedUserStr = localStorage.getItem(USER_STORAGE_KEY);
-            if (storedUserStr) {
-              const storedUser = JSON.parse(storedUserStr) as UserInfo;
-              console.log('[Provider] Found stored user, attempting to restore session');
-              
-              // ユーザー情報を設定
-              setCurrentUser(storedUser);
-              setIsAuthenticated(true);
-              setCompanyId(storedUser.companyId || '');
-              
-              console.log('[Provider] User restored from storage:', storedUser.email);
-              
-              // セッションの復元を試みる
-              const client = supabase();
-              const { data, error } = await client.auth.refreshSession();
-              
-              if (!error && data.session) {
-                console.log('[Provider] Successfully refreshed session from storage');
-                // 初期化済みフラグを設定
-                alreadyInitialised.current = true;
-              }
-            }
-          } catch (storageError) {
-            console.error('[Provider] Error restoring from storage:', storageError);
-          }
-        }
-        
-        // 初期データ読み込みロジックを実行（alreadyInitialisedフラグを渡す）
-        await initializeProvider(
-          setCurrentUser,
-          setUsers,
-          setIsAuthenticated,
-          setCompanyId,
-          setUserPasswords,
-          alreadyInitialised
-        );
-      } catch (error) {
-        console.error('[Provider] Error restoring session:', error);
-        
-        // エラーが発生した場合でも初期化処理は実行
-        await initializeProvider(
-          setCurrentUser,
-          setUsers,
-          setIsAuthenticated,
-          setCompanyId,
-          setUserPasswords,
-          alreadyInitialised
-        );
-      }
-    };
-    
-    restoreSession();
-  }, [isInitialized]); // isInitialized を依存配列に追加
+    // 初期データ読み込みロジックを実行
+    initializeProvider(
+      setCurrentUser,
+      setUsers,
+      setIsAuthenticated,
+      setCompanyId,
+      setUserPasswords,
+      alreadyInitialised
+    ).catch(error => {
+      log('[Provider] 初期化中にエラーが発生しました:', error);
+    });
+  }, [isInitialized]);
 
-  // currentUser と companyInfo の不整合チェック
+  // 認証状態変更リスナーとセッションチェックの設定
   useEffect(() => {
-    if (currentUser && currentUser.companyId && typeof window !== 'undefined') {
-      try {
-        const storedCompanyInfoStr = localStorage.getItem('kaizen_company_info'); // 実際のキーを使用
-        if (storedCompanyInfoStr) {
-          const storedCompanyInfo = JSON.parse(storedCompanyInfoStr);
-          if (storedCompanyInfo && storedCompanyInfo.id !== currentUser.companyId) {
-            console.warn('[Provider] Company info mismatch detected! Clearing stored company info and refetching.');
-            localStorage.removeItem('kaizen_company_info'); // 不正な情報を削除
-          }
-        }
-      } catch (error) {
-        console.error('[Provider] Error checking company info consistency:', error);
-      }
-    }
-  }, [currentUser]); // currentUser が変更されたときにチェック
-
-  // 認証状態変更リスナーを設定
-  useEffect(() => {
-    console.log('[Provider] Setting up auth state change listener');
-    
-    // 既存のリスナーをクリーンアップ
-    let subscription: { unsubscribe: () => void } | null = null;
-    let sessionCheckCleanup: (() => void) | null = null;
-    
     // ブラウザ環境でのみ実行
-    if (typeof window !== 'undefined') {
-      // セッションの復元を試みる
-      const attemptSessionRestore = async () => {
-        try {
-          // Supabaseクライアントを取得
-          const client = supabase();
-          
-          // セッションの取得を試みる
-          const { data: { session }, error } = await client.auth.getSession();
-          
-          if (error) {
-            console.error('[Provider] Error getting session:', error);
-            return;
-          }
-          
-          if (session) {
-            console.log('[Provider] Found existing session during listener setup');
-            setIsAuthenticated(true);
-            
-            // セッションから会社IDを設定
-            if (session.user?.user_metadata?.company_id) {
-              const cid = session.user.user_metadata.company_id;
-              setCompanyId(cid);
-              console.log('[Provider] Company ID updated from session:', cid);
-            }
-            
-            // ユーザー情報がない場合は取得
-            if (!currentUser) {
-              try {
-                const { data: { user } } = await client.auth.getUser();
-                if (user) {
-                  const userInfo: UserInfo = {
-                    id: user.id,
-                    username: user.email?.split('@')[0] || '',
-                    email: user.email || '',
-                    fullName: user.user_metadata?.full_name || '',
-                    role: user.user_metadata?.role || '一般ユーザー',
-                    status: 'アクティブ',
-                    createdAt: user.created_at || new Date().toISOString(),
-                    lastLogin: new Date().toISOString(),
-                    isInvited: false,
-                    inviteToken: '',
-                    companyId: user.user_metadata?.company_id || ''
-                  };
-                  
-                  // ユーザー情報を設定
-                  setCurrentUser(userInfo);
-                  
-                  // ストレージに保存
-                  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
-                  try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo)); } catch(e){}
-                  
-                  console.log('[Provider] User info restored from session:', userInfo.email);
-                }
-              } catch (error) {
-                console.error('[Provider] Error getting user from session:', error);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('[Provider] Error during session restore attempt:', error);
-        }
-      };
-      
-      // セッションの復元を試みる
-      attemptSessionRestore();
-      
-      // 認証状態変更リスナーを設定
-      subscription = setupAuthStateChangeListener(
-        currentUser,
+    if (typeof window === 'undefined') return;
+    
+    // 既に初期化済みの場合はスキップ
+    if (alreadyInitialised.current) {
+      log('[Provider] useEffect: 既に初期化済みのため、処理をスキップします');
+      return;
+    }
+    
+    log('[Provider] Setting up auth state change listener');
+    
+    // 認証状態変更リスナーを設定
+    const subscription = setupAuthStateChangeListener(
+      currentUser,
+      setCurrentUser,
+      setUsers,
+      setIsAuthenticated,
+      setCompanyId,
+      alreadyInitialised
+    );
+    
+    // セッションの有効性を定期的にチェック
+    const sessionCheckCleanup = setupSessionCheck(
+      setCurrentUser,
+      setIsAuthenticated,
+      setCompanyId
+    );
+    
+    // クリーンアップ関数を返す
+    return () => {
+      log('[Provider] Cleaning up auth listeners and event handlers');
+      if (subscription) subscription.unsubscribe();
+      if (sessionCheckCleanup) sessionCheckCleanup();
+    };
+  }, [currentUser, alreadyInitialised.current]); // currentUserとalreadyInitialised.currentが変更されたときにリスナーを再設定
+
+  /**
+   * 最適化されたGoogle認証ログイン関数
+   * @returns ログイン成功したかどうか
+   */
+  const optimizedLogin = useCallback(async (): Promise<boolean> => {
+    log('[Provider] Executing optimized login');
+    
+    try {
+      const result = await loginWithGoogle(
         setCurrentUser,
         setUsers,
-        setIsAuthenticated,
-        setCompanyId,
-        alreadyInitialised
+        setIsAuthenticated
       );
       
-      // セッションの有効性を定期的にチェック
-      sessionCheckCleanup = setupSessionCheck(
-        setCurrentUser,
-        setIsAuthenticated,
-        setCompanyId
-      );
+      if (result.success && result.user) {
+        setCompanyId(result.user.companyId || '');
+        log('[Provider] Login successful, company ID set:', result.user.companyId);
+      } else {
+        log('[Provider] Login failed or no user returned');
+      }
       
-      // ページの可視性変更イベントリスナーを追加
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          console.log('[Provider] Page became visible, checking session');
-          attemptSessionRestore();
-        }
-      };
-      
-      // ページの可視性変更イベントリスナーを追加
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      
-      // Supabaseクライアントを取得
-      const client = supabase();
-      
-      // ブラウザの更新前イベントリスナーを追加
-      const handleBeforeUnload = async () => {
-        // 現在のユーザー情報があれば保存
-        if (currentUser) {
-          console.log('[Provider] Page about to unload, saving user info');
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
-          try { sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser)); } catch(e){}
-          
-          // 現在のセッション情報も保存
-          try {
-            const { data: { session } } = await client.auth.getSession();
-            if (session) {
-              console.log('[Provider] Saving session data before unload');
-              
-              // トークンデータを保存
-              const tokenData = {
-                access_token: session.access_token,
-                refresh_token: session.refresh_token,
-                expires_at: session.expires_at,
-                expires_in: session.expires_in || 3600,
-                token_type: session.token_type || 'bearer',
-                provider_token: session.provider_token,
-                provider_refresh_token: session.provider_refresh_token
-              };
-              
-              // ローカルストレージとセッションストレージの両方に保存
-              localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
-              try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData)); } catch(e){}
-              
-              // セッション情報全体も保存
-              const sessionData = {
-                session: session,
-                user: session.user
-              };
-              localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
-              try { sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData)); } catch(e){}
-            }
-          } catch (error) {
-            console.error('[Provider] Error saving session before unload:', error);
-          }
-        }
-      };
-      
-      // ブラウザの更新前イベントリスナーを追加
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      
-      // クリーンアップ関数を拡張
-      return () => {
-        console.log('[Provider] Cleaning up auth listeners and event handlers');
-        if (subscription) subscription.unsubscribe();
-        if (sessionCheckCleanup) sessionCheckCleanup();
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-      };
+      return result.success;
+    } catch (error) {
+      log('[Provider] Login error:', error);
+      return false;
+    }
+  }, []);
+
+  /**
+   * 最適化されたログアウト関数
+   */
+  const optimizedLogout = useCallback(async (): Promise<void> => {
+    log('[Provider] Executing optimized logout');
+    
+    await logout(
+      setCurrentUser,
+      setIsAuthenticated,
+      setCompanyId
+    );
+  }, []);
+
+  /**
+   * 最適化されたユーザー情報更新関数
+   * @param userData 更新するユーザー情報
+   * @returns 更新成功したかどうか
+   */
+  const optimizedUpdateUserAfterGoogleSignIn = useCallback(async (userData: Partial<UserInfo>): Promise<boolean> => {
+    if (!currentUser) {
+      log('[Provider] Cannot update user: No current user');
+      return false;
     }
     
-    // ブラウザ環境でない場合は空のクリーンアップ関数を返す
-    return () => {};
-  }, [currentUser]); // currentUserが変更されたときにリスナーを再設定
+    log('[Provider] Updating user after Google sign-in');
+    
+    const result = await updateUserInfo(
+      userData,
+      currentUser,
+      setCurrentUser,
+      setUsers
+    );
+    
+    if (result.success && result.user && userData.companyId) {
+      setCompanyId(userData.companyId);
+      log('[Provider] User updated successfully, company ID set:', userData.companyId);
+    } else {
+      log('[Provider] User update failed or no company ID provided');
+    }
+    
+    return result.success;
+  }, [currentUser]);
 
-  // コンテキスト値
-  const value: UserContextType = {
-    currentUser,
-    users,
-    isAuthenticated,
-    companyId,
-    setCompanyId,
-    setUsers, // setUsers関数を追加
-    loginWithGoogle: () => loginWithGoogle(
-      setCurrentUser,
-      setUsers,
-      setIsAuthenticated
-    ),
-    logout: () => logout(
-      currentUser,
-      setCurrentUser,
-      setUsers,
-      setUserPasswords,
-      setIsAuthenticated
-    ),
-    updateUserAfterGoogleSignIn: (userData) => updateUserAfterGoogleSignIn(
-      userData,
-      setCurrentUser,
-      setUsers,
-      setIsAuthenticated
-    ),
-    updateUserProfile: (userData) => updateUserProfile(
+  // ユーザープロファイル更新関数
+  const updateUserProfileCallback = useCallback((userData: Partial<UserInfo>) => {
+    return updateUserProfile(
       userData,
       currentUser,
       setCurrentUser,
       setUsers,
       setUserPasswords
-    ),
-    updateUser: (userId, userData) => updateUser(
+    );
+  }, [currentUser]);
+
+  // ユーザー更新関数
+  const updateUserCallback = useCallback((userId: string, userData: Partial<UserInfo>) => {
+    return updateUser(
       userId,
       userData,
       currentUser,
       setCurrentUser,
       setUsers,
       setUserPasswords
-    ),
-    getUserById: (id) => getUserById(id, users),
-    deleteUser: (userId) => deleteUser(
+    );
+  }, [currentUser]);
+
+  // ユーザー取得関数
+  const getUserByIdCallback = useCallback((id: string) => {
+    return getUserById(id, users);
+  }, [users]);
+
+  // ユーザー削除関数
+  const deleteUserCallback = useCallback((userId: string) => {
+    return deleteUser(
       userId,
       currentUser,
       setUsers,
       setUserPasswords
-    ),
-    deleteCompanyAccount: () => deleteCompanyAccount(
+    );
+  }, [currentUser]);
+
+  // 会社アカウント削除関数
+  const deleteCompanyAccountCallback = useCallback(() => {
+    return deleteCompanyAccount(
       currentUser,
       setCurrentUser,
       setUsers,
       setUserPasswords,
       setIsAuthenticated
-    ),
-    inviteUser: (inviteData) => inviteUser(
+    );
+  }, [currentUser]);
+
+  // ユーザー招待関数
+  const inviteUserCallback = useCallback((inviteData: any) => {
+    return inviteUser(
       inviteData,
       currentUser,
       setUsers,
       setUserPasswords
-    ),
-    verifyInviteToken: (token) => verifyInviteToken(token, users, setUsers, setCompanyId),
-    completeInvitation: (token, userData) => completeInvitation(
+    );
+  }, [currentUser]);
+
+  // 招待トークン検証関数
+  const verifyInviteTokenCallback = useCallback((token: string) => {
+    return verifyInviteToken(token, users, setUsers, setCompanyId);
+  }, [users]);
+
+  // 招待完了関数
+  const completeInvitationCallback = useCallback((token: string, userData: {fullName: string; companyId?: string}) => {
+    return completeInvitation(
       token,
       userData,
       setCurrentUser,
       setUsers,
       setUserPasswords,
       setIsAuthenticated
-    ),
+    );
+  }, []);
+
+  // コンテキスト値の定義
+  const value: UserContextType = {
+    currentUser,
+    users,
+    isAuthenticated,
+    companyId,
+    setCompanyId,
+    setUsers,
+    
+    // 認証関連の操作
+    loginWithGoogle: optimizedLogin,
+    logout: optimizedLogout,
+    updateUserAfterGoogleSignIn: optimizedUpdateUserAfterGoogleSignIn,
+    
+    // ユーザー管理関連の操作
+    updateUserProfile: updateUserProfileCallback,
+    updateUser: updateUserCallback,
+    getUserById: getUserByIdCallback,
+    deleteUser: deleteUserCallback,
+    
+    // 会社アカウント関連の操作
+    deleteCompanyAccount: deleteCompanyAccountCallback,
+    
+    // 招待関連の操作
+    inviteUser: inviteUserCallback,
+    verifyInviteToken: verifyInviteTokenCallback,
+    completeInvitation: completeInvitationCallback,
+    
+    // 従業員関連の操作
     getEmployees
   };
 
