@@ -187,21 +187,96 @@
           localStorage.setItem('kaizen_users', JSON.stringify(usersWithPasswords));
           
           // Supabaseセッションをシミュレート
+          const now = Math.floor(Date.now() / 1000);
+          const expiresAt = now + 3600; // 1時間後
+          
+          // セッション情報を作成
           const session = {
-            access_token: 'dummy_access_token',
-            refresh_token: 'dummy_refresh_token',
-            expires_at: new Date(Date.now() + 3600 * 1000).getTime(),
+            access_token: 'dummy_access_token_' + Date.now(),
+            refresh_token: 'dummy_refresh_token_' + Date.now(),
+            expires_at: expiresAt,
+            expires_in: 3600,
+            token_type: 'bearer',
+            provider_token: null,
+            provider_refresh_token: null,
             user: {
               id: userId,
-              email: email,
+              app_metadata: {
+                provider: 'google',
+                providers: ['google']
+              },
               user_metadata: {
                 full_name: fullName,
                 company_id: companyId,
-                role: role
-              }
+                role: role,
+                avatar_url: '',
+                email: email,
+                email_verified: true,
+                name: fullName,
+                provider_id: userId,
+                sub: userId
+              },
+              aud: 'authenticated',
+              email: email,
+              email_confirmed_at: new Date().toISOString(),
+              phone: '',
+              confirmed_at: new Date().toISOString(),
+              last_sign_in_at: new Date().toISOString(),
+              role: 'authenticated',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              identities: [
+                {
+                  id: userId,
+                  user_id: userId,
+                  identity_data: {
+                    email: email,
+                    sub: userId,
+                    name: fullName,
+                    email_verified: true
+                  },
+                  provider: 'google',
+                  last_sign_in_at: new Date().toISOString(),
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                }
+              ]
             }
           };
-          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(session));
+          
+          // Supabase形式のセッションデータを作成
+          const tokenData = {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_at: session.expires_at,
+            expires_in: session.expires_in,
+            token_type: session.token_type,
+            provider_token: session.provider_token,
+            provider_refresh_token: session.provider_refresh_token
+          };
+          
+          // セッションストレージとローカルストレージの両方に保存
+          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+          try {
+            sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-token', JSON.stringify(tokenData));
+          } catch (e) {
+            console.error('Error setting sessionStorage:', e);
+          }
+          
+          // セッション情報も保存
+          const sessionData = {
+            session: session,
+            user: session.user
+          };
+          localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+          try {
+            sessionStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
+          } catch (e) {
+            console.error('Error setting sessionStorage:', e);
+          }
+          
+          // デバッグ用にセッション情報をコンソールに出力
+          console.log('Simulated session created:', session);
           
           showResult('成功', 'ログイン状態をシミュレートしました', JSON.stringify(user, null, 2), 'success');
           
@@ -217,10 +292,22 @@
       // ログアウト状態にする
       logoutButton.addEventListener('click', function() {
         try {
-          // ローカルストレージをクリア
+          // ローカルストレージとセッションストレージをクリア
           localStorage.removeItem('kaizen_user');
           localStorage.removeItem('kaizen_users');
           localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
+          localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-data');
+          
+          try {
+            sessionStorage.removeItem('kaizen_user');
+            sessionStorage.removeItem('kaizen_users');
+            sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
+            sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-data');
+          } catch (e) {
+            console.error('Error removing from sessionStorage:', e);
+          }
+          
+          console.log('Logged out: All storage cleared');
           
           showResult('成功', 'ログアウト状態にしました', '', 'success');
           

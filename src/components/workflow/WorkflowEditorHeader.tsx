@@ -36,33 +36,47 @@ export const WorkflowEditorHeader: React.FC<WorkflowEditorHeaderProps> = ({
   onSaveWorkflow
 }) => {
   return (
-    <div className="flex justify-between items-center mb-6">
-      <div>
-        <h2 className="text-2xl font-bold text-secondary-900 flex items-center">
-          <span className="bg-primary-100 text-primary-700 p-2 rounded-full mr-3 shadow-sm">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
-            </svg>
-          </span>
-          <span className="whitespace-nowrap">{workflowId === 'new' ? '新規業務フロー作成' : '業務フロー編集'}</span>
-        </h2>
-        {onClose && (
-          <button 
-            onClick={onClose}
-            className="text-sm text-secondary-500 hover:text-secondary-700 flex items-center mt-2 transition-colors duration-200"
-          >
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
-            ダッシュボードに戻る
-          </button>
-        )}
+    <div className="mb-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-secondary-900 flex items-center">
+            <span className="bg-primary-100 text-primary-700 p-2 rounded-full mr-3 shadow-sm">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+              </svg>
+            </span>
+            <span className="whitespace-nowrap">{workflowId === 'new' ? '新規業務フロー作成' : '業務フロー編集'}</span>
+          </h2>
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="text-sm text-secondary-500 hover:text-secondary-700 flex items-center mt-2 transition-colors duration-200"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+              </svg>
+              ホームへ戻る
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex space-x-2">
+      
+      <div className="flex flex-wrap gap-2 mt-4">
+        {/* 共同編集者管理へのリンク */}
+        <a 
+          href={`/workflows/${workflowId}`}
+          className="btn btn-secondary flex items-center"
+        >
+          <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          共同編集者管理
+        </a>
+
         {/* 改善案ボタン */}
         {!isImproved && !improvedWorkflow && (
           <button 
-            className={`btn ${isLoading ? 'btn-secondary opacity-70 cursor-not-allowed' : 'btn-secondary'}`}
+            className={`btn ${isLoading ? 'btn-secondary opacity-70 cursor-not-allowed' : 'btn-secondary'} flex items-center`}
             onClick={onImproveWorkflow}
             disabled={isLoading}
           >
@@ -74,7 +88,14 @@ export const WorkflowEditorHeader: React.FC<WorkflowEditorHeaderProps> = ({
                 </svg>
                 処理中...
               </span>
-            ) : '改善案を表示'}
+            ) : (
+              <>
+                <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                改善案を表示
+              </>
+            )}
           </button>
         )}
         
@@ -104,10 +125,13 @@ export const WorkflowEditorHeader: React.FC<WorkflowEditorHeaderProps> = ({
               )}
             </button>
             <button 
-              className="btn btn-secondary"
+              className="btn btn-secondary flex items-center"
               onClick={onRevertWorkflow}
               disabled={isLoading}
             >
+              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+              </svg>
               元に戻す
             </button>
           </>
@@ -116,17 +140,23 @@ export const WorkflowEditorHeader: React.FC<WorkflowEditorHeaderProps> = ({
         {/* 改善案表示・非表示ボタン */}
         {improvedWorkflow && !showComparison && (
           <button 
-            className="btn btn-secondary"
+            className="btn btn-secondary flex items-center"
             onClick={() => onToggleComparison(true)}
           >
+            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
             改善案を表示
           </button>
         )}
         {showComparison && (
           <button 
-            className="btn btn-secondary"
+            className="btn btn-secondary flex items-center"
             onClick={() => onToggleComparison(false)}
           >
+            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
             比較を閉じる
           </button>
         )}

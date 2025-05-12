@@ -3,416 +3,712 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Supabase認証デバッグ</title>
+  <title>認証デバッグツール</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      max-width: 800px;
+      max-width: 1000px;
       margin: 0 auto;
       padding: 20px;
       line-height: 1.6;
     }
-    h1 {
-      color: #333;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 10px;
-    }
-    button {
-      background-color: #4CAF50;
-      border: none;
-      color: white;
-      padding: 10px 20px;
-      text-align: center;
-      text-decoration: none;
-      display: inline-block;
-      font-size: 16px;
-      margin: 10px 2px;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    button:hover {
-      background-color: #45a049;
-    }
     pre {
       background-color: #f5f5f5;
-      padding: 15px;
+      padding: 10px;
       border-radius: 5px;
       overflow-x: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
-    .error {
-      color: red;
-      font-weight: bold;
+    button {
+      background-color: #0070f3;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
     }
-    .success {
-      color: green;
-      font-weight: bold;
+    button:hover {
+      background-color: #0051a8;
+    }
+    .danger {
+      background-color: #e53e3e;
+    }
+    .danger:hover {
+      background-color: #c53030;
+    }
+    .warning {
+      background-color: #ecc94b;
+      color: #744210;
+    }
+    .warning:hover {
+      background-color: #d69e2e;
     }
     .section {
       margin-bottom: 30px;
-      padding: 15px;
+      padding: 20px;
       border: 1px solid #ddd;
       border-radius: 5px;
+    }
+    h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .log-entry {
+      margin-bottom: 5px;
+      padding: 5px;
+      border-bottom: 1px solid #eee;
+    }
+    .log-entry.error {
+      color: #e53e3e;
+      background-color: #fff5f5;
+    }
+    .log-entry.warning {
+      color: #744210;
+      background-color: #fffff0;
+    }
+    .log-entry.success {
+      color: #2f855a;
+      background-color: #f0fff4;
+    }
+    .tabs {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    .tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      background-color: #f5f5f5;
+      margin-right: 5px;
+      border-radius: 4px 4px 0 0;
+    }
+    .tab.active {
+      background-color: #fff;
+      border-bottom: 1px solid #fff;
+      font-weight: bold;
+    }
+    .tab-content {
+      display: none;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 0 0 4px 4px;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Supabase認証デバッグツール</h1>
+  <h1>認証デバッグツール</h1>
+  <p>このツールは、認証関連の問題をデバッグするためのものです。</p>
+  
+  <div class="tabs">
+    <div class="tab active" data-tab="session">セッション</div>
+    <div class="tab" data-tab="storage">ストレージ</div>
+    <div class="tab" data-tab="cookies">Cookie</div>
+    <div class="tab" data-tab="tests">テスト</div>
+    <div class="tab" data-tab="logs">ログ</div>
+  </div>
+  
+  <div class="tab-content active" id="session-tab">
+    <div class="section">
+      <h2>Supabaseセッション情報</h2>
+      <button id="checkSession">セッション確認</button>
+      <button id="refreshSession">セッション更新</button>
+      <button id="signOut" class="danger">ログアウト</button>
+      <pre id="sessionInfo">セッション情報がここに表示されます...</pre>
+    </div>
+    
+    <div class="section">
+      <h2>セッション詳細</h2>
+      <div class="grid">
+        <div>
+          <h3>アクセストークン</h3>
+          <pre id="accessToken">アクセストークンがここに表示されます...</pre>
+        </div>
+        <div>
+          <h3>リフレッシュトークン</h3>
+          <pre id="refreshToken">リフレッシュトークンがここに表示されます...</pre>
+        </div>
+      </div>
+      <h3>ユーザー情報</h3>
+      <pre id="userInfo">ユーザー情報がここに表示されます...</pre>
+    </div>
+  </div>
+  
+  <div class="tab-content" id="storage-tab">
+    <div class="section">
+      <h2>ローカルストレージ</h2>
+      <button id="checkLocalStorage">ローカルストレージ確認</button>
+      <button id="clearLocalStorage" class="warning">ローカルストレージクリア</button>
+      <pre id="localStorageInfo">ローカルストレージ情報がここに表示されます...</pre>
+    </div>
+    
+    <div class="section">
+      <h2>セッションストレージ</h2>
+      <button id="checkSessionStorage">セッションストレージ確認</button>
+      <button id="clearSessionStorage" class="warning">セッションストレージクリア</button>
+      <pre id="sessionStorageInfo">セッションストレージ情報がここに表示されます...</pre>
+    </div>
+    
+    <div class="section">
+      <h2>IndexedDB</h2>
+      <button id="checkIndexedDB">IndexedDB確認</button>
+      <button id="clearIndexedDB" class="warning">IndexedDBクリア</button>
+      <pre id="indexedDBInfo">IndexedDB情報がここに表示されます...</pre>
+    </div>
+  </div>
+  
+  <div class="tab-content" id="cookies-tab">
+    <div class="section">
+      <h2>Cookie情報</h2>
+      <button id="checkCookies">Cookie確認</button>
+      <button id="clearCookies" class="warning">Cookieクリア</button>
+      <pre id="cookieInfo">Cookie情報がここに表示されます...</pre>
+    </div>
+  </div>
+  
+  <div class="tab-content" id="tests-tab">
+    <div class="section">
+      <h2>セッション永続化テスト</h2>
+      <p>以下のテストを実行して、セッションの永続化が正しく機能しているか確認します。</p>
+      <button id="testSessionPersistence">セッション永続化テスト</button>
+      <button id="testRefresh">ページ更新テスト</button>
+      <button id="testRedirect">リダイレクトテスト</button>
+      <pre id="testResults">テスト結果がここに表示されます...</pre>
+    </div>
+    
+    <div class="section">
+      <h2>トークン操作</h2>
+      <button id="saveTokenManually">トークンを手動で保存</button>
+      <button id="restoreTokenManually">トークンを手動で復元</button>
+      <pre id="tokenOperationResults">操作結果がここに表示されます...</pre>
+    </div>
+  </div>
+  
+  <div class="tab-content" id="logs-tab">
+    <div class="section">
+      <h2>デバッグログ</h2>
+      <button id="clearLogs" class="warning">ログをクリア</button>
+      <div id="logEntries" style="max-height: 400px; overflow-y: auto;">
+        <div class="log-entry">ログはここに表示されます...</div>
+      </div>
+    </div>
+  </div>
   
   <div class="section">
-    <h2>1. 環境変数の確認</h2>
-    <button id="checkEnv">環境変数を確認</button>
-    <div id="envResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>2. Supabaseクライアントの初期化</h2>
-    <button id="initClient">クライアントを初期化</button>
-    <div id="clientResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>3. 現在のセッション確認</h2>
-    <button id="checkSession">セッションを確認</button>
-    <div id="sessionResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>4. ユーザー情報の確認</h2>
-    <button id="checkUser">ユーザー情報を確認</button>
-    <div id="userResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>5. データベース接続テスト</h2>
-    <button id="testDb">データベース接続をテスト</button>
-    <div id="dbResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>6. ログイン</h2>
-    <button id="loginWithGoogle">Googleでログイン</button>
-    <div id="loginResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>7. ログアウト</h2>
-    <button id="logout">ログアウト</button>
-    <div id="logoutResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>8. ローカルストレージの確認</h2>
-    <button id="checkStorage">ローカルストレージを確認</button>
-    <div id="storageResult"></div>
-  </div>
-
-  <div class="section">
-    <h2>9. app_usersテーブルの確認</h2>
-    <button id="checkAppUsers">app_usersテーブルを確認</button>
-    <div id="appUsersResult"></div>
+    <h2>ナビゲーション</h2>
+    <button id="goToHome">ホームページへ</button>
+    <button id="goToLogin">ログインページへ</button>
+    <button id="goToDebugSession">セッションデバッグへ</button>
   </div>
 
   <script>
-    // 結果表示用のヘルパー関数
-    function displayResult(elementId, data, isError = false) {
-      const element = document.getElementById(elementId);
-      if (isError) {
-        element.innerHTML = `<p class="error">エラー:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
-      } else {
-        element.innerHTML = `<p class="success">成功:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
-      }
-    }
-
-    // Supabaseクライアントの初期化
-    let supabase;
+    // ログ機能
+    const logEntries = document.getElementById('logEntries');
     
-    // 1. 環境変数の確認
-    document.getElementById('checkEnv').addEventListener('click', async () => {
-      try {
-        // 環境変数を取得（実際にはフロントエンドからは直接取得できないため、
-        // Next.jsのAPI経由で取得するか、NEXT_PUBLIC_で始まる環境変数のみ取得可能）
-        const envVars = {
-          NEXT_PUBLIC_SUPABASE_URL: 'https://czuedairowlwfqbjmfbg.supabase.co',
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: '設定されています（セキュリティのため表示しません）'
-        };
+    function log(message, type = 'info') {
+      console.log(`[${type.toUpperCase()}] ${message}`);
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEntries.appendChild(entry);
+      logEntries.scrollTop = logEntries.scrollHeight;
+    }
+    
+    // タブ切り替え
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         
-        displayResult('envResult', envVars);
-      } catch (error) {
-        displayResult('envResult', error, true);
+        tab.classList.add('active');
+        document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+      });
+    });
+    
+    // Supabaseクライアントの初期化
+    const SUPABASE_URL = 'https://czuedairowlwfgbjmfb.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZnYmptZmIiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTY4NTM0NTYyOCwiZXhwIjoyMDAwOTIxNjI4fQ.WI-cjkr4igG-pfnTZ_fODYyJvTqAHY7_yYcZ0RVxASw';
+    
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'supabase.auth.token'
       }
     });
-
-    // 2. Supabaseクライアントの初期化
-    document.getElementById('initClient').addEventListener('click', async () => {
+    
+    log('Supabaseクライアントを初期化しました');
+    
+    // セッション情報を表示
+    async function displaySessionInfo() {
       try {
-        // Supabase URLとキーを設定
-        const supabaseUrl = 'https://czuedairowlwfqbjmfbg.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6dWVkYWlyb3dsd2ZxYmptZmJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYwNTU2ODAsImV4cCI6MjA2MTYzMTY4MH0.Dxp1tgP88v0xBz3Dvr9hNoHy2nJR3iBrFcfvr-3LsHE';
-        
-        // Supabaseクライアントを初期化
-        supabase = supabaseJs.createClient(supabaseUrl, supabaseKey, {
-          auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true
-          }
-        });
-        
-        displayResult('clientResult', {
-          message: 'Supabaseクライアントが初期化されました',
-          url: supabaseUrl,
-          keyLength: supabaseKey.length
-        });
-      } catch (error) {
-        displayResult('clientResult', error, true);
-      }
-    });
-
-    // 3. 現在のセッション確認
-    document.getElementById('checkSession').addEventListener('click', async () => {
-      try {
-        if (!supabase) {
-          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
-        }
-        
-        const { data, error } = await supabase.auth.getSession();
+        log('セッション情報を取得中...');
+        const { data, error } = await supabaseClient.auth.getSession();
         
         if (error) {
-          throw error;
+          log(`セッション取得エラー: ${error.message}`, 'error');
+          document.getElementById('sessionInfo').textContent = `エラー: ${JSON.stringify(error, null, 2)}`;
+          return;
         }
         
         if (data.session) {
-          displayResult('sessionResult', {
-            message: 'アクティブなセッションが見つかりました',
-            sessionId: data.session.id,
-            userId: data.session.user.id,
-            email: data.session.user.email,
-            expiresAt: new Date(data.session.expires_at * 1000).toLocaleString(),
-            metadata: data.session.user.user_metadata
-          });
+          const session = data.session;
+          const expiresAt = new Date(session.expires_at * 1000).toLocaleString();
+          const now = new Date().toLocaleString();
+          
+          document.getElementById('sessionInfo').textContent = 
+            `セッション有効: はい\n` +
+            `ユーザーID: ${session.user.id}\n` +
+            `メール: ${session.user.email}\n` +
+            `有効期限: ${expiresAt}\n` +
+            `現在時刻: ${now}\n` +
+            `メタデータ: ${JSON.stringify(session.user.user_metadata, null, 2)}`;
+          
+          // アクセストークンとリフレッシュトークンを表示
+          document.getElementById('accessToken').textContent = `${session.access_token.substring(0, 20)}...`;
+          document.getElementById('refreshToken').textContent = `${session.refresh_token.substring(0, 20)}...`;
+          
+          // ユーザー情報を表示
+          document.getElementById('userInfo').textContent = JSON.stringify(session.user, null, 2);
+          
+          log('セッション情報を表示しました', 'success');
         } else {
-          displayResult('sessionResult', { message: 'アクティブなセッションが見つかりませんでした' });
+          document.getElementById('sessionInfo').textContent = 'セッション有効: いいえ（ログインしていません）';
+          document.getElementById('accessToken').textContent = 'アクセストークンなし';
+          document.getElementById('refreshToken').textContent = 'リフレッシュトークンなし';
+          document.getElementById('userInfo').textContent = 'ユーザー情報なし';
+          
+          log('セッションが見つかりません', 'warning');
         }
-      } catch (error) {
-        displayResult('sessionResult', error, true);
+      } catch (err) {
+        log(`セッション情報取得中に例外発生: ${err.message}`, 'error');
+        document.getElementById('sessionInfo').textContent = `例外発生: ${err.message}`;
       }
-    });
-
-    // 4. ユーザー情報の確認
-    document.getElementById('checkUser').addEventListener('click', async () => {
+    }
+    
+    // セッションを更新
+    async function refreshSessionToken() {
       try {
-        if (!supabase) {
-          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
-        }
-        
-        const { data, error } = await supabase.auth.getUser();
+        log('セッションを更新中...');
+        const { data, error } = await supabaseClient.auth.refreshSession();
         
         if (error) {
-          throw error;
+          log(`セッション更新エラー: ${error.message}`, 'error');
+          document.getElementById('sessionInfo').textContent = `更新エラー: ${JSON.stringify(error, null, 2)}`;
+          return;
         }
         
-        if (data.user) {
-          displayResult('userResult', {
-            message: 'ユーザー情報が見つかりました',
-            id: data.user.id,
-            email: data.user.email,
-            createdAt: data.user.created_at,
-            metadata: data.user.user_metadata
-          });
-        } else {
-          displayResult('userResult', { message: 'ユーザー情報が見つかりませんでした' });
-        }
-      } catch (error) {
-        displayResult('userResult', error, true);
+        log('セッションを更新しました', 'success');
+        document.getElementById('sessionInfo').textContent = `セッション更新成功: ${JSON.stringify(data, null, 2)}`;
+        setTimeout(displaySessionInfo, 1000);
+      } catch (err) {
+        log(`セッション更新中に例外発生: ${err.message}`, 'error');
+        document.getElementById('sessionInfo').textContent = `更新中に例外発生: ${err.message}`;
       }
-    });
-
-    // 5. データベース接続テスト
-    document.getElementById('testDb').addEventListener('click', async () => {
+    }
+    
+    // ログアウト
+    async function signOut() {
       try {
-        if (!supabase) {
-          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
-        }
-        
-        // テーブル一覧を取得
-        const { data, error } = await supabase
-          .from('app_users')
-          .select('id')
-          .limit(1);
+        log('ログアウト中...');
+        const { error } = await supabaseClient.auth.signOut();
         
         if (error) {
-          throw error;
+          log(`ログアウトエラー: ${error.message}`, 'error');
+          return;
         }
         
-        displayResult('dbResult', {
-          message: 'データベース接続に成功しました',
-          tableExists: true,
-          recordCount: data.length
-        });
-      } catch (error) {
-        displayResult('dbResult', error, true);
+        log('ログアウトしました', 'success');
+        displaySessionInfo();
+      } catch (err) {
+        log(`ログアウト中に例外発生: ${err.message}`, 'error');
       }
-    });
-
-    // 6. ログイン
-    document.getElementById('loginWithGoogle').addEventListener('click', async () => {
+    }
+    
+    // ローカルストレージ情報を表示
+    function displayLocalStorageInfo() {
       try {
-        if (!supabase) {
-          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
-        }
+        log('ローカルストレージ情報を取得中...');
+        const items = { ...localStorage };
+        document.getElementById('localStorageInfo').textContent = JSON.stringify(items, null, 2);
+        log('ローカルストレージ情報を表示しました', 'success');
+      } catch (err) {
+        log(`ローカルストレージ情報取得中に例外発生: ${err.message}`, 'error');
+        document.getElementById('localStorageInfo').textContent = `例外発生: ${err.message}`;
+      }
+    }
+    
+    // セッションストレージ情報を表示
+    function displaySessionStorageInfo() {
+      try {
+        log('セッションストレージ情報を取得中...');
+        const items = { ...sessionStorage };
+        document.getElementById('sessionStorageInfo').textContent = JSON.stringify(items, null, 2);
+        log('セッションストレージ情報を表示しました', 'success');
+      } catch (err) {
+        log(`セッションストレージ情報取得中に例外発生: ${err.message}`, 'error');
+        document.getElementById('sessionStorageInfo').textContent = `例外発生: ${err.message}`;
+      }
+    }
+    
+    // IndexedDB情報を表示
+    function displayIndexedDBInfo() {
+      try {
+        log('IndexedDB情報を取得中...');
+        const dbInfoElement = document.getElementById('indexedDBInfo');
+        dbInfoElement.textContent = 'IndexedDBデータベースを列挙中...';
         
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`
+        const databases = indexedDB.databases ? indexedDB.databases() : Promise.resolve([]);
+        databases.then(dbs => {
+          if (dbs.length === 0) {
+            dbInfoElement.textContent = 'IndexedDBデータベースが見つかりません';
+            log('IndexedDBデータベースが見つかりません', 'warning');
+            return;
           }
+          
+          dbInfoElement.textContent = `見つかったデータベース: ${JSON.stringify(dbs, null, 2)}`;
+          log(`${dbs.length}個のIndexedDBデータベースを見つけました`, 'success');
+        }).catch(err => {
+          dbInfoElement.textContent = `IndexedDBデータベース列挙エラー: ${err.message}`;
+          log(`IndexedDBデータベース列挙エラー: ${err.message}`, 'error');
         });
-        
-        if (error) {
-          throw error;
-        }
-        
-        displayResult('loginResult', {
-          message: 'ログイン処理が開始されました',
-          url: data.url
-        });
-        
-        // リダイレクト
-        window.location.href = data.url;
-      } catch (error) {
-        displayResult('loginResult', error, true);
+      } catch (err) {
+        log(`IndexedDB情報取得中に例外発生: ${err.message}`, 'error');
+        document.getElementById('indexedDBInfo').textContent = `例外発生: ${err.message}`;
       }
-    });
-
-    // 7. ログアウト
-    document.getElementById('logout').addEventListener('click', async () => {
+    }
+    
+    // Cookie情報を表示
+    function displayCookieInfo() {
+      log('Cookie情報を取得中...');
+      document.getElementById('cookieInfo').textContent = document.cookie || 'Cookieはありません';
+      log('Cookie情報を表示しました', 'success');
+    }
+    
+    // ローカルストレージをクリア
+    function clearLocalStorageItems() {
       try {
-        if (!supabase) {
-          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        log('ローカルストレージをクリア中...');
+        localStorage.clear();
+        document.getElementById('localStorageInfo').textContent = 'ローカルストレージをクリアしました';
+        log('ローカルストレージをクリアしました', 'success');
+      } catch (err) {
+        log(`ローカルストレージクリア中に例外発生: ${err.message}`, 'error');
+        document.getElementById('localStorageInfo').textContent = `クリア中に例外発生: ${err.message}`;
+      }
+    }
+    
+    // セッションストレージをクリア
+    function clearSessionStorageItems() {
+      try {
+        log('セッションストレージをクリア中...');
+        sessionStorage.clear();
+        document.getElementById('sessionStorageInfo').textContent = 'セッションストレージをクリアしました';
+        log('セッションストレージをクリアしました', 'success');
+      } catch (err) {
+        log(`セッションストレージクリア中に例外発生: ${err.message}`, 'error');
+        document.getElementById('sessionStorageInfo').textContent = `クリア中に例外発生: ${err.message}`;
+      }
+    }
+    
+    // IndexedDBをクリア
+    function clearIndexedDBItems() {
+      try {
+        log('IndexedDBをクリア中...');
+        const dbInfoElement = document.getElementById('indexedDBInfo');
+        
+        const databases = indexedDB.databases ? indexedDB.databases() : Promise.resolve([]);
+        databases.then(dbs => {
+          if (dbs.length === 0) {
+            dbInfoElement.textContent = 'クリアするIndexedDBデータベースが見つかりません';
+            log('クリアするIndexedDBデータベースが見つかりません', 'warning');
+            return;
+          }
+          
+          let deletedCount = 0;
+          dbs.forEach(db => {
+            const deleteRequest = indexedDB.deleteDatabase(db.name);
+            deleteRequest.onsuccess = () => {
+              deletedCount++;
+              log(`データベース ${db.name} を削除しました`, 'success');
+              if (deletedCount === dbs.length) {
+                dbInfoElement.textContent = `${deletedCount}個のデータベースを削除しました`;
+                log(`${deletedCount}個のIndexedDBデータベースを削除しました`, 'success');
+              }
+            };
+            deleteRequest.onerror = () => {
+              log(`データベース ${db.name} の削除に失敗しました`, 'error');
+            };
+          });
+        }).catch(err => {
+          dbInfoElement.textContent = `IndexedDBデータベース削除エラー: ${err.message}`;
+          log(`IndexedDBデータベース削除エラー: ${err.message}`, 'error');
+        });
+      } catch (err) {
+        log(`IndexedDBクリア中に例外発生: ${err.message}`, 'error');
+        document.getElementById('indexedDBInfo').textContent = `例外発生: ${err.message}`;
+      }
+    }
+    
+    // Cookieをクリア
+    function clearCookieItems() {
+      try {
+        log('Cookieをクリア中...');
+        const cookies = document.cookie.split(';');
+        
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i];
+          const eqPos = cookie.indexOf('=');
+          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
         }
         
-        const { error } = await supabase.auth.signOut();
+        document.getElementById('cookieInfo').textContent = 'Cookieをクリアしました';
+        log('Cookieをクリアしました', 'success');
+      } catch (err) {
+        log(`Cookieクリア中に例外発生: ${err.message}`, 'error');
+        document.getElementById('cookieInfo').textContent = `クリア中に例外発生: ${err.message}`;
+      }
+    }
+    
+    // セッション永続化テスト
+    async function testSessionPersistence() {
+      try {
+        log('セッション永続化テストを開始...');
+        const testResultsElement = document.getElementById('testResults');
+        testResultsElement.textContent = 'テスト実行中...';
         
-        if (error) {
-          throw error;
+        // 1. 現在のセッションを取得
+        const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+        
+        if (sessionError) {
+          testResultsElement.textContent = `セッション取得エラー: ${sessionError.message}`;
+          log(`セッション取得エラー: ${sessionError.message}`, 'error');
+          return;
         }
         
-        displayResult('logoutResult', {
-          message: 'ログアウトに成功しました'
+        if (!sessionData.session) {
+          testResultsElement.textContent = 'テストを実行するにはログインが必要です';
+          log('テストを実行するにはログインが必要です', 'warning');
+          return;
+        }
+        
+        // 2. セッション情報をローカル変数に保存
+        const originalSession = sessionData.session;
+        log(`元のセッション: ${originalSession.user.email}`, 'info');
+        
+        // 3. ストレージからトークンを取得
+        const tokenStr = localStorage.getItem('supabase.auth.token');
+        if (!tokenStr) {
+          testResultsElement.textContent = 'ストレージにトークンが見つかりません';
+          log('ストレージにトークンが見つかりません', 'error');
+          return;
+        }
+        
+        // 4. トークンをパース
+        const parsedToken = JSON.parse(tokenStr);
+        log(`ストレージからトークンを取得: ${parsedToken.access_token.substring(0, 20)}...`, 'info');
+        
+        // 5. セッションをクリア
+        await supabaseClient.auth.signOut({ scope: 'local' });
+        log('ローカルセッションをクリアしました', 'info');
+        
+        // 6. セッションが実際にクリアされたか確認
+        const { data: checkData } = await supabaseClient.auth.getSession();
+        if (checkData.session) {
+          testResultsElement.textContent = 'セッションのクリアに失敗しました';
+          log('セッションのクリアに失敗しました', 'error');
+          return;
+        }
+        
+        log('セッションが正常にクリアされました', 'success');
+        
+        // 7. 保存したトークンを使用してセッションを復元
+        const { data: restoreData, error: restoreError } = await supabaseClient.auth.setSession({
+          access_token: parsedToken.access_token,
+          refresh_token: parsedToken.refresh_token
         });
         
-        // ローカルストレージをクリア
-        localStorage.removeItem('kaizen_user');
-        sessionStorage.removeItem('kaizen_user');
-      } catch (error) {
-        displayResult('logoutResult', error, true);
+        if (restoreError) {
+          testResultsElement.textContent = `セッション復元エラー: ${restoreError.message}`;
+          log(`セッション復元エラー: ${restoreError.message}`, 'error');
+          return;
+        }
+        
+        if (!restoreData.session) {
+          testResultsElement.textContent = 'セッションの復元に失敗しました';
+          log('セッションの復元に失敗しました', 'error');
+          return;
+        }
+        
+        // 8. 復元されたセッションが元のセッションと一致するか確認
+        const restoredSession = restoreData.session;
+        const isSameUser = restoredSession.user.id === originalSession.user.id;
+        
+        if (isSameUser) {
+          testResultsElement.textContent = 'テスト成功: セッションが正常に復元されました';
+          log('テスト成功: セッションが正常に復元されました', 'success');
+        } else {
+          testResultsElement.textContent = 'テスト失敗: 復元されたセッションが元のセッションと一致しません';
+          log('テスト失敗: 復元されたセッションが元のセッションと一致しません', 'error');
+        }
+      } catch (err) {
+        log(`テスト実行中に例外発生: ${err.message}`, 'error');
+        document.getElementById('testResults').textContent = `例外発生: ${err.message}`;
       }
-    });
-
-    // 8. ローカルストレージの確認
-    document.getElementById('checkStorage').addEventListener('click', async () => {
+    }
+    
+    // ページ更新テスト
+    function testPageRefresh() {
       try {
-        const storageData = {
-          localStorage: {},
-          sessionStorage: {}
+        log('ページ更新テストを実行中...');
+        localStorage.setItem('refresh_test', new Date().toISOString());
+        window.location.reload();
+      } catch (err) {
+        log(`ページ更新テスト中に例外発生: ${err.message}`, 'error');
+      }
+    }
+    
+    // リダイレクトテスト
+    function testRedirect() {
+      try {
+        log('リダイレクトテストを実行中...');
+        localStorage.setItem('redirect_test', new Date().toISOString());
+        window.location.href = window.location.href;
+      } catch (err) {
+        log(`リダイレクトテスト中に例外発生: ${err.message}`, 'error');
+      }
+    }
+    
+    // トークンを手動で保存
+    async function saveTokenManually() {
+      try {
+        log('トークンを手動で保存中...');
+        const { data } = await supabaseClient.auth.getSession();
+        
+        if (!data || !data.session) {
+          log('保存するセッションがありません', 'warning');
+          document.getElementById('tokenOperationResults').textContent = '保存するセッションがありません';
+          return;
+        }
+        
+        const session = data.session;
+        const tokenData = {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+          expires_at: session.expires_at,
+          user: session.user
         };
         
-        // ローカルストレージの内容を取得
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          try {
-            const value = localStorage.getItem(key);
-            storageData.localStorage[key] = JSON.parse(value);
-          } catch (e) {
-            storageData.localStorage[key] = localStorage.getItem(key);
-          }
-        }
-        
-        // セッションストレージの内容を取得
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          try {
-            const value = sessionStorage.getItem(key);
-            storageData.sessionStorage[key] = JSON.parse(value);
-          } catch (e) {
-            storageData.sessionStorage[key] = sessionStorage.getItem(key);
-          }
-        }
-        
-        displayResult('storageResult', storageData);
-      } catch (error) {
-        displayResult('storageResult', error, true);
+        localStorage.setItem('manual_token', JSON.stringify(tokenData));
+        log('トークンを手動で保存しました', 'success');
+        document.getElementById('tokenOperationResults').textContent = 'トークンを手動で保存しました';
+      } catch (err) {
+        log(`トークン保存中に例外発生: ${err.message}`, 'error');
+        document.getElementById('tokenOperationResults').textContent = `例外発生: ${err.message}`;
       }
-    });
-
-    // 9. app_usersテーブルの確認
-    document.getElementById('checkAppUsers').addEventListener('click', async () => {
+    }
+    
+    // トークンを手動で復元
+    async function restoreTokenManually() {
       try {
-        if (!supabase) {
-          throw new Error('Supabaseクライアントが初期化されていません。「クライアントを初期化」ボタンをクリックしてください。');
+        log('トークンを手動で復元中...');
+        const tokenStr = localStorage.getItem('manual_token');
+        
+        if (!tokenStr) {
+          log('復元するトークンがありません', 'warning');
+          document.getElementById('tokenOperationResults').textContent = '復元するトークンがありません';
+          return;
         }
         
-        // ユーザー情報を取得
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const tokenData = JSON.parse(tokenStr);
         
-        if (userError) {
-          throw userError;
+        const { data, error } = await supabaseClient.auth.setSession({
+          access_token: tokenData.access_token,
+          refresh_token: tokenData.refresh_token
+        });
+        
+        if (error) {
+          log(`トークン復元エラー: ${error.message}`, 'error');
+          document.getElementById('tokenOperationResults').textContent = `トークン復元エラー: ${error.message}`;
+          return;
         }
         
-        if (!user) {
-          throw new Error('ユーザーがログインしていません');
-        }
-        
-        // app_usersテーブルからユーザー情報を取得
-        const { data, error } = await supabase
-          .from('app_users')
-          .select('*')
-          .eq('auth_uid', user.id)
-          .single();
-        
-        if (error && error.code !== 'PGRST116') { // PGRST116はレコードが見つからないエラー
-          throw error;
-        }
-        
-        if (data) {
-          displayResult('appUsersResult', {
-            message: 'app_usersテーブルにユーザー情報が見つかりました',
-            userData: data
-          });
-        } else {
-          // ユーザー情報が見つからない場合は、テーブルに保存
-          const { data: insertData, error: insertError } = await supabase
-            .from('app_users')
-            .upsert({
-              id: user.id,
-              auth_uid: user.id,
-              email: user.email,
-              role: user.user_metadata?.role || '一般ユーザー',
-              status: 'アクティブ',
-              created_at: user.created_at,
-              updated_at: new Date().toISOString(),
-              last_login: new Date().toISOString()
-            }, { onConflict: 'auth_uid' })
-            .select();
-          
-          if (insertError) {
-            throw insertError;
-          }
-          
-          displayResult('appUsersResult', {
-            message: 'ユーザー情報をapp_usersテーブルに保存しました',
-            userData: insertData
-          });
-        }
-      } catch (error) {
-        displayResult('appUsersResult', error, true);
+        log('トークンを手動で復元しました', 'success');
+        document.getElementById('tokenOperationResults').textContent = 'トークンを手動で復元しました';
+        setTimeout(displaySessionInfo, 1000);
+      } catch (err) {
+        log(`トークン復元中に例外発生: ${err.message}`, 'error');
+        document.getElementById('tokenOperationResults').textContent = `例外発生: ${err.message}`;
       }
-    });
-
-    // ページ読み込み時に自動的にクライアントを初期化
-    window.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('initClient').click();
+    }
+    
+    // ログをクリア
+    function clearLogs() {
+      logEntries.innerHTML = '';
+      log('ログをクリアしました');
+    }
+    
+    // イベントリスナーの設定
+    document.getElementById('checkSession').addEventListener('click', displaySessionInfo);
+    document.getElementById('refreshSession').addEventListener('click', refreshSessionToken);
+    document.getElementById('signOut').addEventListener('click', signOut);
+    document.getElementById('checkLocalStorage').addEventListener('click', displayLocalStorageInfo);
+    document.getElementById('clearLocalStorage').addEventListener('click', clearLocalStorageItems);
+    document.getElementById('checkSessionStorage').addEventListener('click', displaySessionStorageInfo);
+    document.getElementById('clearSessionStorage').addEventListener('click', clearSessionStorageItems);
+    document.getElementById('checkIndexedDB').addEventListener('click', displayIndexedDBInfo);
+    document.getElementById('clearIndexedDB').addEventListener('click', clearIndexedDBItems);
+    document.getElementById('checkCookies').addEventListener('click', displayCookieInfo);
+    document.getElementById('clearCookies').addEventListener('click', clearCookieItems);
+    document.getElementById('testSessionPersistence').addEventListener('click', testSessionPersistence);
+    document.getElementById('testRefresh').addEventListener('click', testPageRefresh);
+    document.getElementById('testRedirect').addEventListener('click', testRedirect);
+    document.getElementById('saveTokenManually').addEventListener('click', saveTokenManually);
+    document.getElementById('restoreTokenManually').addEventListener('click', restoreTokenManually);
+    document.getElementById('clearLogs').addEventListener('click', clearLogs);
+    document.getElementById('goToHome').addEventListener('click', () => window.location.href = '/');
+    document.getElementById('goToLogin').addEventListener('click', () => window.location.href = '/auth/login');
+    document.getElementById('goToDebugSession').addEventListener('click', () => window.location.href = '/dev-tools/auth/debug-session.html');
+    
+    // 初期表示
+    window.addEventListener('load', () => {
+      displaySessionInfo();
+      displayLocalStorageInfo();
+      displaySessionStorageInfo();
+      displayCookieInfo();
+      
+      // リフレッシュテストの結果を表示
+      const refreshTest = localStorage.getItem('refresh_test');
+      if (refreshTest) {
+        log(`リフレッシュテスト: 前回のリフレッシュ時刻 ${refreshTest}`, 'success');
+        localStorage.removeItem('refresh_test');
+      }
+      
+      // リダイレクトテストの結果を表示
+      const redirectTest = localStorage.getItem('redirect_test');
+      if (redirectTest) {
+        log(`リダイレクトテスト: 前回のリダイレクト時刻 ${redirectTest}`, 'success');
+        localStorage.removeItem('redirect_test');
+      }
     });
   </script>
 </body>

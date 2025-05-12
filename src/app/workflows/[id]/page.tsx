@@ -279,7 +279,7 @@ export default function WorkflowDetailPage() {
                 onClick={() => router.push('/')}
                 className="text-sm text-secondary-500 hover:text-secondary-700 mb-2 flex items-center"
               >
-                <span>← ダッシュボードに戻る</span>
+                <span>← ホームへ戻る</span>
               </button>
               <h1 className="text-2xl font-bold text-secondary-900">{workflow.name}</h1>
               <p className="text-secondary-600">{workflow.description}</p>
@@ -681,48 +681,56 @@ export default function WorkflowDetailPage() {
           </div>
         </div>
 
-        {/* チャットインターフェース */}
-        <div 
-          className={`fixed right-0 top-0 h-full bg-white border-l border-secondary-200 transition-all duration-300 ease-in-out ${
-            chatExpanded ? 'w-96' : 'w-16'
-          }`}
+        {/* チャットアイコン */}
+        <button
+          className="fixed right-6 bottom-6 w-14 h-14 bg-primary-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-all duration-200 z-50"
+          onClick={() => setChatExpanded(!chatExpanded)}
         >
-          <button
-            className="absolute top-4 left-4 text-secondary-500 hover:text-secondary-700"
-            onClick={() => setChatExpanded(!chatExpanded)}
-          >
-            {chatExpanded ? '>' : '<'}
-          </button>
-          
-          {chatExpanded && (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+          </svg>
+        </button>
+        
+        {/* チャットインターフェース */}
+        {chatExpanded && (
+          <div className="fixed right-0 top-0 h-full w-96 bg-white border-l border-secondary-200 shadow-lg z-40 transition-all duration-300 ease-in-out">
+            <button
+              className="absolute top-4 right-4 text-secondary-500 hover:text-secondary-700"
+              onClick={() => setChatExpanded(false)}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+            
             <div className="h-full pt-14">
               <WorkflowContextProvider>
-              <ChatInterface 
-                companyInfo={companyInfo}
-                employees={employees}
-                workflowContext={{
-                  id: workflow.id,
-                  name: workflow.name,
-                  description: workflow.description,
-                  steps: workflow.steps,
-                  isImproved: workflow.isImproved,
-                  originalId: workflow.originalId,
-                  relatedWorkflow: relatedWorkflow ? {
-                    id: relatedWorkflow.id,
-                    name: relatedWorkflow.name,
-                    description: relatedWorkflow.description,
-                    steps: relatedWorkflow.steps,
-                    createdAt: relatedWorkflow.createdAt,
-                    updatedAt: relatedWorkflow.updatedAt,
-                    isImproved: relatedWorkflow.isImproved,
-                    originalId: relatedWorkflow.originalId
-                  } : undefined
-                }}
-              />
+                <ChatInterface 
+                  companyInfo={companyInfo}
+                  employees={employees}
+                  workflowContext={{
+                    id: workflow.id,
+                    name: workflow.name,
+                    description: workflow.description,
+                    steps: workflow.steps,
+                    isImproved: workflow.isImproved,
+                    originalId: workflow.originalId,
+                    relatedWorkflow: relatedWorkflow ? {
+                      id: relatedWorkflow.id,
+                      name: relatedWorkflow.name,
+                      description: relatedWorkflow.description,
+                      steps: relatedWorkflow.steps,
+                      createdAt: relatedWorkflow.createdAt,
+                      updatedAt: relatedWorkflow.updatedAt,
+                      isImproved: relatedWorkflow.isImproved,
+                      originalId: relatedWorkflow.originalId
+                    } : undefined
+                  }}
+                />
               </WorkflowContextProvider>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   )
