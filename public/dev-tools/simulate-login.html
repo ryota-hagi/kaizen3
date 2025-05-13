@@ -266,7 +266,8 @@
           // セッション情報も保存
           const sessionData = {
             session: session,
-            user: session.user
+            user: session.user,
+            timestamp: Math.floor(Date.now() / 1000) // 現在のタイムスタンプを追加
           };
           localStorage.setItem('sb-czuedairowlwfgbjmfbg-auth-data', JSON.stringify(sessionData));
           try {
@@ -275,14 +276,54 @@
             console.error('Error setting sessionStorage:', e);
           }
           
+          // セッションキャッシュも設定
+          const sessionCache = {
+            valid: true,
+            timestamp: Math.floor(Date.now() / 1000),
+            expiresAt: session.expires_at
+          };
+          localStorage.setItem('sb-session-cache', JSON.stringify(sessionCache));
+          try {
+            sessionStorage.setItem('sb-session-cache', JSON.stringify(sessionCache));
+          } catch (e) {
+            console.error('Error setting sessionStorage:', e);
+          }
+          
+          // app_usersテーブルにユーザー情報を保存するためのAPIを呼び出す
+          try {
+            fetch('/api/test-supabase-admin', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                action: 'create_user',
+                userId: userId,
+                email: email,
+                fullName: fullName,
+                companyId: companyId,
+                role: role
+              }),
+            })
+            .then(response => response.json())
+            .then(data => {
+              console.log('User data saved to app_users table:', data);
+            })
+            .catch(error => {
+              console.error('Error saving user data to app_users table:', error);
+            });
+          } catch (error) {
+            console.error('Error calling API:', error);
+          }
+          
           // デバッグ用にセッション情報をコンソールに出力
           console.log('Simulated session created:', session);
           
           showResult('成功', 'ログイン状態をシミュレートしました', JSON.stringify(user, null, 2), 'success');
           
-          // 3秒後にダッシュボードにリダイレクト
+          // 3秒後にワークフローページにリダイレクト
           setTimeout(() => {
-            window.location.href = '/dashboard/users';
+            window.location.href = '/workflows';
           }, 3000);
         } catch (error) {
           showResult('エラー', 'ログイン状態のシミュレートに失敗しました', error.toString(), 'error');
@@ -297,12 +338,14 @@
           localStorage.removeItem('kaizen_users');
           localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
           localStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-data');
+          localStorage.removeItem('sb-session-cache'); // セッションキャッシュも削除
           
           try {
             sessionStorage.removeItem('kaizen_user');
             sessionStorage.removeItem('kaizen_users');
             sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-token');
             sessionStorage.removeItem('sb-czuedairowlwfgbjmfbg-auth-data');
+            sessionStorage.removeItem('sb-session-cache'); // セッションキャッシュも削除
           } catch (e) {
             console.error('Error removing from sessionStorage:', e);
           }

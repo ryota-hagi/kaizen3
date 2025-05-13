@@ -63,7 +63,7 @@ export const WorkflowEditorSteps: React.FC<WorkflowEditorStepsProps> = ({
             <div
               {...provided.droppableProps}
               ref={provided.innerRef}
-              className="space-y-4 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300"
+              className="space-y-4 p-3 md:p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300"
               style={{ minHeight: '100px' }}
             >
               {steps.length === 0 ? (
@@ -86,7 +86,7 @@ export const WorkflowEditorSteps: React.FC<WorkflowEditorStepsProps> = ({
                           <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
-                          className="relative border border-secondary-200 rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+                          className="relative border border-secondary-200 rounded-lg p-3 md:p-4 bg-white hover:shadow-md transition-shadow"
                           style={{...provided.draggableProps.style}}
                         >
                           <WorkflowBlock

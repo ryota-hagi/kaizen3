@@ -77,7 +77,7 @@ export const WorkflowBlock: React.FC<WorkflowBlockProps> = ({
     : "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-secondary-100 text-secondary-800";
 
   return (
-    <div className={`flex flex-col md:flex-row md:items-center p-4 rounded-lg transition-all duration-300 hover:shadow-xl ${blockStyle} relative`}>
+    <div className={`flex flex-col md:flex-row md:items-center p-3 md:p-4 rounded-lg transition-all duration-300 hover:shadow-xl ${blockStyle} relative`}>
       {/* 移動ボタン */}
       <div className={`${isMobile ? 'absolute top-2 right-2 flex flex-row space-x-1' : 'mr-3 flex flex-col items-center justify-center h-full'}`} {...dragHandleProps}>
         <button 
@@ -126,37 +126,39 @@ export const WorkflowBlock: React.FC<WorkflowBlockProps> = ({
         </h3>
         <p className={`mt-2 ${isAutomated ? 'text-purple-700' : 'text-secondary-600'} whitespace-normal break-words`}>{step.description}</p>
         
-        {/* バッジ */}
-        <div className={`flex flex-wrap items-center mt-3 ${isMobile ? 'gap-2' : 'gap-3'}`}>
-          <div className={`${assigneeBadgeStyle} ${isMobile ? 'text-xs px-2 py-0.5' : ''} whitespace-nowrap`}>
-            {isAutomated && (
-              <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-              </svg>
-            )}
-            <span className="font-medium">担当:</span> {step.assignee}
-          </div>
-          <div className={`inline-flex items-center ${isMobile ? 'text-xs px-2 py-0.5' : 'px-3 py-1'} rounded-full text-sm font-medium ${isAutomated ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'} whitespace-nowrap`}>
-            <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            <span className="font-medium">所要時間:</span> {step.timeRequired}分
-          </div>
-          <div className={`inline-flex items-center ${isMobile ? 'text-xs px-2 py-0.5' : 'px-3 py-1'} rounded-full text-sm font-medium ${isAutomated ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'} whitespace-nowrap`}>
-            <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            <span className="font-medium">コスト:</span> {step.cost !== undefined ? `${step.cost.toLocaleString()}円` : '未設定'}
-          </div>
-          {step.tools && (
-            <div className={`inline-flex items-center ${isMobile ? 'text-xs px-2 py-0.5' : 'px-3 py-1'} rounded-full text-sm font-medium ${isAutomated ? 'bg-purple-100 text-purple-800' : 'bg-yellow-100 text-yellow-800'} whitespace-nowrap`}>
-              <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-              </svg>
-              <span className="font-medium">ツール:</span> {step.tools}
+        {/* バッジ - 横スクロール可能なコンテナに配置 */}
+        <div className={`mt-3 ${isMobile ? 'overflow-x-auto pb-2 -mx-2 px-2' : ''}`}>
+          <div className={`flex items-center ${isMobile ? 'space-x-2 w-max' : 'flex-wrap gap-3'}`}>
+            <div className={`${assigneeBadgeStyle} ${isMobile ? 'text-xs px-2 py-0.5' : ''} whitespace-nowrap flex-shrink-0`}>
+              {isAutomated && (
+                <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                </svg>
+              )}
+              <span className="font-medium">担当:</span> {step.assignee}
             </div>
-          )}
+            <div className={`inline-flex items-center ${isMobile ? 'text-xs px-2 py-0.5' : 'px-3 py-1'} rounded-full text-sm font-medium ${isAutomated ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'} whitespace-nowrap flex-shrink-0`}>
+              <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span className="font-medium">所要時間:</span> {step.timeRequired}分
+            </div>
+            <div className={`inline-flex items-center ${isMobile ? 'text-xs px-2 py-0.5' : 'px-3 py-1'} rounded-full text-sm font-medium ${isAutomated ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'} whitespace-nowrap flex-shrink-0`}>
+              <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span className="font-medium">コスト:</span> {step.cost !== undefined ? `${step.cost.toLocaleString()}円` : '未設定'}
+            </div>
+            {step.tools && (
+              <div className={`inline-flex items-center ${isMobile ? 'text-xs px-2 py-0.5' : 'px-3 py-1'} rounded-full text-sm font-medium ${isAutomated ? 'bg-purple-100 text-purple-800' : 'bg-yellow-100 text-yellow-800'} whitespace-nowrap flex-shrink-0`}>
+                <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span className="font-medium">ツール:</span> {step.tools}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       

@@ -41,3 +41,57 @@ export async function GET(request: Request) {
     }, { status: 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { action, userId, email, fullName, companyId, role } = body;
+    
+    // アクションに応じて処理を分岐
+    if (action === 'create_user') {
+      const adminClient = supabaseAdmin();
+      
+      // app_usersテーブルにユーザー情報を保存
+      const { data, error } = await adminClient
+        .from('app_users')
+        .upsert({
+          id: userId,
+          auth_uid: userId,
+          email: email,
+          full_name: fullName,
+          company_id: companyId,
+          role: role || '一般ユーザー',
+          status: 'アクティブ',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_login: new Date().toISOString()
+        }, { onConflict: 'auth_uid' })
+        .select();
+      
+      if (error) {
+        console.error('ユーザー情報の保存エラー:', error);
+        return NextResponse.json({ 
+          success: false, 
+          error: error.message
+        }, { status: 500 });
+      }
+      
+      return NextResponse.json({ 
+        success: true, 
+        data
+      });
+    }
+    
+    // サポートされていないアクション
+    return NextResponse.json({ 
+      success: false, 
+      error: 'サポートされていないアクションです'
+    }, { status: 400 });
+  } catch (error) {
+    console.error('Supabase Admin API POSTエラー:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: `予期せぬエラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}`
+    }, { status: 500 });
+  }
+}
