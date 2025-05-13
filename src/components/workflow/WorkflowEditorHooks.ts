@@ -6,6 +6,19 @@ import { WorkflowStep, generateSampleWorkflow, parseStepsFromResponse } from './
 import { useUser } from '../../contexts/UserContext'
 
 /**
+ * UUID v4を生成する関数
+ * @returns UUID v4形式の文字列
+ */
+function generateUUID() {
+  // UUIDのテンプレート
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/**
  * ワークフローデータを読み込むためのカスタムフック
  * @param workflowId ワークフローID
  * @returns ワークフロー関連の状態と操作関数
@@ -412,7 +425,7 @@ ${workflow.steps
               isImproved: workflow.isImproved || false,
               // 再提案の場合は、現在の改善後ステップを使用
               relatedWorkflow: {
-                id: improvedWorkflow ? improvedWorkflow.id : `improved-${workflow?.id}-${Date.now()}`,
+                id: improvedWorkflow ? improvedWorkflow.id : generateUUID(), // UUIDを生成
                 name: `${workflowName}（改善後）`,
                 description: `${workflowDescription} - AIによる改善案`,
                 steps: improvedSteps.length > 0 ? improvedSteps : [],
@@ -442,7 +455,7 @@ ${workflow.steps
 
         // 改善後のワークフローを作成
         const newImprovedWorkflow: Workflow = {
-          id: improvedWorkflow ? improvedWorkflow.id : `improved-${workflow?.id}-${Date.now()}`,
+          id: improvedWorkflow ? improvedWorkflow.id : generateUUID(), // UUIDを生成
           name: `${workflowName}（改善後）`,
           description: `${workflowDescription} - AIによる改善案`,
           steps: steps,
@@ -583,7 +596,7 @@ export const useWorkflowSave = (
 
     // 新規作成の場合
     if (workflow.id === 'new') {
-      updatedWorkflow.id = Date.now().toString()
+      updatedWorkflow.id = generateUUID() // UUIDを生成
       // 作成者情報を設定
       updatedWorkflow.createdBy = currentUser?.id
       workflows.push(updatedWorkflow)
@@ -602,7 +615,7 @@ export const useWorkflowSave = (
     if (improvedSteps.length > 0) {
       // 改善後ワークフローの作成または更新
       improvedWorkflowData = {
-        id: improvedWorkflow ? improvedWorkflow.id : `improved-${updatedWorkflow.id}-${Date.now()}`,
+        id: improvedWorkflow ? improvedWorkflow.id : generateUUID(), // UUIDを生成
         name: `${workflowName}（改善後）`,
         description: `${workflowDescription} - AIによる改善案`,
         steps: improvedSteps, // 現在の改善後ステップを使用
@@ -635,90 +648,160 @@ export const useWorkflowSave = (
     // ワークフローの状態を更新
     setWorkflow(updatedWorkflow)
     
-    try {
-      // Supabaseにも保存
-      console.log('Supabaseにワークフローを保存します')
-      
-      // 元のワークフローを保存
-      const workflowData = {
-        id: updatedWorkflow.id,
-        name: updatedWorkflow.name,
-        description: updatedWorkflow.description,
-        steps: updatedWorkflow.steps,
-        isImproved: updatedWorkflow.isImproved || false,
-        originalId: updatedWorkflow.originalId,
-        isCompleted: updatedWorkflow.isCompleted,
-        accessLevel: accessLevel // アクセスレベルを設定
-      }
-      
-      // 新規作成か更新かによってエンドポイントを変更
-      const isNew = workflow.id === 'new' || !workflows.some(w => w.id === updatedWorkflow.id && w.id !== 'new')
-      const method = isNew ? 'POST' : 'PUT'
-      
-      const response = await fetch('/api/workflows', {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(workflowData),
-      })
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-      
-      // 改善後フローも保存
-      if (improvedWorkflowData !== null) {
-        try {
-          // TypeScriptのnull checkを追加
-          const nonNullImprovedWorkflow = improvedWorkflowData as Workflow; // 型アサーション
-          const improvedData = {
-            id: nonNullImprovedWorkflow.id,
-            name: nonNullImprovedWorkflow.name,
-            description: nonNullImprovedWorkflow.description,
-            steps: nonNullImprovedWorkflow.steps,
-            isImproved: true,
-            originalId: updatedWorkflow.id,
-            accessLevel: 'user' // デフォルトのアクセスレベル
+    // Supabaseへの保存処理
+    let saveSuccess = false;
+    let saveError = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (!saveSuccess && retryCount < maxRetries) {
+      try {
+        // リトライ時のログ
+        if (retryCount > 0) {
+          console.log(`Supabaseへの保存を再試行します (${retryCount}/${maxRetries})...`);
+        } else {
+          console.log('Supabaseにワークフローを保存します');
+        }
+        
+        // 元のワークフローを保存
+        const workflowData = {
+          id: updatedWorkflow.id,
+          name: updatedWorkflow.name,
+          description: updatedWorkflow.description,
+          steps: updatedWorkflow.steps,
+          isImproved: updatedWorkflow.isImproved || false,
+          originalId: updatedWorkflow.originalId,
+          isCompleted: updatedWorkflow.isCompleted,
+          accessLevel: accessLevel, // アクセスレベルを設定
+          company_id: currentUser?.companyId // 会社IDを設定
+        }
+        
+        // 新規作成か更新かによってエンドポイントを変更
+        const isNew = workflow.id === 'new' || !workflows.some(w => w.id === updatedWorkflow.id && w.id !== 'new')
+        const method = isNew ? 'POST' : 'PUT'
+        
+        // タイムアウト設定を追加
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒でタイムアウト（増加）
+        
+        const response = await fetch('/api/workflows', {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(workflowData),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const responseText = await response.text();
+          throw new Error(`API error: ${response.status} - ${responseText}`);
+        }
+        
+        // レスポンスのJSONを解析して確認
+        const responseData = await response.json();
+        console.log('保存成功:', responseData);
+        
+        // 改善後フローも保存
+        if (improvedWorkflowData !== null) {
+          try {
+            // TypeScriptのnull checkを追加
+            const nonNullImprovedWorkflow = improvedWorkflowData as Workflow; // 型アサーション
+            const improvedData = {
+              id: nonNullImprovedWorkflow.id,
+              name: nonNullImprovedWorkflow.name,
+              description: nonNullImprovedWorkflow.description,
+              steps: nonNullImprovedWorkflow.steps,
+              isImproved: true,
+              originalId: updatedWorkflow.id,
+              accessLevel: 'user', // デフォルトのアクセスレベル
+              company_id: currentUser?.companyId // 会社IDを設定
+            }
+            
+            // 改善後フローが既に存在するかどうかを確認
+            const workflowId = nonNullImprovedWorkflow.id;
+            const isImprovedNew = !workflows.some(w => 
+              w.id === workflowId && w.id.startsWith('improved-')
+            );
+            
+            const improvedMethod = isImprovedNew ? 'POST' : 'PUT';
+            
+            // タイムアウト設定を追加
+            const improvedController = new AbortController();
+            const improvedTimeoutId = setTimeout(() => improvedController.abort(), 15000); // 15秒でタイムアウト（増加）
+            
+            const improvedResponse = await fetch('/api/workflows', {
+              method: improvedMethod,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(improvedData),
+              signal: improvedController.signal
+            });
+            
+            clearTimeout(improvedTimeoutId);
+            
+            if (!improvedResponse.ok) {
+              const improvedResponseText = await improvedResponse.text();
+              console.error('改善後フローの保存に失敗しました:', improvedResponseText);
+              throw new Error(`改善後フローの保存エラー: ${improvedResponse.status} - ${improvedResponseText}`);
+            }
+            
+            // 改善後フローの保存成功
+            const improvedResponseData = await improvedResponse.json();
+            console.log('改善後フロー保存成功:', improvedResponseData);
+          } catch (error) {
+            console.error('改善後フローの保存中にエラーが発生しました:', error);
+            // 改善後フローの保存失敗は全体の失敗とはしない
           }
-          
-          // 改善後フローが既に存在するかどうかを確認
-          const workflowId = nonNullImprovedWorkflow.id;
-          const isImprovedNew = !workflows.some(w => 
-            w.id === workflowId && w.id.startsWith('improved-')
-          );
-          
-          const improvedMethod = isImprovedNew ? 'POST' : 'PUT';
-          
-          const improvedResponse = await fetch('/api/workflows', {
-            method: improvedMethod,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(improvedData),
-          });
-          
-          if (!improvedResponse.ok) {
-            console.error('改善後フローの保存に失敗しました:', await improvedResponse.text());
-          }
-        } catch (error) {
-          console.error('改善後フローの保存中にエラーが発生しました:', error);
+        }
+        
+        // 保存成功
+        saveSuccess = true;
+        
+      } catch (error) {
+        saveError = error as Error;
+        console.error(`Supabaseへの保存中にエラーが発生しました (試行 ${retryCount + 1}/${maxRetries}):`, error);
+        
+        // ネットワークエラーやタイムアウトの場合のみリトライ
+        if (
+          error instanceof TypeError || // ネットワークエラー
+          (error instanceof Error && error.name === 'AbortError') || // タイムアウト
+          (error instanceof Error && error.message && error.message.includes('network')) // その他のネットワーク関連エラー
+        ) {
+          retryCount++;
+          // 指数バックオフでリトライ間隔を増やす
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 8000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          // その他のエラーはリトライしない
+          break;
         }
       }
-      
-      // 保存完了メッセージ
-      alert('業務フローを保存しました')
-    } catch (error) {
-      console.error('Supabaseへの保存中にエラーが発生しました:', error)
-      alert('ローカルには保存されましたが、サーバーへの保存に失敗しました。ネットワーク接続を確認してください。')
+    }
+    
+    // 保存結果に応じたメッセージ表示
+    if (saveSuccess) {
+      alert('業務フローを保存しました');
+    } else {
+      // エラーの種類に応じたメッセージ
+      if (saveError && saveError instanceof Error && saveError.message && saveError.message.includes('認証')) {
+        alert('認証エラーが発生しました。再ログインしてから再度お試しください。');
+      } else if (saveError && saveError instanceof Error && saveError.name === 'AbortError') {
+        alert('サーバーとの通信がタイムアウトしました。ネットワーク接続を確認して再度お試しください。');
+      } else {
+        alert('ローカルには保存されましたが、サーバーへの保存に失敗しました。ネットワーク接続を確認してください。');
+      }
     }
 
     // 新規作成の場合のみ閉じるコールバックを呼び出す
-    if (onClose && workflow.id === 'new') {
-      onClose()
+    if (onClose && workflow.id === 'new' && saveSuccess) {
+      onClose();
     }
     
-    return updatedWorkflow
+    return updatedWorkflow;
   }
 
   return {
