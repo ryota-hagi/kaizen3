@@ -126,9 +126,9 @@ export const WorkflowBlock: React.FC<WorkflowBlockProps> = ({
         </h3>
         <p className={`mt-2 ${isAutomated ? 'text-purple-700' : 'text-secondary-600'} whitespace-normal break-words`}>{step.description}</p>
         
-        {/* バッジ - 横スクロール可能なコンテナに配置 */}
-        <div className={`mt-3 ${isMobile ? 'overflow-x-auto pb-2 -mx-2 px-2' : ''}`}>
-          <div className={`flex items-center ${isMobile ? 'space-x-2 w-max' : 'flex-wrap gap-3'}`}>
+        {/* バッジ - 折り返して表示 */}
+        <div className="mt-3">
+          <div className={`flex flex-wrap items-center ${isMobile ? 'gap-1' : 'gap-3'}`}>
             <div className={`${assigneeBadgeStyle} ${isMobile ? 'text-xs px-2 py-0.5' : ''} whitespace-nowrap flex-shrink-0`}>
               {isAutomated && (
                 <svg className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">

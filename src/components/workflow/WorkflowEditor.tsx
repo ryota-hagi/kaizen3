@@ -459,7 +459,7 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
   }, [workflow, workflowName, workflowDescription, steps]);
 
   return (
-    <div className="bg-gradient-to-br from-white to-blue-50 rounded-lg shadow-lg p-6 border border-blue-100">
+    <div className="bg-gradient-to-br from-white to-blue-50 rounded-lg shadow-lg p-4 md:p-6 border border-blue-100 w-full max-w-full">
       {/* ヘッダー部分 */}
       <WorkflowEditorHeader
         workflowId={workflowId}

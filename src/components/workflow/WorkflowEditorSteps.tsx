@@ -63,7 +63,7 @@ export const WorkflowEditorSteps: React.FC<WorkflowEditorStepsProps> = ({
             <div
               {...provided.droppableProps}
               ref={provided.innerRef}
-              className="space-y-4 p-3 md:p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300"
+              className="space-y-4 p-3 md:p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 w-full max-w-full"
               style={{ minHeight: '100px' }}
             >
               {steps.length === 0 ? (
