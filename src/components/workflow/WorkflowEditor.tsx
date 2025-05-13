@@ -267,32 +267,41 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
   // 提案されたステップを採用する
   const handleAdoptSuggestedSteps = (suggestedSteps: WorkflowStep[]) => {
     if (currentSubdivideStepId && subdivideInsertIndex >= 0) {
-      // 細分化するステップを削除
-      deleteStep(currentSubdivideStepId);
+      // 元のステップを除外した新しい配列を作成
+      const filteredSteps = steps.filter(step => step.id !== currentSubdivideStepId);
       
-      // 細分化されたステップを挿入
-      const newSteps = [...steps];
+      // 新しいステップを作成
+      const newSteps = suggestedSteps.map((step, index) => ({
+        ...step,
+        id: `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+        position: subdivideInsertIndex + index
+      }));
       
-      // 提案されたステップを追加
-      suggestedSteps.forEach((step, index) => {
-        const newStep: WorkflowStep = {
-          ...step,
-          id: `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
-          position: subdivideInsertIndex + index
-        };
-        
-        // 新しいステップを挿入位置に追加
-        newSteps.splice(subdivideInsertIndex + index, 0, newStep);
-      });
+      // 挿入位置に新しいステップを追加
+      const resultSteps = [
+        ...filteredSteps.slice(0, subdivideInsertIndex),
+        ...newSteps,
+        ...filteredSteps.slice(subdivideInsertIndex)
+      ];
       
       // 位置情報を更新
-      const updatedSteps = newSteps.map((step, index) => ({
+      const updatedSteps = resultSteps.map((step, index) => ({
         ...step,
         position: index
       }));
       
       // ステップを更新
       setSteps(updatedSteps);
+      
+      // ワークフローの更新日時を更新
+      if (workflow) {
+        const updatedWorkflow = {
+          ...workflow,
+          steps: updatedSteps,
+          updatedAt: new Date()
+        };
+        setWorkflow(updatedWorkflow);
+      }
     }
     
     // モーダルを閉じる
