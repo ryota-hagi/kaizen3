@@ -104,6 +104,8 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
   const [suggestedSteps, setSuggestedSteps] = useState<WorkflowStep[]>([])
   const [isSupportLoading, setIsSupportLoading] = useState(false)
+  const [currentSubdivideStepId, setCurrentSubdivideStepId] = useState<string | null>(null)
+  const [subdivideInsertIndex, setSubdivideInsertIndex] = useState<number>(-1)
 
   // ステップ追加ボタンのクリックハンドラ
   const handleAddStep = () => {
@@ -148,12 +150,25 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
     await improveWorkflow(prompt)
   }
   
-  // 入力補助ボタンのクリックハンドラ
-  const handleSupportButtonClick = async () => {
+  // 細分化ボタンのクリックハンドラ
+  const handleSubdivideStep = async (stepId: string) => {
     setIsSupportModalOpen(true)
     setIsSupportLoading(true)
+    setCurrentSubdivideStepId(stepId)
+    
+    // 細分化するステップの位置を特定
+    const stepIndex = steps.findIndex(step => step.id === stepId)
+    if (stepIndex !== -1) {
+      setSubdivideInsertIndex(stepIndex)
+    }
     
     try {
+      // 細分化するステップを取得
+      const stepToSubdivide = steps.find(step => step.id === stepId)
+      if (!stepToSubdivide) {
+        throw new Error('細分化するステップが見つかりません')
+      }
+      
       // 会社情報を取得
       const storedCompanyInfo = localStorage.getItem('kaizen_company_info')
       let companyInfo = null
@@ -178,9 +193,18 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
 
       // Claudeに送信するプロンプトを作成
       const prompt = `
-以下の業務フロー名と説明に基づいて、詳細な業務フローのステップを生成してください。
+以下の業務フローのステップを細分化して、より詳細な3つのサブステップに分割してください。
+これは改善前の業務フローを詳細に洗い出すことが目的です。自動化などの改善は行わず、現状の業務をより詳細に分解してください。
+
 業務フロー名: ${workflowName}
 説明: ${workflowDescription || '未入力'}
+
+細分化するステップ:
+タイトル: ${stepToSubdivide.title}
+説明: ${stepToSubdivide.description}
+担当: ${stepToSubdivide.assignee}
+所要時間: ${stepToSubdivide.timeRequired}分
+${stepToSubdivide.tools ? `ツール/設備: ${stepToSubdivide.tools}` : ''}
 
 ${companyInfo ? `会社情報:
 会社名: ${companyInfo.name || '未設定'}
@@ -192,18 +216,18 @@ ${companyInfo ? `会社情報:
 ${employees && employees.length > 0 ? `従業員情報:
 ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.position || '役職未設定'}, ${emp.department || '部署未設定'}, 時給: ${emp.hourlyRate || 0}円)`).join('\n')}` : ''}
 
-この業務フローに必要な詳細なステップを5-8個程度提案してください。
-各ステップには、タイトル、説明、担当者、所要時間、使用するツールや設備を含めてください。
+このステップを3つの詳細なサブステップに分割してください。分割したステップの合計所要時間は元のステップの所要時間と同じになるようにしてください。
+各サブステップには、タイトル、説明、担当者、所要時間、使用するツールや設備を含めてください。
 
 回答は必ず以下のフォーマットで各ステップごとに提供してください：
 <工程名>ステップのタイトル</工程名>
 <概要>ステップの説明</概要>
-<担当者>担当者または「自動化」</担当者>
+<担当者>担当者</担当者>
 <所要時間>分数（数字のみ）</所要時間>
 <ツール>使用するツールや設備（メール、電話、Zapier、Zoom、車、バックホー、3Dプリンタなど）</ツール>
 <コスト>コスト削減額または「なし」</コスト>
 
-各タグは必ず含めてください。特に<ツール>タグは重要です。自動化の場合は「自動化システム」などの適切なツール名を指定してください。
+各タグは必ず含めてください。特に<ツール>タグは重要です。
 `;
 
       // Claude APIを呼び出す
@@ -233,30 +257,48 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
       setSuggestedSteps(extractedSteps);
       
     } catch (error) {
-      console.error('ステップ提案の生成中にエラーが発生しました:', error);
-      alert('ステップ提案の生成中にエラーが発生しました。もう一度お試しください。');
+      console.error('ステップ細分化の生成中にエラーが発生しました:', error);
+      alert('ステップ細分化の生成中にエラーが発生しました。もう一度お試しください。');
     } finally {
       setIsSupportLoading(false);
     }
   }
   
   // 提案されたステップを採用する
-  const handleAdoptSuggestedSteps = (steps: WorkflowStep[]) => {
-    // 既存のステップをクリア
-    setSteps([]);
-    
-    // 提案されたステップを追加
-    steps.forEach((step, index) => {
-      const newStep: WorkflowStep = {
+  const handleAdoptSuggestedSteps = (suggestedSteps: WorkflowStep[]) => {
+    if (currentSubdivideStepId && subdivideInsertIndex >= 0) {
+      // 細分化するステップを削除
+      deleteStep(currentSubdivideStepId);
+      
+      // 細分化されたステップを挿入
+      const newSteps = [...steps];
+      
+      // 提案されたステップを追加
+      suggestedSteps.forEach((step, index) => {
+        const newStep: WorkflowStep = {
+          ...step,
+          id: `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          position: subdivideInsertIndex + index
+        };
+        
+        // 新しいステップを挿入位置に追加
+        newSteps.splice(subdivideInsertIndex + index, 0, newStep);
+      });
+      
+      // 位置情報を更新
+      const updatedSteps = newSteps.map((step, index) => ({
         ...step,
-        id: `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
         position: index
-      };
-      addStep(newStep);
-    });
+      }));
+      
+      // ステップを更新
+      setSteps(updatedSteps);
+    }
     
     // モーダルを閉じる
     setIsSupportModalOpen(false);
+    setCurrentSubdivideStepId(null);
+    setSubdivideInsertIndex(-1);
   }
   
   // 提案を再生成する
@@ -264,6 +306,12 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
     setIsSupportLoading(true);
     
     try {
+      // 細分化するステップを取得
+      const stepToSubdivide = steps.find(step => step.id === currentSubdivideStepId)
+      if (!stepToSubdivide) {
+        throw new Error('細分化するステップが見つかりません')
+      }
+      
       // 会社情報を取得
       const storedCompanyInfo = localStorage.getItem('kaizen_company_info')
       let companyInfo = null
@@ -288,9 +336,18 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
 
       // Claudeに送信するプロンプトを作成
       const newPrompt = `
-以下の業務フロー名と説明に基づいて、詳細な業務フローのステップを生成してください。
+以下の業務フローのステップを細分化して、より詳細な3つのサブステップに分割してください。
+これは改善前の業務フローを詳細に洗い出すことが目的です。自動化などの改善は行わず、現状の業務をより詳細に分解してください。
+
 業務フロー名: ${workflowName}
 説明: ${workflowDescription || '未入力'}
+
+細分化するステップ:
+タイトル: ${stepToSubdivide.title}
+説明: ${stepToSubdivide.description}
+担当: ${stepToSubdivide.assignee}
+所要時間: ${stepToSubdivide.timeRequired}分
+${stepToSubdivide.tools ? `ツール/設備: ${stepToSubdivide.tools}` : ''}
 
 ${companyInfo ? `会社情報:
 会社名: ${companyInfo.name || '未設定'}
@@ -304,18 +361,18 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
 
 追加の要望: ${prompt}
 
-この業務フローに必要な詳細なステップを5-8個程度提案してください。
-各ステップには、タイトル、説明、担当者、所要時間、使用するツールや設備を含めてください。
+このステップを3つの詳細なサブステップに分割してください。分割したステップの合計所要時間は元のステップの所要時間と同じになるようにしてください。
+各サブステップには、タイトル、説明、担当者、所要時間、使用するツールや設備を含めてください。
 
 回答は必ず以下のフォーマットで各ステップごとに提供してください：
 <工程名>ステップのタイトル</工程名>
 <概要>ステップの説明</概要>
-<担当者>担当者または「自動化」</担当者>
+<担当者>担当者</担当者>
 <所要時間>分数（数字のみ）</所要時間>
 <ツール>使用するツールや設備（メール、電話、Zapier、Zoom、車、バックホー、3Dプリンタなど）</ツール>
 <コスト>コスト削減額または「なし」</コスト>
 
-各タグは必ず含めてください。特に<ツール>タグは重要です。自動化の場合は「自動化システム」などの適切なツール名を指定してください。
+各タグは必ず含めてください。特に<ツール>タグは重要です。
 `;
 
       // Claude APIを呼び出す
@@ -472,7 +529,7 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
           onEditStep={handleEditStep}
           onDeleteStep={deleteStep}
           onReorderSteps={reorderSteps}
-          onSupportButtonClick={handleSupportButtonClick}
+          onSubdivideStep={handleSubdivideStep}
         />
       )}
 
@@ -497,11 +554,17 @@ ${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.positio
       {/* 入力補助モーダル */}
       <WorkflowSupportModal
         isOpen={isSupportModalOpen}
-        onClose={() => setIsSupportModalOpen(false)}
+        onClose={() => {
+          setIsSupportModalOpen(false);
+          setCurrentSubdivideStepId(null);
+          setSubdivideInsertIndex(-1);
+        }}
         onAdopt={handleAdoptSuggestedSteps}
         onRegenerate={handleRegenerateSuggestion}
         suggestedSteps={suggestedSteps}
         isLoading={isSupportLoading}
+        isSubdividing={currentSubdivideStepId !== null}
+        subdivideStepTitle={steps.find(step => step.id === currentSubdivideStepId)?.title || ''}
       />
     </div>
   )

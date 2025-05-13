@@ -25,7 +25,7 @@ interface WorkflowEditorStepsProps {
   onEditStep: (step: WorkflowStep) => void
   onDeleteStep: (stepId: string) => void
   onReorderSteps: (sourceIndex: number, destinationIndex: number) => void
-  onSupportButtonClick?: () => void
+  onSubdivideStep?: (stepId: string) => void
 }
 
 export const WorkflowEditorSteps: React.FC<WorkflowEditorStepsProps> = ({
@@ -34,7 +34,7 @@ export const WorkflowEditorSteps: React.FC<WorkflowEditorStepsProps> = ({
   onEditStep,
   onDeleteStep,
   onReorderSteps,
-  onSupportButtonClick
+  onSubdivideStep
 }) => {
   // ドラッグ＆ドロップの処理
   const handleDragEnd = (result: any) => {
@@ -98,6 +98,7 @@ export const WorkflowEditorSteps: React.FC<WorkflowEditorStepsProps> = ({
                             onMoveDown={() => onReorderSteps(index, index + 1)}
                             isFirst={index === 0}
                             isLast={index === steps.length - 1}
+                            onSubdivide={onSubdivideStep}
                           />
                         </div>
                       )}
@@ -106,26 +107,15 @@ export const WorkflowEditorSteps: React.FC<WorkflowEditorStepsProps> = ({
                 </div>
               )}
               {provided.placeholder}
-              <div className="mt-6 text-center flex justify-center space-x-3">
+              <div className="mt-6 text-center">
                 <button 
-                  className="btn bg-gradient-to-r from-blue-500 to-primary-500 hover:from-blue-600 hover:to-primary-600 text-white shadow-md hover:shadow-lg transform transition-all duration-200 hover:-translate-y-1 flex items-center"
+                  className="btn bg-gradient-to-r from-blue-500 to-primary-500 hover:from-blue-600 hover:to-primary-600 text-white shadow-md hover:shadow-lg transform transition-all duration-200 hover:-translate-y-1 flex items-center mx-auto"
                   onClick={onAddStep}
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                   </svg>
                   ステップを追加
-                </button>
-                
-                <button 
-                  className="btn bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-md hover:shadow-lg transform transition-all duration-200 hover:-translate-y-1 flex items-center"
-                  onClick={onSupportButtonClick}
-                  title="AIによる入力補助"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                  </svg>
-                  入力補助
                 </button>
               </div>
             </div>

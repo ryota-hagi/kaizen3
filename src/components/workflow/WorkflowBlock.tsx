@@ -22,6 +22,7 @@ interface WorkflowBlockProps {
   isFirst?: boolean
   isLast?: boolean
   dragHandleProps?: any
+  onSubdivide?: (stepId: string) => void
 }
 
 export const WorkflowBlock: React.FC<WorkflowBlockProps> = ({ 
@@ -34,7 +35,8 @@ export const WorkflowBlock: React.FC<WorkflowBlockProps> = ({
   onMoveDown,
   isFirst = false,
   isLast = false,
-  dragHandleProps
+  dragHandleProps,
+  onSubdivide
 }) => {
   // 画面サイズの変更を検知
   const [isMobile, setIsMobile] = useState(false)
@@ -170,6 +172,18 @@ export const WorkflowBlock: React.FC<WorkflowBlockProps> = ({
             }`}
           >
             {isCompleted ? '完了済み' : '完了'}
+          </button>
+        )}
+        {onSubdivide && (
+          <button
+            onClick={() => onSubdivide(step.id)}
+            className={`${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1 text-sm'} bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors shadow-sm flex items-center`}
+            title="AIによる細分化"
+          >
+            <svg className={`${isMobile ? 'w-3 h-3 mr-1' : 'w-4 h-4 mr-1'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            細分化
           </button>
         )}
         <button

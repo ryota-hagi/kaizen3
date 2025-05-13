@@ -10,6 +10,8 @@ interface WorkflowSupportModalProps {
   onRegenerate: (prompt: string) => void
   suggestedSteps: WorkflowStep[]
   isLoading: boolean
+  isSubdividing?: boolean
+  subdivideStepTitle?: string
 }
 
 export const WorkflowSupportModal: React.FC<WorkflowSupportModalProps> = ({
@@ -18,7 +20,9 @@ export const WorkflowSupportModal: React.FC<WorkflowSupportModalProps> = ({
   onAdopt,
   onRegenerate,
   suggestedSteps,
-  isLoading
+  isLoading,
+  isSubdividing = false,
+  subdivideStepTitle = ''
 }) => {
   const [regeneratePrompt, setRegeneratePrompt] = useState('')
   const [showRegenerateForm, setShowRegenerateForm] = useState(false)
@@ -49,12 +53,14 @@ export const WorkflowSupportModal: React.FC<WorkflowSupportModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold text-secondary-900 mb-4">
-          AIによる業務フロー提案
+          {isSubdividing ? 'AIによるステップ細分化' : 'AIによる業務フロー提案'}
         </h2>
         
         <div className="mb-6">
           <p className="text-secondary-700 mb-4">
-            以下の業務フローが提案されました。この内容を採用しますか？
+            {isSubdividing 
+              ? `「${subdivideStepTitle}」を細分化した結果です。この内容を採用しますか？` 
+              : '以下の業務フローが提案されました。この内容を採用しますか？'}
           </p>
           
           {isLoading ? (
