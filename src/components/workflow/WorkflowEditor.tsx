@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { WorkflowStep } from './WorkflowEditorHelpers'
+import { WorkflowStep, parseStepsFromResponse } from './WorkflowEditorHelpers'
 import { WorkflowBlockModal } from './WorkflowBlockModal'
 import { RegeneratePromptModal } from './RegeneratePromptModal'
 import { WorkflowComparison } from './WorkflowComparison'
@@ -9,6 +9,7 @@ import { WorkflowEditorHeader } from './WorkflowEditorHeader'
 import { WorkflowEditorForm } from './WorkflowEditorForm'
 import { WorkflowEditorSteps } from './WorkflowEditorSteps'
 import { WorkflowEditorMetrics } from './WorkflowEditorMetrics'
+import { WorkflowSupportModal } from './WorkflowSupportModal'
 import { 
   useWorkflowData, 
   useWorkflowImprovement, 
@@ -98,6 +99,11 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState<WorkflowStep | null>(null)
   const [isRegenerateModalOpen, setIsRegenerateModalOpen] = useState(false)
+  
+  // 入力補助関連の状態管理
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
+  const [suggestedSteps, setSuggestedSteps] = useState<WorkflowStep[]>([])
+  const [isSupportLoading, setIsSupportLoading] = useState(false)
 
   // ステップ追加ボタンのクリックハンドラ
   const handleAddStep = () => {
@@ -140,6 +146,210 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
     
     // 改善案を再生成
     await improveWorkflow(prompt)
+  }
+  
+  // 入力補助ボタンのクリックハンドラ
+  const handleSupportButtonClick = async () => {
+    setIsSupportModalOpen(true)
+    setIsSupportLoading(true)
+    
+    try {
+      // 会社情報を取得
+      const storedCompanyInfo = localStorage.getItem('kaizen_company_info')
+      let companyInfo = null
+      if (storedCompanyInfo) {
+        try {
+          companyInfo = JSON.parse(storedCompanyInfo)
+        } catch (error) {
+          console.error('会社情報の解析エラー:', error)
+        }
+      }
+
+      // 従業員情報を取得
+      const storedEmployees = localStorage.getItem('kaizen_employees')
+      let employees = []
+      if (storedEmployees) {
+        try {
+          employees = JSON.parse(storedEmployees)
+        } catch (error) {
+          console.error('従業員情報の解析エラー:', error)
+        }
+      }
+
+      // Claudeに送信するプロンプトを作成
+      const prompt = `
+以下の業務フロー名と説明に基づいて、詳細な業務フローのステップを生成してください。
+業務フロー名: ${workflowName}
+説明: ${workflowDescription || '未入力'}
+
+${companyInfo ? `会社情報:
+会社名: ${companyInfo.name || '未設定'}
+業種: ${companyInfo.industry || '未設定'}
+事業内容: ${companyInfo.businessDescription || '未設定'}
+規模: ${companyInfo.size || '未設定'}
+所在地: ${companyInfo.address || '未設定'}` : ''}
+
+${employees && employees.length > 0 ? `従業員情報:
+${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.position || '役職未設定'}, ${emp.department || '部署未設定'}, 時給: ${emp.hourlyRate || 0}円)`).join('\n')}` : ''}
+
+この業務フローに必要な詳細なステップを5-8個程度提案してください。
+各ステップには、タイトル、説明、担当者、所要時間、使用するツールや設備を含めてください。
+
+回答は必ず以下のフォーマットで各ステップごとに提供してください：
+<工程名>ステップのタイトル</工程名>
+<概要>ステップの説明</概要>
+<担当者>担当者または「自動化」</担当者>
+<所要時間>分数（数字のみ）</所要時間>
+<ツール>使用するツールや設備（メール、電話、Zapier、Zoom、車、バックホー、3Dプリンタなど）</ツール>
+<コスト>コスト削減額または「なし」</コスト>
+
+各タグは必ず含めてください。特に<ツール>タグは重要です。自動化の場合は「自動化システム」などの適切なツール名を指定してください。
+`;
+
+      // Claude APIを呼び出す
+      const response = await fetch('/api/claude', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: prompt,
+          companyInfo: companyInfo,
+          employees: employees
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // レスポンスからステップ情報を抽出
+      const responseText = data.response;
+      const extractedSteps = parseStepsFromResponse(responseText, []);
+      
+      // 提案モーダルに表示するためのステップを設定
+      setSuggestedSteps(extractedSteps);
+      
+    } catch (error) {
+      console.error('ステップ提案の生成中にエラーが発生しました:', error);
+      alert('ステップ提案の生成中にエラーが発生しました。もう一度お試しください。');
+    } finally {
+      setIsSupportLoading(false);
+    }
+  }
+  
+  // 提案されたステップを採用する
+  const handleAdoptSuggestedSteps = (steps: WorkflowStep[]) => {
+    // 既存のステップをクリア
+    setSteps([]);
+    
+    // 提案されたステップを追加
+    steps.forEach((step, index) => {
+      const newStep: WorkflowStep = {
+        ...step,
+        id: `step-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+        position: index
+      };
+      addStep(newStep);
+    });
+    
+    // モーダルを閉じる
+    setIsSupportModalOpen(false);
+  }
+  
+  // 提案を再生成する
+  const handleRegenerateSuggestion = async (prompt: string) => {
+    setIsSupportLoading(true);
+    
+    try {
+      // 会社情報を取得
+      const storedCompanyInfo = localStorage.getItem('kaizen_company_info')
+      let companyInfo = null
+      if (storedCompanyInfo) {
+        try {
+          companyInfo = JSON.parse(storedCompanyInfo)
+        } catch (error) {
+          console.error('会社情報の解析エラー:', error)
+        }
+      }
+
+      // 従業員情報を取得
+      const storedEmployees = localStorage.getItem('kaizen_employees')
+      let employees = []
+      if (storedEmployees) {
+        try {
+          employees = JSON.parse(storedEmployees)
+        } catch (error) {
+          console.error('従業員情報の解析エラー:', error)
+        }
+      }
+
+      // Claudeに送信するプロンプトを作成
+      const newPrompt = `
+以下の業務フロー名と説明に基づいて、詳細な業務フローのステップを生成してください。
+業務フロー名: ${workflowName}
+説明: ${workflowDescription || '未入力'}
+
+${companyInfo ? `会社情報:
+会社名: ${companyInfo.name || '未設定'}
+業種: ${companyInfo.industry || '未設定'}
+事業内容: ${companyInfo.businessDescription || '未設定'}
+規模: ${companyInfo.size || '未設定'}
+所在地: ${companyInfo.address || '未設定'}` : ''}
+
+${employees && employees.length > 0 ? `従業員情報:
+${employees.map((emp: any) => `- ${emp.name || '名前未設定'} (${emp.position || '役職未設定'}, ${emp.department || '部署未設定'}, 時給: ${emp.hourlyRate || 0}円)`).join('\n')}` : ''}
+
+追加の要望: ${prompt}
+
+この業務フローに必要な詳細なステップを5-8個程度提案してください。
+各ステップには、タイトル、説明、担当者、所要時間、使用するツールや設備を含めてください。
+
+回答は必ず以下のフォーマットで各ステップごとに提供してください：
+<工程名>ステップのタイトル</工程名>
+<概要>ステップの説明</概要>
+<担当者>担当者または「自動化」</担当者>
+<所要時間>分数（数字のみ）</所要時間>
+<ツール>使用するツールや設備（メール、電話、Zapier、Zoom、車、バックホー、3Dプリンタなど）</ツール>
+<コスト>コスト削減額または「なし」</コスト>
+
+各タグは必ず含めてください。特に<ツール>タグは重要です。自動化の場合は「自動化システム」などの適切なツール名を指定してください。
+`;
+
+      // Claude APIを呼び出す
+      const response = await fetch('/api/claude', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: newPrompt,
+          companyInfo: companyInfo,
+          employees: employees
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // レスポンスからステップ情報を抽出
+      const responseText = data.response;
+      const extractedSteps = parseStepsFromResponse(responseText, []);
+      
+      // 提案モーダルに表示するためのステップを設定
+      setSuggestedSteps(extractedSteps);
+      
+    } catch (error) {
+      console.error('ステップ提案の再生成中にエラーが発生しました:', error);
+      alert('ステップ提案の再生成中にエラーが発生しました。もう一度お試しください。');
+    } finally {
+      setIsSupportLoading(false);
+    }
   }
 
   // 変更検知と警告機能
@@ -262,6 +472,7 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
           onEditStep={handleEditStep}
           onDeleteStep={deleteStep}
           onReorderSteps={reorderSteps}
+          onSupportButtonClick={handleSupportButtonClick}
         />
       )}
 
@@ -282,6 +493,16 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
           defaultPrompt={customPrompt}
         />
       )}
+      
+      {/* 入力補助モーダル */}
+      <WorkflowSupportModal
+        isOpen={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        onAdopt={handleAdoptSuggestedSteps}
+        onRegenerate={handleRegenerateSuggestion}
+        suggestedSteps={suggestedSteps}
+        isLoading={isSupportLoading}
+      />
     </div>
   )
 }
