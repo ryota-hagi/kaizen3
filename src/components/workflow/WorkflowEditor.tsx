@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { WorkflowStep } from './WorkflowEditorHelpers'
 import { WorkflowBlockModal } from './WorkflowBlockModal'
 import { RegeneratePromptModal } from './RegeneratePromptModal'
@@ -141,6 +141,46 @@ export const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflowId, onCl
     // 改善案を再生成
     await improveWorkflow(prompt)
   }
+
+  // 変更検知と警告機能
+  useEffect(() => {
+    // 変更があるかどうかを判定する関数
+    const hasUnsavedChanges = () => {
+      // 元のワークフローと現在のワークフローを比較
+      if (!workflow) return false;
+      
+      // 名前または説明が変更されている場合
+      if (workflowName !== workflow.name || 
+          workflowDescription !== workflow.description) {
+        return true;
+      }
+      
+      // ステップが変更されている場合
+      if (JSON.stringify(steps) !== JSON.stringify(workflow.steps)) {
+        return true;
+      }
+      
+      return false;
+    };
+    
+    // beforeunloadイベントハンドラ
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges()) {
+        // 標準のブラウザ警告メッセージを表示
+        const message = '変更が保存されていません。このページを離れますか？';
+        e.returnValue = message;
+        return message;
+      }
+    };
+    
+    // イベントリスナーを追加
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // クリーンアップ関数
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [workflow, workflowName, workflowDescription, steps]);
 
   return (
     <div className="bg-gradient-to-br from-white to-blue-50 rounded-lg shadow-lg p-6 border border-blue-100">
