@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>セキュリティ問題修正ツール</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+      <h1 class="text-2xl font-bold text-center mb-6">セキュリティ問題修正ツール</h1>
+      
+      <div class="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <p class="text-sm text-yellow-700">
+              このツールは以下のセキュリティ問題を修正します：
+            </p>
+            <ul class="list-disc ml-5 mt-2 text-sm text-yellow-700">
+              <li>workflow_collaboratorsテーブルのRLSを有効化</li>
+              <li>invitations_vビューのSECURITY DEFINERプロパティを修正</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <p class="text-gray-600 mb-4">
+          Supabaseのセキュリティアドバイザーで検出された問題を修正します。このツールは管理者権限を持つユーザーのみが実行できます。
+        </p>
+        <p class="text-gray-600 mb-4">
+          修正を実行する前に、データベースのバックアップを取ることをお勧めします。
+        </p>
+      </div>
+
+      <div class="flex justify-center">
+        <button id="fixButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+          セキュリティ問題を修正
+        </button>
+      </div>
+
+      <div id="result" class="mt-6 hidden">
+        <div id="loading" class="flex items-center justify-center">
+          <div class="loading mr-2"></div>
+          <span>処理中...</span>
+        </div>
+        <div id="success" class="bg-green-50 border-l-4 border-green-400 p-4 hidden">
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p id="successMessage" class="text-sm text-green-700"></p>
+            </div>
+          </div>
+        </div>
+        <div id="error" class="bg-red-50 border-l-4 border-red-400 p-4 hidden">
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p id="errorMessage" class="text-sm text-red-700"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const fixButton = document.getElementById('fixButton');
+      const result = document.getElementById('result');
+      const loading = document.getElementById('loading');
+      const success = document.getElementById('success');
+      const error = document.getElementById('error');
+      const successMessage = document.getElementById('successMessage');
+      const errorMessage = document.getElementById('errorMessage');
+
+      fixButton.addEventListener('click', async function() {
+        // ボタンを無効化
+        fixButton.disabled = true;
+        fixButton.classList.add('opacity-50', 'cursor-not-allowed');
+        
+        // 結果表示エリアを表示
+        result.classList.remove('hidden');
+        loading.classList.remove('hidden');
+        success.classList.add('hidden');
+        error.classList.add('hidden');
+
+        try {
+          const response = await fetch('/api/fix-security-issues', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const data = await response.json();
+
+          // ローディング表示を非表示
+          loading.classList.add('hidden');
+
+          if (response.ok) {
+            // 成功メッセージを表示
+            success.classList.remove('hidden');
+            successMessage.textContent = data.message || 'セキュリティ問題が正常に修正されました。';
+          } else {
+            // エラーメッセージを表示
+            error.classList.remove('hidden');
+            errorMessage.textContent = data.error || '予期しないエラーが発生しました。';
+          }
+        } catch (err) {
+          // ローディング表示を非表示
+          loading.classList.add('hidden');
+          
+          // エラーメッセージを表示
+          error.classList.remove('hidden');
+          errorMessage.textContent = '通信エラーが発生しました: ' + err.message;
+        } finally {
+          // ボタンを再度有効化
+          setTimeout(() => {
+            fixButton.disabled = false;
+            fixButton.classList.remove('opacity-50', 'cursor-not-allowed');
+          }, 3000);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
